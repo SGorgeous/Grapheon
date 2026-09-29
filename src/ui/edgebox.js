@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/edgebox.js
    连线样式面板：箭头 / 线型 / 走线 / 标签。
@@ -20,6 +20,7 @@ function openEdgeBox(){
   const e = selectedEdge();
   if (!e){ say('* 先点选一条连线，再打开样式面板。'); return; }
   hideCtx(); closeHelp(); closeExport();
+  if (typeof closeEndBox === 'function') closeEndBox();
   ebEdgeId = e.id;
   renderEdgeBox();
   edgeBoxEl.style.display = 'block';

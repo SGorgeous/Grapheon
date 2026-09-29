@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/text.js
    Unifont 文本度量、中英混排换行、节点尺寸计算。
@@ -52,7 +52,10 @@ function sizeNode(n){
   const dia  = n.shape === 'diamond';
   const cap  = (big ? MAXW + 90 : MAXW) * (dia ? 1.5 : 1);
   const need = natural + PADX * 2 + 14;
-  n.w = Math.round(Math.max(big ? 210 : MINW, Math.min(cap, need * (dia ? 1.6 : 1))));
+  let w = Math.max(big ? 210 : MINW, Math.min(cap, need * (dia ? 1.6 : 1)));
+  // 手动拖过尺寸就用固定值；文字仍然按这个宽度重新折行
+  if (n.fixedW) w = Math.max(MIN_FIXED_W, n.fixedW);
+  n.w = Math.round(w);
 
   const avail = dia ? n.w * 0.54 : n.w - PADX * 2;
   n.lines = wrapText(raw, avail, size, weight);
@@ -61,6 +64,8 @@ function sizeNode(n){
   n.fw  = weight;
   let h = n.lines.length * n.lh + PADY * 2;
   if (dia) h = Math.max(h, n.w * 0.52);
-  n.h = Math.round(Math.max(big ? 68 : MINH, h));
+  h = Math.max(big ? 68 : MINH, h);
+  if (n.fixedH) h = Math.max(MIN_FIXED_H, n.fixedH);
+  n.h = Math.round(h);
 }
 

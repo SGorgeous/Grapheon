@@ -27,21 +27,35 @@ function showMenu(x, y, items){
 function hideCtx(){ ctxEl.style.display = 'none'; }
 
 /* ---------------- 画布右键菜单 ---------------- */
-function showCtx(x, y, n, e){
+function showCtx(x, y, n, e, info){
+  info = info || {};
   const items = [];
   if (n){
-    items.push(['添加子节点', 'Tab', addChild]);
-    items.push(['添加兄弟节点', 'Enter', addSibling]);
+    items.push(['添加子节点', 'Tab', () => addChild()]);
+    items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     items.push(['重命名', 'F2', () => startEdit('node', n.id)]);
     items.push('hr');
     items.push(['矩形', '', () => setShape('rect')]);
     items.push(['圆角矩形', '', () => setShape('round')]);
     items.push(['菱形（判断）', '', () => setShape('diamond')]);
     items.push(['椭圆', '', () => setShape('oval')]);
+    if (n.fixedW || n.fixedH) items.push(['恢复自适应尺寸', '', () => autoSizeNode(n)]);
     items.push('hr');
-    items.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', toggleCollapse]);
-    items.push(['删除节点', 'Del', deleteSelection]);
+    if (doc.edges.some(x2 => x2.s === n.id || x2.t === n.id)){
+      items.push(['连线端点吸附…', '', () => openEndBox(n)]);
+    }
+    items.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', () => toggleCollapseOf(n)]);
+    items.push(['删除节点', 'Del', () => { selectOnly(n.id); deleteSelection(); }]);
   } else if (e){
+    if (info.waypoint){
+      items.push(['删除这个拐点', '双击', () => { removeWaypoint(e, info.waypoint.index); pushHist(); say('* 拐点已删除。'); }]);
+    } else if (info.p){
+      items.push(['在此添加拐点', '', () => { addWaypoint(e, info.p.x, info.p.y); pushHist(); say('* 已添加拐点，拖动它调整走向。'); }]);
+    }
+    if (e.waypoints && e.waypoints.length){
+      items.push(['清除全部拐点（' + e.waypoints.length + ' 个）', '', () => { clearWaypoints(e); pushHist(); say('* 拐点已清除。'); }]);
+    }
+    items.push('hr');
     items.push(['连线样式…', 'E', () => openEdgeBox()]);
     items.push('hr');
     items.push(['箭头：' + ARROW_LABEL[e.arrow], '▶', () => { cycleEdgeArrow(e); pushHist(); }]);

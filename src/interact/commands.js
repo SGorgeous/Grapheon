@@ -138,14 +138,33 @@ function deleteEdgeOnly(e){
   if (selEdgeId === e.id) selEdgeId = null;
   reindex(); relayout(); pushHist(); say('* 连线已断开。');
 }
-function toggleCollapse(){
-  const n = soleSel();
+function toggleCollapseOf(n){
   if (!n) return;
   const kids = idx.children.get(n.id) || [];
   if (!kids.length){ say('* 这个节点没有子节点。'); return; }
-  n.collapsed = !n.collapsed;
-  relayout(); pushHist();
-  say(n.collapsed ? '* 已折叠，隐藏 ' + descendants(n.id).length + ' 个子孙节点。' : '* 已展开。');
+  if (!n.collapsed){
+    n.collapsed = true;
+    n.collapseAt = { x:n.x, y:n.y };     // 记住折叠时父节点的位置
+    reindex();
+    say('* 已折叠，隐藏 ' + descendants(n.id).length + ' 个子孙节点。点角标或按 Space 展开。');
+  } else {
+    const from = n.collapseAt;
+    n.collapsed = false;
+    // 折叠期间父节点可能被拖走过，展开时把整棵子树按同样的位移挪过去，相对形状不变
+    if (from){
+      const dx = n.x - from.x, dy = n.y - from.y;
+      if (dx || dy) for (const id of descendants(n.id)){ const m = byId(id); if (m){ m.x += dx; m.y += dy; } }
+    }
+    n.collapseAt = null;
+    reindex();
+    say('* 已展开。');
+  }
+  pushHist(); mark();
+}
+function toggleCollapse(){
+  const n = soleSel();
+  if (!n){ say('* 先选中一个节点，再按 Space。'); return; }
+  toggleCollapseOf(n);
 }
 function setShape(shape){
   const n = soleSel(); if (!n) return;
@@ -153,9 +172,27 @@ function setShape(shape){
   const names = { rect:'矩形', round:'圆角', diamond:'菱形', oval:'椭圆' };
   say('* 形状已改为「' + names[shape] + '」。');
 }
+/* 把节点尺寸改回「随文字自适应」 */
+function autoSizeNode(n){
+  if (!n) return;
+  n.fixedW = null; n.fixedH = null;
+  sizeNode(n); pushHist(); mark();
+  say('* 尺寸已恢复自适应。');
+}
+function setNodeSize(n, w, h){
+  if (!n) return;
+  n.fixedW = Math.max(MIN_FIXED_W, Math.round(w));
+  n.fixedH = Math.max(MIN_FIXED_H, Math.round(h));
+  sizeNode(n);
+  mark();
+}
 function selectOnly(id){ sel.clear(); selEdgeId = null; if (id) sel.add(id); mark(); }
 function selectEdge(id){ sel.clear(); selEdgeId = id || null; mark(); }
-function selectAll(){ sel = new Set(doc.nodes.map(n => n.id)); selEdgeId = null; mark(); }
+function selectAll(){
+  sel = new Set(doc.nodes.filter(n => !isHidden(n.id)).map(n => n.id));
+  selEdgeId = null;
+  mark();
+}
 
 /* --- 连线样式 --- */
 const ARROW_LABEL = { none:'无箭头', end:'单向箭头', both:'双向箭头' };
@@ -176,6 +213,53 @@ function cycleEdgeRoute(e){
   if (!e) return;
   e.route = e.route === 'ortho' ? 'curve' : 'ortho';
   mark(); say('* 走线：' + ROUTE_LABEL[e.route]);
+}
+/* --- 端点钉位（自由连接）：null = 自动吸附 --- */
+function edgeSideOf(e, which){ return which === 'a' ? e.aSide : e.bSide; }
+function setEdgeSide(e, which, side){
+  if (!e) return;
+  if (which === 'a') e.aSide = normSide(side); else e.bSide = normSide(side);
+  mark();
+}
+const edgeSideText = (e) => (e.aSide ? SIDE_LABEL[e.aSide] : '自动') + ' → ' + (e.bSide ? SIDE_LABEL[e.bSide] : '自动');
+
+/* --- 拐点：手动指定连线的弯折走向 --- */
+function addWaypoint(e, x, y, index){
+  if (!e) return -1;
+  if (!e.waypoints) e.waypoints = [];
+  const at = (index == null) ? e.waypoints.length : Math.max(0, Math.min(e.waypoints.length, index));
+  e.waypoints.splice(at, 0, { x, y });
+  mark();
+  return at;
+}
+function moveWaypoint(e, index, x, y){
+  if (!e || !e.waypoints || !e.waypoints[index]) return;
+  e.waypoints[index] = { x, y };
+  mark();
+}
+function removeWaypoint(e, index){
+  if (!e || !e.waypoints || !e.waypoints[index]) return;
+  e.waypoints.splice(index, 1);
+  if (!e.waypoints.length) e.waypoints = null;
+  mark();
+}
+function clearWaypoints(e){
+  if (!e) return;
+  e.waypoints = null;
+  mark();
+}
+/* 拖到几乎成一条直线时把拐点自动收掉 */
+function pruneWaypoint(e, index){
+  if (!e || !e.waypoints || e.waypoints.length < 1) return false;
+  const pts = edgeGeomFor(e) ? edgeGeomFor(e).pts : null;
+  if (!pts) return false;
+  const i = index + 1;                       // pts[0] 是起点锚点，拐点从 1 开始
+  if (i <= 0 || i >= pts.length - 1) return false;
+  if (distSeg(pts[i], pts[i - 1], pts[i + 1]) < 8){
+    removeWaypoint(e, index);
+    return true;
+  }
+  return false;
 }
 
 function moveSelection(dx, dy){

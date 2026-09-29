@@ -88,6 +88,15 @@
   </div>
 </div>
 
+<div id="endbox" class="ud">
+  <h2>* 连线端点</h2>
+  <div class="sub" id="endSub"></div>
+  <div id="endList" class="endlist"></div>
+  <div class="acts">
+    <button class="ud-btn" id="endClose">完成</button>
+  </div>
+</div>
+
 <div id="help" class="ud">
   <h2>* 操作指南</h2>
   <table>
@@ -99,6 +108,9 @@
     <tr><td class="sec" colspan="2">— 连线 —</td></tr>
     <tr><td>点选连线</td><td>选中它（节点选择被清掉），两端出现可拖的手柄</td></tr>
     <tr><td>拖拽端点手柄</td><td>把这一端取下来，接到别的节点上；松开在空白处 = 取消</td></tr>
+    <tr><td>拖拽已选中的连线</td><td>拉出一个拐点，自由改变走向；拉成直线会自动收掉</td></tr>
+    <tr><td>拖拽拐点方块 / 双击拐点</td><td>移动它 / 删掉它</td></tr>
+    <tr><td>右键连线「在此添加拐点」</td><td>在指定位置插一个拐点；「清除全部拐点」一次清完</td></tr>
     <tr><td>E / 右键「连线样式…」</td><td>打开样式面板</td></tr>
     <tr><td>　箭头</td><td>无箭头 / 单向箭头 / 双向箭头</td></tr>
     <tr><td>　线型</td><td>实线 / 虚线</td></tr>
@@ -109,9 +121,12 @@
     <tr><td>双击连线</td><td>快速改标签</td></tr>
     <tr><td class="sec" colspan="2">— 编辑 —</td></tr>
     <tr><td>F2 / 双击节点</td><td>重命名（Shift+Enter 换行）</td></tr>
+    <tr><td>拖节点右下角手柄</td><td>自由调整节点尺寸（右键可「恢复自适应尺寸」）</td></tr>
+    <tr><td>右键节点「连线端点吸附…」</td><td>把某条连线的这一端钉在上/右/下/左任意一条边上；默认是「自动」</td></tr>
     <tr><td>直接打字</td><td>覆盖文本重新命名（w/a/s/d 已让给生成节点）</td></tr>
     <tr><td>Delete / Backspace</td><td>删除选中的节点（连同子孙）或选中的连线</td></tr>
-    <tr><td>Space</td><td>折叠 / 展开子树</td></tr>
+    <tr><td>Space / 右键「折叠子树」</td><td>折叠子树（整棵子孙真的会藏起来）</td></tr>
+    <tr><td>点节点上的数字角标</td><td>展开（角标上写的就是被藏起来的子孙数量）</td></tr>
     <tr><td class="sec" colspan="2">— 导航 —</td></tr>
     <tr><td>拖拽空白 / 中键拖</td><td>平移画布</td></tr>
     <tr><td>滚轮</td><td>以光标为中心缩放</td></tr>
@@ -165,6 +180,7 @@
 <script src="src/ui/help.js"></script>
 <script src="src/ui/exporter.js"></script>
 <script src="src/ui/edgebox.js"></script>
+<script src="src/ui/endbox.js"></script>
 <script src="src/ui/cursor.js"></script>
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>

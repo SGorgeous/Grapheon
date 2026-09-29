@@ -28,6 +28,7 @@
   }
   const S = (wp) => w2s(wp);
   const center = (n) => S({ x:n.x + n.w / 2, y:n.y + n.h / 2 });
+  const center0 = (n) => ({ x:n.x + n.w / 2, y:n.y + n.h / 2 });   // 世界坐标下的中心
   const nodeByText = (t) => doc.nodes.find(n => n.text === t);
   const rootNode = () => doc.nodes.find(n => isRoot(n));   // fresh() 会重建文档，别缓存节点引用
   const edgeOf = (s, t) => doc.edges.find(e => e.s === s.id && e.t === t.id);
@@ -837,6 +838,330 @@
     selEdgeId = saved;
     ok('E07 两者尺寸一致', withSel.width === withoutSel.width && withSel.height === withoutSel.height);
     ok('E07b 导出前后选中态被还原', selEdgeId === e.id);
+  /* ==================== 折叠子树（真隐藏）==================== */
+  T('H01 折叠后整棵子树真的被藏起来', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');                 // 有 3 个子节点
+    const kids = descendants(b.id);
+    ok('H01 前置：它有子孙', kids.length === 3, kids.length);
+    const kid = byId(kids[0]);
+    ok('H01b 折叠前能命中子节点', hitNode(center0(kid)) === kid);
+    selectOnly(b.id);
+    toggleCollapseOf(b);
+    ok('H01c collapsed 已置位', b.collapsed === true);
+    ok('H01d 子孙都被标记为隐藏', kids.every(id => isHidden(id)), kids.filter(id => !isHidden(id)).join(','));
+    ok('H01e 子节点再也点不到', hitNode(center0(kid)) === null);
+    ok('H01f 子节点不在绘制列表里', isHidden(kid.id));
+    ok('H01g 折到子节点的连线也隐藏了',
+      doc.edges.filter(e => e.s === b.id && kids.indexOf(e.t) >= 0).every(e => !edgeVisible(e)));
+    ok('H01h 隐藏数量正确', idx.hidden.size === 3, idx.hidden.size);
+  });
+  T('H02 点折叠角标就能展开', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    selectOnly(b.id); toggleCollapseOf(b);
+    const r = collapseBadgeRect(b);
+    const c = S({ x:r.x + r.w / 2, y:r.y + r.h / 2 });
+    pe('pointerdown', c.x, c.y);
+    ok('H02 点角标后已展开', b.collapsed === false);
+    ok('H02b 子孙重新可见', descendants(b.id).every(id => !isHidden(id)));
+    pe('pointerup', c.x, c.y);
+  });
+  T('H03 隐藏的节点选不中（框选 / 全选都会跳过）', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    selectOnly(b.id); toggleCollapseOf(b);
+    selectAll();
+    ok('H03 全选不含隐藏节点', [...sel].every(id => !isHidden(id)), sel.size + ' 个');
+    const p1 = S({ x:bboxAll().minX - 80, y:bboxAll().minY - 80 });
+    const p2 = S({ x:bboxAll().maxX + 80, y:bboxAll().maxY + 80 });
+    pe('pointerdown', p1.x, p1.y, { shiftKey:true });
+    pe('pointermove', p2.x, p2.y, { shiftKey:true });
+    pe('pointerup', p2.x, p2.y, { shiftKey:true });
+    ok('H03b 框选也不含隐藏节点', [...sel].every(id => !isHidden(id)), sel.size + ' / ' + doc.nodes.length);
+  });
+  T('H04 折叠期间拖动父节点，展开时子树跟着走', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    const kidId = descendants(b.id)[0];
+    selectOnly(b.id); toggleCollapseOf(b);
+    const before = { x:byId(kidId).x, y:byId(kidId).y };
+    b.x += 300; b.y += 120;                      // 等价于拖拽父节点
+    toggleCollapseOf(b);                         // 展开
+    const after = { x:byId(kidId).x, y:byId(kidId).y };
+    ok('H04 子树整体跟着父节点位移',
+      Math.abs((after.x - before.x) - 300) < 0.01 && Math.abs((after.y - before.y) - 120) < 0.01,
+      JSON.stringify({ dx:after.x - before.x, dy:after.y - before.y }));
+  });
+  T('H05 删除折叠的节点会连隐藏的子孙一起删', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    const kids = descendants(b.id);
+    selectOnly(b.id); toggleCollapseOf(b);
+    const before = doc.nodes.length;
+    selectOnly(b.id);
+    deleteSelection();
+    ok('H05 连子孙一起删掉', doc.nodes.length === before - 1 - kids.length, before + ' -> ' + doc.nodes.length);
+    ok('H05b 没有悬挂连线', doc.edges.every(x => byId(x.s) && byId(x.t)));
+    ok('H05c 隐藏表已清空', idx.hidden.size === 0);
+  });
+  T('H06 导出范围跳过隐藏节点', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    selectOnly(b.id); toggleCollapseOf(b);
+    sel.clear(); selEdgeId = null;
+    expScope = 'all'; renderScopes();
+    const set = currentExportSet();
+    ok('H06 全部范围不含隐藏节点', set.every(n => !isHidden(n.id)), set.length + ' / ' + doc.nodes.length);
+    ok('H06b 数量对得上', set.length === doc.nodes.length - 3, set.length);
+  });
+  T('H07 折叠状态能存下来', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    selectOnly(b.id); toggleCollapseOf(b);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const b2 = nodeByText('连线');
+    ok('H07 collapsed 往返保留', b2.collapsed === true);
+    ok('H07b 重新索引后隐藏集正确', descendants(b2.id).every(id => isHidden(id)));
+  });
+
+  /* ==================== 端点钉位（自由连接，默认自动）==================== */
+  T('S01 默认是自动吸附，端点不钉死', () => {
+    fresh(); layoutMind();
+    ok('S01 所有边默认 aSide/bSide 为 null',
+      doc.edges.every(e => e.aSide === null && e.bSide === null),
+      doc.edges.map(e => e.aSide + '/' + e.bSide).join(' '));
+  });
+  T('S02 节点右键菜单里有「连线端点吸附…」', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    const c = center(b);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
+    ok('S02 菜单显示', ctxEl.style.display === 'block');
+    const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('S02b 有端点吸附项', labels.some(t => t.indexOf('连线端点吸附') === 0), labels.join(' | '));
+    const it = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('连线端点吸附') === 0);
+    if (it) it.click();
+    ok('S02c 面板打开', endBoxEl.style.display === 'block');
+    ok('S02d 面板列出该节点的连线', endListEl.querySelectorAll('.endrow').length === 4,
+      endListEl.querySelectorAll('.endrow').length + ' 行');
+  });
+  T('S03 指定端点后几何真的接在那条边上', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    openEndBox(b);
+    const row = endListEl.querySelectorAll('.endrow')[0];
+    const opts = [...row.querySelectorAll('.opt')];
+    ok('S03 默认高亮「自动」', opts[0].className.indexOf('on') >= 0);
+    const targetId = doc.edges.find(e => e.s === b.id).t;
+    const e = doc.edges.find(x => x.s === b.id && x.t === targetId);
+    opts[1].click();                              // 上
+    ok('S03b aSide 变成 t', e.aSide === 't', e.aSide);
+    const ep = edgeEndpoints(e);
+    const want = anchorsFor(b).t;
+    ok('S03c 起点锚点就在上边中点',
+      Math.abs(ep.a.x - want.x) < 0.01 && Math.abs(ep.a.y - want.y) < 0.01,
+      JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
+    const opts2 = [...endListEl.querySelectorAll('.endrow')[0].querySelectorAll('.opt')];
+    opts2[0].click();                             // 回到自动
+    ok('S03d 可以恢复自动', e.aSide === null);
+    closeEndBox();
+  });
+  T('S04 钉死的端点不随相对位置改变', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    const targetId = doc.edges.find(e => e.s === b.id).t;
+    const e = doc.edges.find(x => x.s === b.id && x.t === targetId);
+    setEdgeSide(e, 'a', 'b');                     // 钉在下边
+    const before = edgeEndpoints(e).a;
+    const target = byId(targetId);
+    target.x += 400; target.y -= 300;             // 把目标挪走
+    const after = edgeEndpoints(e).a;
+    ok('S04 起点仍钉在同一条边上', Math.abs(after.y - before.y) < 0.01, after.y + ' vs ' + before.y);
+  });
+  T('S05 端点钉位能存下来', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    setEdgeSide(e, 'a', 't'); setEdgeSide(e, 'b', 'l');
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const e2 = doc.edges.find(x => x.id === e.id);
+    ok('S05 往返保留', e2.aSide === 't' && e2.bSide === 'l', e2.aSide + '/' + e2.bSide);
+  });
+  T('S06 非法值会被规整成自动', () => {
+    fresh();
+    const e = doc.edges[0];
+    e.aSide = 'xx'; normalizeEdge(e);
+    ok('S06 非法端点值 → null', e.aSide === null);
+  });
+
+  /* ==================== 节点自由缩放 ==================== */
+  T('W01 默认随文字自适应', () => {
+    fresh();
+    ok('W01 没有 fixedW/fixedH', doc.nodes.every(n => !n.fixedW && !n.fixedH));
+  });
+  T('W02 拖右下角手柄改尺寸', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);
+    const r = resizeHandleRect(n);
+    const h = S({ x:r.x + r.w / 2, y:r.y + r.h / 2 });
+    const tgt = S({ x:n.x + 320, y:n.y + 200 });
+    pe('pointerdown', h.x, h.y);
+    ok('W02 进入缩放态', drag && drag.mode === 'resize', drag && drag.mode);
+    pe('pointermove', tgt.x, tgt.y);
+    ok('W02b 宽度变了', Math.abs(n.w - 320) <= 1, n.w);
+    ok('W02c 高度变了', Math.abs(n.h - 200) <= 1, n.h);
+    ok('W02d 记到了 fixedW/fixedH', n.fixedW === n.w && n.fixedH === n.h);
+    pe('pointerup', tgt.x, tgt.y);
+    ok('W02e 状态已退出', !drag);
+  });
+  T('W03 尺寸有下限，缩不成负的', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);
+    const r = resizeHandleRect(n);
+    const h = S({ x:r.x + r.w / 2, y:r.y + r.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    pe('pointermove', h.x - 900, h.y - 900);
+    pe('pointerup', h.x - 900, h.y - 900);
+    ok('W03 不小于下限', n.w >= MIN_FIXED_W && n.h >= MIN_FIXED_H, n.w + 'x' + n.h);
+  });
+  T('W04 恢复自适应尺寸', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setNodeSize(n, 300, 200);
+    ok('W04 先改成固定尺寸', n.fixedW === 300);
+    const c = center(n);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
+    const it = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('恢复自适应') === 0);
+    ok('W04b 右键里有恢复项', !!it);
+    if (it) it.click();
+    ok('W04c 已清掉固定尺寸', !n.fixedW && !n.fixedH);
+    ok('W04d 又回到自动宽度', n.w !== 300);
+    hideCtx();
+  });
+  T('W05 固定尺寸能存下来，且排版时按它算', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setNodeSize(n, 360, 180);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const n2 = nodeByText('节点');
+    ok('W05 往返保留', n2.fixedW === 360 && n2.fixedH === 180, n2.fixedW + 'x' + n2.fixedH);
+    layoutMind();
+    ok('W05b 尺寸没被排版改掉', n2.w === 360 && n2.h === 180, n2.w + 'x' + n2.h);
+    ok('W05c 排版后仍然无重叠', overlaps().length === 0, overlaps().join(' '));
+  });
+
+  /* ==================== 连线拐点 ==================== */
+  T('V01 拖已选中的连线会拉出拐点', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id);
+    ok('V01 前置：还没有拐点', !e.waypoints);
+    const ms = S(edgeGeomFor(e).mid);
+    pe('pointerdown', ms.x, ms.y);
+    pe('pointermove', ms.x + 90, ms.y + 70);
+    pe('pointerup', ms.x + 90, ms.y + 70);
+    ok('V01b 生成了 1 个拐点', e.waypoints && e.waypoints.length === 1, e.waypoints && e.waypoints.length);
+    ok('V01c 几何多了一个折点', edgeGeomFor(e).pts.length === 3, edgeGeomFor(e).pts.length);
+  });
+  T('V02 没选中时点连线只是选中，不会拉拐点', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    const m = S(edgeGeomFor(e).mid);
+    pe('pointerdown', m.x, m.y);
+    pe('pointermove', m.x + 80, m.y + 60);
+    pe('pointerup', m.x + 80, m.y + 60);
+    ok('V02 只是选中了它', selEdgeId === e.id);
+    ok('V02b 没有产生拐点', !e.waypoints);
+  });
+  T('V03 拖拐点手柄移动它', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id);
+    addWaypoint(e, 400, 400);
+    const w = S({ x:400, y:400 });
+    pe('pointerdown', w.x, w.y);
+    ok('V03 抓住的是拐点', drag && drag.mode === 'bend' && drag.index === 0, drag && drag.mode + '/' + (drag && drag.index));
+    pe('pointermove', w.x + 50, w.y - 30);
+    pe('pointerup', w.x + 50, w.y - 30);
+    const moved = e.waypoints[0];
+    ok('V03b 拐点跟着移动',
+      Math.abs(moved.x - (400 + 50 / view.z)) < 2 && Math.abs(moved.y - (400 - 30 / view.z)) < 2,
+      Math.round(moved.x) + ',' + Math.round(moved.y));
+  });
+  T('V04 拉成一条直线会自动收掉拐点', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id);
+    addWaypoint(e, 400, 400);
+    const pts = edgeGeomFor(e).pts;
+    moveWaypoint(e, 0, (pts[0].x + pts[2].x) / 2, (pts[0].y + pts[2].y) / 2);
+    ok('V04 判定为直线并删除', pruneWaypoint(e, 0) === true);
+    ok('V04b 拐点已清空', !e.waypoints || e.waypoints.length === 0);
+  });
+  T('V05 双击拐点删除它', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id);
+    addWaypoint(e, 500, 500);
+    const w = S({ x:500, y:500 });
+    cv.dispatchEvent(new MouseEvent('dblclick', { clientX:w.x, clientY:w.y, bubbles:true, cancelable:true }));
+    ok('V05 拐点已删掉', !e.waypoints || e.waypoints.length === 0, e.waypoints && e.waypoints.length);
+  });
+  T('V06 右键连线可以加 / 清拐点', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    const m = S(edgeGeomFor(e).mid);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
+    const add = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('在此添加拐点') === 0);
+    ok('V06 菜单里有「在此添加拐点」', !!add);
+    if (add) add.click();
+    ok('V06b 加上了一个拐点', e.waypoints && e.waypoints.length === 1);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
+    const clr = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('清除全部拐点') === 0);
+    ok('V06c 有拐点时出现「清除全部拐点」', !!clr);
+    if (clr) clr.click();
+    ok('V06d 已清空', !e.waypoints);
+    hideCtx();
+  });
+  T('V07 曲线 + 拐点走平滑样条', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    setEdgeStyle(e, { route:'ortho' });
+    addWaypoint(e, 400, 500); addWaypoint(e, 700, 300);
+    ok('V07 正交时是折线', edgeGeomFor(e).type === 'p');
+    setEdgeStyle(e, { route:'curve' });
+    const g = edgeGeomFor(e);
+    ok('V07b 曲线时是样条', g.type === 'w', g.type);
+    ok('V07c 端点仍是节点上的锚点', g.pts.length === 4, g.pts.length);
+    dirty = true; draw();
+    ok('V07d 样条能正常绘制', true);
+  });
+  T('V08 拐点能存下来', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    addWaypoint(e, 321, 654);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const e2 = doc.edges.find(x => x.id === e.id);
+    ok('V08 往返保留', e2.waypoints && e2.waypoints.length === 1 &&
+      e2.waypoints[0].x === 321 && e2.waypoints[0].y === 654, JSON.stringify(e2.waypoints));
+  });
+  T('V09 拐点能被命中（用于拖拽 / 删除）', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id);
+    addWaypoint(e, 600, 600);
+    ok('V09 命中拐点', (hitWaypoint({ x:600, y:600 }) || {}).index === 0);
+    ok('V09b 离远了不命中', hitWaypoint({ x:100, y:100 }) === null);
+    selEdgeId = null;
+    ok('V09c 没选中连线时不命中拐点', hitWaypoint({ x:600, y:600 }) === null);
+  });
+
   });
 
   /* ==================== 收尾 ==================== */

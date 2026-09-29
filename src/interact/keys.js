@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/keys.js
    快捷键：一张可自定义的绑定表（BINDINGS）+ 一张动作注册表（ACTIONS）。
@@ -71,6 +71,7 @@ function defaultBindings(){
 /* 动作表。overlay:true 表示浮层打开时仍然生效（目前只有 Esc）。 */
 const ACTIONS = {
   'ui.escape':        { label:'关闭浮层 / 取消选择', group:'界面', overlay:true, run(){
+      if (endBoxEl.style.display === 'block'){ closeEndBox(); return; }
       if (edgeBoxEl.style.display === 'block'){ closeEdgeBox(); return; }
       if (expEl.style.display === 'block'){ closeExport(); return; }
       if (helpEl.style.display === 'block'){ closeHelp(); return; }
@@ -185,7 +186,8 @@ function dispatchKey(ev){
   const expOpen  = expEl.style.display === 'block';
   const helpOpen = helpEl.style.display === 'block';
   const boxOpen  = edgeBoxEl.style.display === 'block';
-  if (!act.overlay && (expOpen || helpOpen || boxOpen)) return false;   // 浮层打开时屏蔽其它快捷键
+  const endOpen  = endBoxEl.style.display === 'block';
+  if (!act.overlay && (expOpen || helpOpen || boxOpen || endOpen)) return false;   // 浮层打开时屏蔽其它快捷键
 
   // run() 返回 false 表示「当前不适用」，交回给兜底逻辑（见下面的可打印字符改名）
   if (act.run(ev) === false) return false;
@@ -202,7 +204,8 @@ window.addEventListener('keydown', (ev) => {
   const expOpen  = expEl.style.display === 'block';
   const helpOpen = helpEl.style.display === 'block';
   const boxOpen  = edgeBoxEl.style.display === 'block';
-  if (expOpen || boxOpen) return;                       // 面板打开时不再兜底
+  const endOpen  = endBoxEl.style.display === 'block';
+  if (expOpen || boxOpen || endOpen) return;                       // 面板打开时不再兜底
   if (helpOpen){
     if (ev.key === 'h' || ev.key === 'H' || ev.key === '?'){ ev.preventDefault(); closeHelp(); }
     return;

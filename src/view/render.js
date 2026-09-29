@@ -53,10 +53,14 @@ function drawGrid(){
 }
 function drawGraph(g){
   for (const e of doc.edges){
+    if (!edgeVisible(e)) continue;                    // 被折叠藏起来的不画
     if (relink && relink.edgeId === e.id) continue;   // 正在拖端点的那条改用预览画
     drawEdge(g, e);
   }
-  for (const n of doc.nodes) drawNode(g, n);
+  for (const n of doc.nodes){
+    if (isHidden(n.id)) continue;
+    drawNode(g, n);
+  }
   // 选中节点的连接端口：鼠标悬停在该节点（或已悬停到它的端口）时才显示
   if (sel.size === 1 && !editing){
     const n = byId([...sel][0]);
@@ -95,6 +99,19 @@ function drawGraph(g){
   // 拖拽端点改接的预览
   if (relink) drawRelink(g);
 }
+/* 折叠标记的位置/尺寸 —— 绘制和命中测试共用同一份几何 */
+function collapseBadgeRect(n){
+  const label = String(descendants(n.id).length);
+  setFont(mctx, FS, 'normal');
+  const bw = Math.max(22, mctx.measureText(label).width + 12), bh = 22;
+  return { x:n.x + n.w - bw / 2, y:n.y + n.h / 2 - bh / 2, w:bw, h:bh, label };
+}
+/* 选中节点的右下角缩放手柄 */
+const RESIZE_SZ = 15;
+function resizeHandleRect(n){
+  return { x:n.x + n.w - RESIZE_SZ / 2, y:n.y + n.h - RESIZE_SZ / 2, w:RESIZE_SZ, h:RESIZE_SZ };
+}
+const WAYPOINT_SZ = 13;
 function outlineNode(g, n){
   g.save();
   g.strokeStyle = C.yellow; g.lineWidth = 3;
@@ -118,7 +135,10 @@ function drawRelink(g){
   g.setLineDash([10, 8]);
   if (tgt && fixedNode){
     // 按这条线自己的走线方式预览：松手之后长什么样，现在就长什么样
-    pathGeom(g, e.route === 'curve' ? bezierGeom(fixedNode, tgt) : orthoGeom(fixedNode, tgt, 0), CORNER);
+    const geom = (e.route === 'curve')
+      ? bezierGeom(fixedNode, tgt, draggedIsT ? e.aSide : null, draggedIsT ? null : e.bSide)
+      : orthoGeom(fixedNode, tgt, 0, draggedIsT ? e.aSide : null, draggedIsT ? null : e.bSide);
+    pathGeom(g, geom, CORNER);
     g.stroke();
   } else {
     g.beginPath();
@@ -183,30 +203,46 @@ function drawNode(g, n){
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], n.x + n.w / 2, startY + i * n.lh);
 
   const kids = idx.children.get(n.id) || [];
-  // 只有折叠时才显示「隐藏了 N 个」的标记；展开时端点悬停才出现，两者不会打架
+  // 折叠时才显示「隐藏了 N 个」的标记；它同时也是展开按钮（点一下展开）
   if (kids.length && n.collapsed){
-    const label = String(descendants(n.id).length);
-    setFont(g, FS, 'normal');
-    const tw = g.measureText(label).width;
-    const bw = Math.max(22, tw + 12), bh = 22;
-    const cxb = n.x + n.w, cyb = n.y + n.h / 2;
+    const r = collapseBadgeRect(n);
     g.lineWidth = 2.5; g.strokeStyle = C.white; g.fillStyle = C.bg;
     g.beginPath();
-    g.rect(Math.round(cxb - bw / 2), Math.round(cyb - bh / 2), Math.round(bw), bh);
+    g.rect(Math.round(r.x), Math.round(r.y), Math.round(r.w), r.h);
     g.fill(); g.stroke();
     g.fillStyle = C.white; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(label, cxb, cyb + 1);
+    g.fillText(r.label, r.x + r.w / 2, r.y + r.h / 2 + 1);
   }
-  if (selected) drawHeart(g, n.x - 26, n.y + n.h / 2 - 6.5, 2);
+  if (selected){
+    drawHeart(g, n.x - 26, n.y + n.h / 2 - 6.5, 2);
+    // 右下角缩放手柄
+    const r = resizeHandleRect(n);
+    g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+    g.beginPath();
+    g.rect(Math.round(r.x), Math.round(r.y), r.w, r.h);
+    g.fill(); g.stroke();
+    g.fillStyle = C.yellow;
+    g.fillRect(Math.round(r.x + r.w - 8), Math.round(r.y + r.h - 8), 5, 5);
+  }
   g.restore();
 }
-/* 把一段连线几何铺成当前路径（贝塞尔 / 带圆角的折线），绘制与预览共用 */
+/* 把一段连线几何铺成当前路径（贝塞尔 / 样条 / 带圆角的折线），绘制与预览共用 */
 function pathGeom(g, geom, radius){
   g.beginPath();
   if (!geom) return;
   if (geom.type === 'c'){
     g.moveTo(geom.p0.x, geom.p0.y);
     g.bezierCurveTo(geom.p1.x, geom.p1.y, geom.p2.x, geom.p2.y, geom.p3.x, geom.p3.y);
+    return;
+  }
+  if (geom.type === 'w'){
+    const p = geom.pts;
+    if (p.length < 2) return;
+    g.moveTo(p[0].x, p[0].y);
+    for (let i = 0; i < p.length - 1; i++){
+      const s = catmullSeg(p, i);
+      g.bezierCurveTo(s.c1.x, s.c1.y, s.c2.x, s.c2.y, s.p2.x, s.p2.y);
+    }
     return;
   }
   const pts = geom.pts;
@@ -242,7 +278,7 @@ function drawEdge(g, e){
     if (e.arrow === 'both') arrowHead(g, ap.start.from, ap.start.to, 11);
     arrowHead(g, ap.end.from, ap.end.to, 11);
   }
-  // 选中时在两端画出可拖拽的手柄
+  // 选中时在两端画出可拖拽的手柄，以及每个拐点的手柄
   if (e.id === selEdgeId){
     const ep = geomEndpoints(geom);
     for (const pt of [ep.a, ep.b]){
@@ -253,6 +289,15 @@ function drawEdge(g, e){
       g.fill(); g.stroke();
       g.fillStyle = C.yellow;
       g.fillRect(Math.round(pt.x) - 2, Math.round(pt.y) - 2, 4, 4);
+    }
+    for (const w of (e.waypoints || [])){
+      g.globalAlpha = 1;
+      g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+      g.beginPath();
+      g.rect(Math.round(w.x) - WAYPOINT_SZ / 2, Math.round(w.y) - WAYPOINT_SZ / 2, WAYPOINT_SZ, WAYPOINT_SZ);
+      g.fill(); g.stroke();
+      g.fillStyle = C.yellow;
+      g.fillRect(Math.round(w.x) - 2, Math.round(w.y) - 2, 4, 4);
     }
   }
   g.restore();

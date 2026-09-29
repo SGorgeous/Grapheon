@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -38,8 +38,14 @@ function updateMeta(){
   const nSel = sel.size, eSel = selEdgeId ? 1 : 0;
   let selTxt = '';
   if (nSel) selTxt = ' · 选中 ' + nSel + ' 节点';
-  else if (eSel){ const e = selectedEdge(); selTxt = ' · 选中连线（' + (e ? edgeStyleLabel(e) : '') + '）'; }
-  dlgMeta.textContent = doc.nodes.length + ' 节点 / ' + doc.edges.length + ' 连线' + selTxt +
+  else if (eSel){
+    const e = selectedEdge();
+    const wp = (e && e.waypoints && e.waypoints.length) ? ' · ' + e.waypoints.length + ' 拐点' : '';
+    selTxt = ' · 选中连线（' + (e ? edgeStyleLabel(e) + wp : '') + '）';
+  }
+  const hid = idx.hidden ? idx.hidden.size : 0;
+  dlgMeta.textContent = doc.nodes.length + ' 节点' + (hid ? '（隐藏 ' + hid + '）' : '') +
+    ' / ' + doc.edges.length + ' 连线' + selTxt +
     ' · ' + Math.round(view.z * 100) + '%';
   dlgHint.textContent = HINT;
 }

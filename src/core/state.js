@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -12,15 +12,23 @@ let doc = { v:2, nodes:[], edges:[] };
 const EDGE_DEFAULTS = { arrow:'end', dash:false, route:'ortho' };
 const ARROW_KINDS = ['none', 'end', 'both'];
 const ROUTE_KINDS = ['ortho', 'curve'];
+/* 连线的两端各可以「钉」在节点的某条边上（r/l/t/b）。null = 自动吸附，
+   由路由按两个节点的相对位置挑最合适的一对锚点（默认就是这个）。 */
+const SIDE_KINDS = ['r', 'l', 't', 'b'];
+const SIDE_LABEL = { r:'右', l:'左', t:'上', b:'下' };
+const normSide = (v) => (SIDE_KINDS.indexOf(v) >= 0 ? v : null);
 function normalizeEdge(e){
   if (ARROW_KINDS.indexOf(e.arrow) < 0) e.arrow = EDGE_DEFAULTS.arrow;
   if (ROUTE_KINDS.indexOf(e.route) < 0) e.route = EDGE_DEFAULTS.route;
   e.dash = !!e.dash;
   e.label = e.label == null ? '' : String(e.label);
+  e.aSide = normSide(e.aSide);
+  e.bSide = normSide(e.bSide);
+  if (e.waypoints && !Array.isArray(e.waypoints)) e.waypoints = null;
   return e;
 }
 function makeEdge(s, t){
-  return normalizeEdge({ id:uid('e'), s, t, label:'' });
+  return normalizeEdge({ id:uid('e'), s, t, label:'', aSide:null, bSide:null });
 }
 let nid = 1;
 /* id 分配：节点用 n* 前缀、边用 e* 前缀，共用同一个自增计数器。
@@ -66,11 +74,26 @@ function reindex(){
     n.big = !idx.parent.has(n.id) &&
             ((idx.children.get(n.id) || []).length > 0 || doc.nodes.length === 1);
   }
+  // 折叠：把被折叠节点以下的整棵子树标记为隐藏（绘制/命中/选择/导出都要跳过它们）
+  idx.hidden = new Set();
+  for (const n of doc.nodes){
+    if (!n.collapsed) continue;
+    for (const d of descendants(n.id)) idx.hidden.add(d);
+  }
+  // 选中集里不该留着看不见的东西
+  for (const id of [...sel]) if (idx.hidden.has(id)) sel.delete(id);
+  if (selEdgeId){
+    const e = doc.edges.find(x => x.id === selEdgeId);
+    if (e && (idx.hidden.has(e.s) || idx.hidden.has(e.t))) selEdgeId = null;
+  }
   // 重建 id 占用表，uid() 靠它保证不与既有 id 冲突
   usedIds = new Set();
   for (const n of doc.nodes) usedIds.add(n.id);
   for (const e of doc.edges) usedIds.add(e.id);
 }
+const isHidden = (id) => idx.hidden.has(id);
+/* 这条线整体可见吗（两端都没被折叠藏起来） */
+const edgeVisible = (e) => !idx.hidden.has(e.s) && !idx.hidden.has(e.t);
 function reachUp(from, target){
   let cur = from, guard = 0;
   while (cur !== undefined && guard++ < 5000){
@@ -93,10 +116,13 @@ function sizeAll(){ for (const n of doc.nodes) sizeNode(n); }
 function serialize(){
   return {
     v:2, nid,
-    nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape, collapsed:!!n.collapsed })),
+    nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape,
+      collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
-      arrow:e.arrow, dash:!!e.dash, route:e.route
+      arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
+      waypoints:(e.waypoints && e.waypoints.length)
+        ? e.waypoints.map(p => ({ x:Math.round(p.x), y:Math.round(p.y) })) : null
     }))
   };
 }
@@ -112,7 +138,8 @@ function deserialize(d){
     let id = n.id;
     if (!id || seen.has(id)) id = mkId('n', seen); else seen.add(id);
     doc.nodes.push({ id, text:n.text == null ? '' : String(n.text),
-      x:+n.x || 0, y:+n.y || 0, w:0, h:0, shape:n.shape || 'rect', collapsed:!!n.collapsed });
+      x:+n.x || 0, y:+n.y || 0, w:0, h:0, shape:n.shape || 'rect', collapsed:!!n.collapsed,
+      fixedW:(+n.fixedW > 0) ? +n.fixedW : null, fixedH:(+n.fixedH > 0) ? +n.fixedH : null });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const e of (d.edges || [])){
@@ -121,7 +148,8 @@ function deserialize(d){
     if (!id || seen.has(id)) id = mkId('e', seen); else seen.add(id);
     doc.edges.push(normalizeEdge({
       id, s:e.s, t:e.t, label:e.label || '',
-      arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute
+      arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute, aSide:e.aSide, bSide:e.bSide,
+      waypoints:Array.isArray(e.waypoints) ? e.waypoints.map(p => ({ x:+p.x || 0, y:+p.y || 0 })) : null
     }));
   }
   sel.clear(); selEdgeId = null; editing = null; hideEditor();

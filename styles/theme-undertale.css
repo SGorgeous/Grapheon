@@ -157,3 +157,18 @@ body.dsh-ready{cursor:none}
   width:min(720px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
 }
 #edgebox .opts{flex:1;min-width:0;display:flex;gap:22px;flex-wrap:wrap}
+
+/* ---------- 连线端点面板 ---------- */
+#endbox{
+  position:fixed;display:none;z-index:90;left:50%;top:47%;transform:translate(-50%,-50%);
+  width:min(880px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
+}
+#endbox .sub{color:var(--g);margin:-8px 0 14px}
+#endbox .endlist{max-height:calc(100vh - 380px);overflow:auto}
+#endbox .endrow{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:6px 0;border-bottom:3px solid #333;
+}
+#endbox .endrow:last-child{border-bottom:0}
+#endbox .endname{color:var(--y);flex:none;min-width:220px}
+#endbox .opts{display:flex;gap:16px;flex-wrap:wrap}

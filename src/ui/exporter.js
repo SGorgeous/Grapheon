@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/exporter.js
    导出面板：范围选择、标题与文件名、PNG 输出。
@@ -40,12 +40,14 @@ function loadExportPrefs(){
   } catch (e) {}
 }
 function exportScopes(){
-  const all = doc.nodes.slice();
-  const picked = doc.nodes.filter(n => sel.has(n.id));
+  // 折叠藏起来的节点不算在导出范围里（所见即所得）
+  const visible = doc.nodes.filter(n => !isHidden(n.id));
+  const all = visible;
+  const picked = visible.filter(n => sel.has(n.id));
   let sub = [];
   if (sel.size === 1){
     const r = byId([...sel][0]);
-    if (r){ const ids = new Set([r.id, ...descendants(r.id)]); sub = doc.nodes.filter(n => ids.has(n.id)); }
+    if (r){ const ids = new Set([r.id, ...descendants(r.id)]); sub = visible.filter(n => ids.has(n.id)); }
   }
   return {
     all:{ label:'全部节点',     nodes:all,    hint: all.length + ' 个' },
@@ -66,6 +68,7 @@ function openExport(){
   if (!doc.nodes.length){ say('* 画布上还没有节点，没什么可导出的。'); return; }
   hideCtx(); closeHelp();
   if (typeof closeEdgeBox === 'function') closeEdgeBox();
+  if (typeof closeEndBox === 'function') closeEndBox();
   if (!exportScopes()[expScope].nodes.length) expScope = 'all';
   if (!expNameEl.value) expNameEl.value = 'grapheon-' + new Date().toISOString().slice(0, 10);
   renderScopes();

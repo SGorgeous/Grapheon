@@ -1,12 +1,17 @@
 'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
-   鼠标状态机：框选、平移、拖拽节点、端口拉新线、拖端点改接。
+   鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
+
+   pointerdown 的判定顺序很讲究（手柄都压在别的东西上，先判谁有讲究）：
+     连线端点手柄 → 拐点手柄 → 缩放柄 → 折叠标记 → 连接端口 → 节点 → 连线 → 空白
    ========================================================================== */
 
 /* =========================================================================
    鼠标交互
    ========================================================================= */
+const BEND_THRESHOLD = 6;      // 超过这么多世界单位才算「拉出拐点」，避免误点
+
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.button === 2) return;
   hideCtx();
@@ -17,13 +22,34 @@ canvas.addEventListener('pointerdown', (ev) => {
 
   if (ev.button === 1){ drag = { mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y }; return; }
 
-  // 选中连线的端点手柄优先：它就压在节点边框上，不先判会被 hitNode 抢走
+  // 选中连线的端点手柄：它正好压在节点边框上，不先判会被 hitNode 抢走
   const handle = hitEdgeHandle(p);
   if (handle){
     const otherId = handle.end === 's' ? handle.edge.t : handle.edge.s;
     drag = { mode:'relink', edgeId:handle.edge.id, end:handle.end, otherId, moved:false };
     relink = { edgeId:handle.edge.id, end:handle.end, to:p, target:null };
     mark();
+    return;
+  }
+  // 拐点手柄
+  const wp = hitWaypoint(p);
+  if (wp){
+    drag = { mode:'bend', edgeId:wp.edgeId, index:wp.index, p0:p, moved:false };
+    mark();
+    return;
+  }
+  // 缩放柄
+  const rz = hitResizeHandle(p);
+  if (rz){
+    selectOnly(rz.id);
+    drag = { mode:'resize', nodeId:rz.id, startW:rz.w, startH:rz.h, moved:false };
+    mark();
+    return;
+  }
+  // 折叠标记 = 展开按钮
+  const cb = hitCollapseBadge(p);
+  if (cb){
+    toggleCollapseOf(cb);
     return;
   }
   const port = hitPort(p);
@@ -58,7 +84,13 @@ canvas.addEventListener('pointerdown', (ev) => {
   }
   const e = hitEdge(p);
   if (e){
-    selectEdge(e.id);            // 单独选中连线，节点选择被清掉
+    if (selEdgeId === e.id){
+      // 已经选中了：拖线身 = 拉出一个新的拐点（超过阈值才真的建）
+      drag = { mode:'bend', edgeId:e.id, index:-1, p0:p, moved:false };
+      mark();
+      return;
+    }
+    selectEdge(e.id);
     hoverEdge = null;
     lastClickNode = null;
     mark();
@@ -71,6 +103,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   else drag = { mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y };
   mark();
 });
+
 window.addEventListener('pointermove', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
   if (drag){
@@ -82,6 +115,13 @@ window.addEventListener('pointermove', (ev) => {
       const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
       for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
+      mark();
+    } else if (drag.mode === 'resize'){
+      const n = byId(drag.nodeId);
+      if (n){
+        setNodeSize(n, p.x - n.x, p.y - n.y);
+        drag.moved = true;
+      }
       mark();
     } else if (drag.mode === 'marquee'){
       marquee.b = p; mark();
@@ -95,6 +135,18 @@ window.addEventListener('pointermove', (ev) => {
       relink.target = (t && t.id !== drag.otherId) ? t : null;   // 不许接到自己另一端造成自环
       drag.moved = true;
       mark();
+    } else if (drag.mode === 'bend'){
+      const e = doc.edges.find(x => x.id === drag.edgeId);
+      if (e){
+        if (drag.index < 0){
+          if (Math.hypot(p.x - drag.p0.x, p.y - drag.p0.y) < BEND_THRESHOLD / view.z) return;
+          drag.index = addWaypoint(e, p.x, p.y);       // 第一次超过阈值才真的建拐点
+        } else {
+          moveWaypoint(e, drag.index, p.x, p.y);
+        }
+        drag.moved = true;
+        mark();
+      }
     }
     return;
   }
@@ -104,10 +156,23 @@ window.addEventListener('pointermove', (ev) => {
   if (!hoverPort && !hover && ev.target === canvas) hoverEdge = hitEdge(p);
   mark();
 });
+
 window.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   const p = s2w(ev.clientX, ev.clientY);
   if (drag.mode === 'node' && drag.moved){
+    pushHist();
+  } else if (drag.mode === 'resize' && drag.moved){
+    const n = byId(drag.nodeId);
+    if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
+    pushHist();
+  } else if (drag.mode === 'bend' && drag.moved){
+    const e = doc.edges.find(x => x.id === drag.edgeId);
+    if (e && drag.index >= 0 && pruneWaypoint(e, drag.index)){
+      say('* 拐点已拉直，自动收掉了。');
+    } else {
+      say('* 已调整拐点。把线拉直会自动收掉，右键可清除全部拐点。');
+    }
     pushHist();
   } else if (drag.mode === 'marquee' && marquee){
     const a = marquee.a, b = marquee.b;
@@ -115,6 +180,7 @@ window.addEventListener('pointerup', (ev) => {
     const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
     sel.clear(); selEdgeId = null;
     for (const n of doc.nodes){
+      if (isHidden(n.id)) continue;
       if (n.x + n.w > x1 && n.x < x2 && n.y + n.h > y1 && n.y < y2) sel.add(n.id);
     }
     if (sel.size) say('* 选中了 ' + sel.size + ' 个节点。');
@@ -146,8 +212,16 @@ window.addEventListener('pointerup', (ev) => {
   }
   drag = null; marquee = null; linking = null; relink = null; mark();
 });
+
 canvas.addEventListener('dblclick', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
+  // 双击拐点 = 删掉它
+  const wp = hitWaypoint(p);
+  if (wp){
+    const e = doc.edges.find(x => x.id === wp.edgeId);
+    if (e){ removeWaypoint(e, wp.index); pushHist(); say('* 拐点已删除。'); }
+    return;
+  }
   const n = hitNode(p);
   if (n){ selectOnly(n.id); startEdit('node', n.id); return; }
   const e = hitEdge(p);
@@ -159,22 +233,27 @@ canvas.addEventListener('dblclick', (ev) => {
   startEdit('node', nn.id, '');
   say('* 创建了一个自由节点。');
 });
+
 canvas.addEventListener('wheel', (ev) => {
   ev.preventDefault();
   const f = Math.pow(1.0016, -ev.deltaY * (ev.deltaMode === 1 ? 18 : 1));
   zoomAt(ev.clientX, ev.clientY, f);
 }, { passive:false });
+
 canvas.addEventListener('contextmenu', (ev) => {
   ev.preventDefault();
   const p = s2w(ev.clientX, ev.clientY);
   const n = hitNode(p);
+  const wp = hitWaypoint(p);
   const e = n ? null : hitEdge(p);
-  if (n) selectOnly(n.id);
+  if (wp) selEdgeId = wp.edgeId;
+  else if (n) selectOnly(n.id);
   else if (e) selectEdge(e.id);
   else selectOnly(null);
-  showCtx(ev.clientX, ev.clientY, n, e);
+  showCtx(ev.clientX, ev.clientY, n, wp ? doc.edges.find(x => x.id === wp.edgeId) : e, { p, waypoint:wp });
   mark();
 });
+
 window.addEventListener('blur', () => {
   drag = null; marquee = null; linking = null; relink = null; mark();
 });

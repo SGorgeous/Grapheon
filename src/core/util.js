@@ -12,6 +12,8 @@ const FS     = 16;      // 正文字号（Unifont 原生尺寸）
 const FS_BIG = 32;      // 根节点字号（2× 原生尺寸）
 const PADX   = 18, PADY = 13;
 const MINW   = 148, MAXW = 300, MINH = 48;
+/* 手动缩放时的下限，别让节点缩成一条线 */
+const MIN_FIXED_W = 72, MIN_FIXED_H = 40;
 const HGAP   = 68, VGAP = 18, ROOT_VGAP = 150;
 const STUB   = 22, CORNER = 10;
 /* 画布调色板。实际值由 core/theme.js 的 applyTheme() 写入，
