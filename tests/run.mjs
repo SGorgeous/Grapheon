@@ -139,6 +139,7 @@ try {
   child.kill();
   if (!KEEP){
     try { unlinkSync(TMP); } catch (e) {}
+    try { rmSync(profile, { recursive:true, force:true }); } catch (e) {}
   } else {
     console.log('\n临时页面保留在 ' + TMP);
   }
