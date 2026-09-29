@@ -65,6 +65,7 @@ function exportGeometry(nodes){
 function openExport(){
   if (!doc.nodes.length){ say('* 画布上还没有节点，没什么可导出的。'); return; }
   hideCtx(); closeHelp();
+  if (typeof closeEdgeBox === 'function') closeEdgeBox();
   if (!exportScopes()[expScope].nodes.length) expScope = 'all';
   if (!expNameEl.value) expNameEl.value = 'grapheon-' + new Date().toISOString().slice(0, 10);
   renderScopes();
@@ -137,11 +138,11 @@ function buildExportCanvas(nodesIn, titleIn){
 function drawGraphForExport(g, nodes, edges){
   nodes = nodes || doc.nodes;
   if (!edges){ const ids = new Set(nodes.map(n => n.id)); edges = doc.edges.filter(e => ids.has(e.s) && ids.has(e.t)); }
-  const savedHover = hover, savedEdge = hoverEdge, savedSel = sel;
-  hover = null; hoverEdge = null; sel = new Set();
-  for (const e of edges) drawEdge(g, e, false);
+  const savedHover = hover, savedEdge = hoverEdge, savedSel = sel, savedSelEdge = selEdgeId;
+  hover = null; hoverEdge = null; sel = new Set(); selEdgeId = null;   // 导出图里不要选中态和手柄
+  for (const e of edges) drawEdge(g, e);
   for (const n of nodes) drawNode(g, n);
-  hover = savedHover; hoverEdge = savedEdge; sel = savedSel;
+  hover = savedHover; hoverEdge = savedEdge; sel = savedSel; selEdgeId = savedSelEdge;
 }
 function doExport(){
   const nodes = currentExportSet();

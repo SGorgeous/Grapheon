@@ -70,7 +70,6 @@ editor.addEventListener('input', () => {
     if (n){
       n.text = editor.value;
       sizeAll();
-      if (doc.mode === 'mind' && doc.autoLayout) layoutMind();
     }
   }
   positionEditor();
@@ -92,7 +91,6 @@ function commitEdit(){
   }
   hideEditor();
   sizeAll();
-  if (doc.mode === 'mind' && doc.autoLayout) layoutMind();
   pushHist();
   mark();
 }
@@ -107,7 +105,6 @@ function cancelEdit(){
   }
   hideEditor();
   sizeAll();
-  if (doc.mode === 'mind' && doc.autoLayout) layoutMind();
   mark();
 }
 

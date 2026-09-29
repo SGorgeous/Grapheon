@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/routing.js
    连线几何：四向锚点、正交折线（含走廊错位）、贝塞尔。
@@ -79,12 +79,40 @@ function orthoGeom(a, b, bias){
   const n = clean.length;
   return { type:'p', pts:clean, mid: clean[Math.floor(n / 2)], dir:B.d };
 }
-function edgeGeom(a, b){ return doc.mode === 'mind' ? bezierGeom(a, b) : orthoGeom(a, b); }
+/* ---------------- 走线：按每条线自己的 route 决定 ---------------- */
 function edgeGeomFor(e){
   const a = byId(e.s), b = byId(e.t);
   if (!a || !b) return null;
-  if (doc.mode === 'mind') return bezierGeom(a, b);
+  if (e.route === 'curve') return bezierGeom(a, b);
+  // 正交折线：按 id 哈希给每条线一点走廊偏移，避免平行线完全重叠
   return orthoGeom(a, b, ((hashId(e.id) % 7) - 3) * 9);
+}
+/* 几何的两端（用于拖拽端点、画箭头） */
+function geomEndpoints(geom){
+  if (!geom) return null;
+  if (geom.type === 'c') return { a:geom.p0, b:geom.p3 };
+  return { a:geom.pts[0], b:geom.pts[geom.pts.length - 1] };
+}
+function edgeEndpoints(e){ return geomEndpoints(edgeGeomFor(e)); }
+/* 每个箭头的「从哪指向哪」，起点箭头是指进起始节点，终点箭头是指进目标节点 */
+function geomArrowPoints(geom){
+  if (!geom) return null;
+  if (geom.type === 'c'){
+    return { start:{ from:geom.p1, to:geom.p0 }, end:{ from:geom.p2, to:geom.p3 } };
+  }
+  const p = geom.pts;
+  return { start:{ from:p[1], to:p[0] }, end:{ from:p[p.length - 2], to:p[p.length - 1] } };
+}
+/* 一个节点上离某点最近的锚点（拖拽重连时的吸附位置） */
+function nearestAnchor(n, from){
+  const P = anchorsFor(n);
+  let best = null, bd = Infinity;
+  for (const k of ['r', 'l', 't', 'b']){
+    const a = P[k];
+    const d = Math.hypot(a.x - from.x, a.y - from.y);
+    if (d < bd){ bd = d; best = a; }
+  }
+  return best;
 }
 function hashId(s){
   let h = 2166136261;

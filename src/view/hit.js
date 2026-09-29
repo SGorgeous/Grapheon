@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/hit.js
    命中测试：节点 / 连接端口 / 连线。
@@ -39,4 +39,17 @@ function hitEdge(p){
   }
   return best;
 }
+/* 选中连线两端的拖拽手柄。必须优先于 hitNode —— 手柄正好压在节点边框上。 */
+function hitEdgeHandle(p){
+  if (!selEdgeId) return null;
+  const e = doc.edges.find(x => x.id === selEdgeId);
+  if (!e) return null;
+  const ep = edgeEndpoints(e);
+  if (!ep) return null;
+  const tol = Math.max(12, 12 / view.z);      // 缩小后手柄也跟着变小，给个屏幕像素下限
+  if (Math.hypot(p.x - ep.a.x, p.y - ep.a.y) <= tol) return { edge:e, end:'s' };
+  if (Math.hypot(p.x - ep.b.x, p.y - ep.b.y) <= tol) return { edge:e, end:'t' };
+  return null;
+}
+function selectedEdge(){ return selEdgeId ? (doc.edges.find(x => x.id === selEdgeId) || null) : null; }
 

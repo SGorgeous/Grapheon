@@ -12,7 +12,7 @@ const dlgArrow = document.getElementById('dlgArrow');
 const dlgMeta  = document.getElementById('dlgMeta');
 const dlgHint  = document.getElementById('dlgHint');
 let dlg = { full:'', shown:0, timer:null };
-const HINT = '方向键/WASD 生成节点 · Ctrl+方向键 仅跳转 · Tab 子节点 · Enter 兄弟 · F2 改名 · Space 折叠 · Del 删除 · 滚轮缩放 · H 帮助';
+const HINT = '方向键/WASD 生成节点 · Tab 子节点 · Enter 兄弟 · E 改连线样式 · 拖端点可改接 · Del 删除 · H 帮助';
 function say(msg){
   dlg.full = msg; dlg.shown = 0;
   clearInterval(dlg.timer);
@@ -35,9 +35,12 @@ function skipDlg(){
   dlgArrow.style.visibility = 'visible';
 }
 function updateMeta(){
-  const mode = doc.mode === 'mind' ? '思维导图' : '流程图';
-  const auto = doc.mode === 'mind' ? (doc.autoLayout ? '自动排版' : '自由摆放') : '自由摆放';
-  dlgMeta.textContent = mode + ' · ' + auto + ' · ' + doc.nodes.length + ' 节点 / ' + doc.edges.length + ' 连线 · ' + Math.round(view.z * 100) + '%';
+  const nSel = sel.size, eSel = selEdgeId ? 1 : 0;
+  let selTxt = '';
+  if (nSel) selTxt = ' · 选中 ' + nSel + ' 节点';
+  else if (eSel){ const e = selectedEdge(); selTxt = ' · 选中连线（' + (e ? edgeStyleLabel(e) : '') + '）'; }
+  dlgMeta.textContent = doc.nodes.length + ' 节点 / ' + doc.edges.length + ' 连线' + selTxt +
+    ' · ' + Math.round(view.z * 100) + '%';
   dlgHint.textContent = HINT;
 }
 document.getElementById('dialogue').addEventListener('click', skipDlg);

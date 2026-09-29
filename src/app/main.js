@@ -20,14 +20,15 @@ function boot(){
       if (j && j.nodes && j.nodes.length) { deserialize(j); loaded = true; }
     }
   } catch(e){}
-  if (!loaded) deserialize(demoDoc());
+  if (!loaded){
+    deserialize(demoDoc());
+    layoutMind();       // 示例文档的节点都从原点开始，先按树形摆一次
+  }
   reindex(); sizeAll();
-  if (doc.mode === 'mind' && doc.autoLayout) layoutMind();
-  syncButtons();
   initHist();
   fitView();
   document.body.classList.add('dsh-ready');
-  say('* 欢迎来到 GRAPHEON。选中节点后按方向键或 WASD，就能在该方向长出新的节点。');
+  say('* 欢迎来到 GRAPHEON。选中节点后按方向键或 WASD 生成节点；点选连线后按 E 改连线样式。');
   updateMeta();
   setInterval(updateMeta, 500);
   requestAnimationFrame(loop);

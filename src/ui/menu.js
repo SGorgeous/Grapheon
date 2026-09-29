@@ -42,8 +42,14 @@ function showCtx(x, y, n, e){
     items.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', toggleCollapse]);
     items.push(['删除节点', 'Del', deleteSelection]);
   } else if (e){
-    items.push(['编辑标签', '', () => startEdit('edge', e.id)]);
-    items.push(['删除连线', '', () => deleteEdgeOnly(e)]);
+    items.push(['连线样式…', 'E', () => openEdgeBox()]);
+    items.push('hr');
+    items.push(['箭头：' + ARROW_LABEL[e.arrow], '▶', () => { cycleEdgeArrow(e); pushHist(); }]);
+    items.push(['线型：' + (e.dash ? '虚线' : '实线'), '▶', () => { setEdgeStyle(e, { dash: !e.dash }); pushHist(); say('* 线型：' + (e.dash ? '虚线' : '实线')); }]);
+    items.push(['走线：' + ROUTE_LABEL[e.route], '▶', () => { cycleEdgeRoute(e); pushHist(); }]);
+    items.push('hr');
+    items.push(['编辑标签', '双击', () => startEdit('edge', e.id)]);
+    items.push(['删除连线', 'Del', () => deleteEdgeOnly(e)]);
   } else {
     items.push(['在此新建节点', '双击', () => {
       const p = s2w(x, y);
@@ -51,7 +57,7 @@ function showCtx(x, y, n, e){
       reindex(); relayout(); selectOnly(nn.id); pushHist(); startEdit('node', nn.id, ''); mark();
     }]);
     items.push(['全选', 'Ctrl+A', selectAll]);
-    items.push(['整理布局', 'Ctrl+L', () => { doc.autoLayout = true; relayout(); fitIfNeeded(); pushHist(); say('* 已重新排版。'); }]);
+    items.push(['排版（按树形摆一次）', 'Ctrl+L', () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }]);
     items.push(['居中显示', '', fitView]);
   }
   showMenu(x, y, items);

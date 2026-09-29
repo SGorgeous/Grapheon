@@ -10,9 +10,7 @@
    ========================================================================== */
 
 const TOPBAR = [
-  ['b-mind',  () => setMode('mind')],
-  ['b-flow',  () => setMode('flow')],
-  ['b-tidy',  () => { doc.autoLayout = true; relayout(); fitIfNeeded(); pushHist(); say('* 已重新排版。'); }],
+  ['b-tidy',  () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }],
   ['b-undo',  () => undo()],
   ['b-redo',  () => redo()],
   ['b-new',   (ev) => { hideCtx(); showNewMenu(ev.currentTarget); }],

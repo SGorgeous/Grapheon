@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/layout.js
    思维导图：以根为中心、子树按高度贪心平衡分到左右两侧。
@@ -83,9 +83,16 @@ function placeSub(id, dir, edgeX, yTop, cache){
   }
   n.y = (centers[0] + centers[centers.length - 1]) / 2 - n.h / 2;
 }
+/* 内容变了之后重算尺寸（不再有「实时自动排版」这回事） */
 function relayout(){
   sizeAll();
-  if (doc.mode === 'mind' && doc.autoLayout) layoutMind();
+  mark();
+}
+/* 「排版」按钮 / Ctrl+L：按树形把节点摆一次。这是一次性操作，不会一直管着你的手动位置。 */
+function tidyLayout(){
+  sizeAll();
+  layoutMind();
+  fitIfNeeded();
   mark();
 }
 

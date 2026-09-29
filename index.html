@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>* GRAPHEON — 流程图 / 思维导图</title>
+<title>* GRAPHEON — 节点与连线</title>
 
 <link rel="stylesheet" href="styles/theme-undertale.css">
 </head>
@@ -12,12 +12,10 @@
 <canvas id="stage"></canvas>
 
 <div id="ui">
-  <div id="brand" class="ud">* GRAPHEON<small>FLOWCHART / MINDMAP</small></div>
+  <div id="brand" class="ud">* GRAPHEON<small>NODES / CONNECTIONS</small></div>
 
   <div id="topbar">
-    <button class="ud-btn" id="b-mind">思维导图</button>
-    <button class="ud-btn" id="b-flow">流程图</button>
-    <button class="ud-btn" id="b-tidy">整理</button>
+    <button class="ud-btn" id="b-tidy">排版</button>
     <span id="sep"></span>
     <button class="ud-btn" id="b-undo">撤销</button>
     <button class="ud-btn" id="b-redo">重做</button>
@@ -66,20 +64,53 @@
   </div>
 </div>
 
+<div id="edgebox" class="ud">
+  <h2>* 连线样式</h2>
+  <div class="row">
+    <span class="lab">箭头</span>
+    <div id="ebArrow" class="opts"></div>
+  </div>
+  <div class="row">
+    <span class="lab">线型</span>
+    <div id="ebDash" class="opts"></div>
+  </div>
+  <div class="row">
+    <span class="lab">走线</span>
+    <div id="ebRoute" class="opts"></div>
+  </div>
+  <div class="row">
+    <span class="lab">标签</span>
+    <input id="ebLabel" class="ud-input" spellcheck="false" autocomplete="off"
+           placeholder="（留空则不显示）" maxlength="24">
+  </div>
+  <div class="acts">
+    <button class="ud-btn" id="ebClose">完成</button>
+  </div>
+</div>
+
 <div id="help" class="ud">
   <h2>* 操作指南</h2>
   <table>
     <tr><td class="sec" colspan="2">— 快速生成（选中节点后）—</td></tr>
     <tr><td>方向键 或 WASD</td><td>在「该方向」新建节点，并自动连好线</td></tr>
-    <tr><td>　├ 流程图</td><td>空间方向：上 / 下 / 左 / 右 直接摆放，自动避开同一排的已有节点</td></tr>
-    <tr><td>　└ 思维导图</td><td>结构方向：→ 子节点　← 父节点　↑ 前一个兄弟　↓ 后一个兄弟</td></tr>
-    <tr><td>Tab</td><td>添加子节点（等于思维导图里的 →）</td></tr>
-    <tr><td>Enter</td><td>添加兄弟节点（等于思维导图里的 ↓）</td></tr>
+    <tr><td>Tab</td><td>添加子节点（落在右边）</td></tr>
+    <tr><td>Enter</td><td>添加兄弟节点</td></tr>
     <tr><td>Ctrl + 方向键</td><td>只跳转选择，不新建节点</td></tr>
+    <tr><td class="sec" colspan="2">— 连线 —</td></tr>
+    <tr><td>点选连线</td><td>选中它（节点选择被清掉），两端出现可拖的手柄</td></tr>
+    <tr><td>拖拽端点手柄</td><td>把这一端取下来，接到别的节点上；松开在空白处 = 取消</td></tr>
+    <tr><td>E / 右键「连线样式…」</td><td>打开样式面板</td></tr>
+    <tr><td>　箭头</td><td>无箭头 / 单向箭头 / 双向箭头</td></tr>
+    <tr><td>　线型</td><td>实线 / 虚线</td></tr>
+    <tr><td>　走线</td><td>正交折线 / 曲线（每条线各自独立）</td></tr>
+    <tr><td>　标签</td><td>连线上的文字（如「是 / 否」）</td></tr>
+    <tr><td>拖拽节点边缘方块</td><td>拉出一条新连线到另一个节点</td></tr>
+    <tr><td>Shift + 点击两个节点</td><td>快速建立连线</td></tr>
+    <tr><td>双击连线</td><td>快速改标签</td></tr>
     <tr><td class="sec" colspan="2">— 编辑 —</td></tr>
     <tr><td>F2 / 双击节点</td><td>重命名（Shift+Enter 换行）</td></tr>
     <tr><td>直接打字</td><td>覆盖文本重新命名（w/a/s/d 已让给生成节点）</td></tr>
-    <tr><td>Delete / Backspace</td><td>删除节点及其所有子孙（根节点不可删）</td></tr>
+    <tr><td>Delete / Backspace</td><td>删除选中的节点（连同子孙）或选中的连线</td></tr>
     <tr><td>Space</td><td>折叠 / 展开子树</td></tr>
     <tr><td class="sec" colspan="2">— 导航 —</td></tr>
     <tr><td>拖拽空白 / 中键拖</td><td>平移画布</td></tr>
@@ -87,19 +118,14 @@
     <tr><td>Shift + 拖拽空白</td><td>框选</td></tr>
     <tr><td>双击空白</td><td>新建一个自由节点</td></tr>
     <tr><td>Esc</td><td>取消选择 / 关闭浮层</td></tr>
-    <tr><td class="sec" colspan="2">— 连线 —</td></tr>
-    <tr><td>拖拽节点边缘方块</td><td>拉出一条连线到另一个节点</td></tr>
-    <tr><td>Shift + 点击两个节点</td><td>快速建立连线</td></tr>
-    <tr><td>双击连线</td><td>编辑连线标签（如「是 / 否」）</td></tr>
-    <tr><td>右键节点/连线</td><td>打开菜单：形状、删除等</td></tr>
     <tr><td class="sec" colspan="2">— 文件与视图 —</td></tr>
     <tr><td>顶栏「新建」</td><td>菜单：空白文件 / 示例文档（会覆盖当前内容）</td></tr>
+    <tr><td>顶栏「排版」</td><td>按树形把节点摆一次（一次性操作，之后可以随便拖）</td></tr>
     <tr><td>Ctrl+Z / Ctrl+Shift+Z</td><td>撤销 / 重做</td></tr>
     <tr><td>Ctrl+S / Ctrl+O</td><td>保存 JSON / 打开 JSON</td></tr>
     <tr><td>Ctrl+E</td><td>打开导出面板（选范围、填标题、改文件名）</td></tr>
-    <tr><td>Ctrl+L</td><td>重新整理布局（思维导图自动排版）</td></tr>
-    <tr><td>Ctrl+A</td><td>全选</td></tr>
-    <tr><td>1 / 2</td><td>切换 思维导图 / 流程图</td></tr>
+    <tr><td>Ctrl+L</td><td>按树形排版</td></tr>
+    <tr><td>Ctrl+A</td><td>全选节点</td></tr>
     <tr><td>H 或 ?</td><td>开关本帮助</td></tr>
   </table>
   <div class="foot">* 关闭：按 H / Esc，或点击此框外任意处。</div>
@@ -138,6 +164,7 @@
 <script src="src/ui/menu.js"></script>
 <script src="src/ui/help.js"></script>
 <script src="src/ui/exporter.js"></script>
+<script src="src/ui/edgebox.js"></script>
 <script src="src/ui/cursor.js"></script>
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>

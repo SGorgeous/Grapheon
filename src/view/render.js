@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -52,7 +52,10 @@ function drawGrid(){
   ctx.restore();
 }
 function drawGraph(g){
-  for (const e of doc.edges) drawEdge(g, e, e === hoverEdge);
+  for (const e of doc.edges){
+    if (relink && relink.edgeId === e.id) continue;   // 正在拖端点的那条改用预览画
+    drawEdge(g, e);
+  }
   for (const n of doc.nodes) drawNode(g, n);
   // 选中节点的连接端口：鼠标悬停在该节点（或已悬停到它的端口）时才显示
   if (sel.size === 1 && !editing){
@@ -72,7 +75,7 @@ function drawGraph(g){
       }
     }
   }
-  // 连线预览
+  // 拉新连线的预览
   if (linking){
     const a = byId(linking.node);
     if (a){
@@ -86,16 +89,54 @@ function drawGraph(g){
       g.lineTo(to.x, to.y);
       g.stroke();
       g.restore();
-      const tn = hover;
-      if (tn){
-        g.save();
-        g.strokeStyle = C.yellow; g.lineWidth = 3;
-        pathShape(g, tn);
-        g.stroke();
-        g.restore();
-      }
+      if (hover) outlineNode(g, hover);
     }
   }
+  // 拖拽端点改接的预览
+  if (relink) drawRelink(g);
+}
+function outlineNode(g, n){
+  g.save();
+  g.strokeStyle = C.yellow; g.lineWidth = 3;
+  pathShape(g, n);
+  g.stroke();
+  g.restore();
+}
+function drawRelink(g){
+  const e = doc.edges.find(x => x.id === relink.edgeId);
+  if (!e) return;
+  const ep = edgeEndpoints(e);
+  if (!ep) return;
+  const draggedIsT = relink.end === 't';
+  const fixed = draggedIsT ? ep.a : ep.b;            // 没被拖的那一端，还留在原节点上
+  const fixedNode = byId(draggedIsT ? e.s : e.t);
+  const tgt = relink.target;
+
+  g.save();
+  g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.setLineDash([10, 8]);
+  if (tgt && fixedNode){
+    // 按这条线自己的走线方式预览：松手之后长什么样，现在就长什么样
+    pathGeom(g, e.route === 'curve' ? bezierGeom(fixedNode, tgt) : orthoGeom(fixedNode, tgt, 0), CORNER);
+    g.stroke();
+  } else {
+    g.beginPath();
+    g.moveTo(fixed.x, fixed.y);
+    g.lineTo(relink.to.x, relink.to.y);
+    g.stroke();
+  }
+  g.restore();
+
+  // 松手会落到的锚点方块
+  const dropPt = tgt ? nearestAnchor(tgt, fixed) : relink.to;
+  g.save();
+  g.fillStyle = C.yellow;
+  g.beginPath();
+  g.rect(Math.round(dropPt.x) - 6, Math.round(dropPt.y) - 6, 12, 12);
+  g.fill();
+  g.restore();
+  if (tgt) outlineNode(g, tgt);
 }
 function pathShape(g, n){
   const x = n.x, y = n.y, w = n.w, h = n.h;
@@ -159,36 +200,60 @@ function drawNode(g, n){
   if (selected) drawHeart(g, n.x - 26, n.y + n.h / 2 - 6.5, 2);
   g.restore();
 }
-function drawEdge(g, e, highlighted){
-  const geom = edgeGeomFor(e);
-  if (!geom) return;
-  g.save();
-  g.strokeStyle = highlighted ? C.yellow : C.white;
-  g.globalAlpha = highlighted ? 1 : 0.85;
-  g.lineWidth = 2.5;
-  g.lineCap = 'round';
-  g.lineJoin = 'round';
+/* 把一段连线几何铺成当前路径（贝塞尔 / 带圆角的折线），绘制与预览共用 */
+function pathGeom(g, geom, radius){
   g.beginPath();
+  if (!geom) return;
   if (geom.type === 'c'){
     g.moveTo(geom.p0.x, geom.p0.y);
     g.bezierCurveTo(geom.p1.x, geom.p1.y, geom.p2.x, geom.p2.y, geom.p3.x, geom.p3.y);
-  } else {
-    const pts = geom.pts;
-    g.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length - 1; i++){
-      const r = Math.min(CORNER, Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) / 2,
-                                Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y) / 2);
-      g.arcTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, Math.max(1, r));
-    }
-    g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    return;
   }
+  const pts = geom.pts;
+  g.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++){
+    const r = Math.min(radius, Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) / 2,
+                              Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y) / 2);
+    g.arcTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, Math.max(1, r));
+  }
+  g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+}
+/* 画一条连线。样式（箭头 / 虚线 / 走线）全部来自这条线自己的属性 */
+function drawEdge(g, e){
+  const geom = edgeGeomFor(e);
+  if (!geom) return;
+  const hi = (e.id === selEdgeId) || (e === hoverEdge);
+  const stroke = hi ? C.yellow : C.white;
+  g.save();
+  g.strokeStyle = stroke;
+  g.globalAlpha = hi ? 1 : 0.85;
+  g.lineWidth = 2.5;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  if (e.dash) g.setLineDash([11, 8]);
+  pathGeom(g, geom, CORNER);
   g.stroke();
-  if (geom.type === 'p'){
-    const pts = geom.pts;
-    const last = pts[pts.length - 1], prev = pts[pts.length - 2];
-    g.globalAlpha = highlighted ? 1 : 0.9;
-    g.fillStyle = highlighted ? C.yellow : C.white;
-    arrowHead(g, prev, last, 11);
+  g.setLineDash([]);
+  // 箭头：none / end（终点单向）/ both（双向）
+  const ap = geomArrowPoints(geom);
+  if (e.arrow !== 'none' && ap){
+    g.globalAlpha = hi ? 1 : 0.9;
+    g.fillStyle = stroke;
+    if (e.arrow === 'both') arrowHead(g, ap.start.from, ap.start.to, 11);
+    arrowHead(g, ap.end.from, ap.end.to, 11);
+  }
+  // 选中时在两端画出可拖拽的手柄
+  if (e.id === selEdgeId){
+    const ep = geomEndpoints(geom);
+    for (const pt of [ep.a, ep.b]){
+      g.globalAlpha = 1;
+      g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+      g.beginPath();
+      g.rect(Math.round(pt.x) - 7, Math.round(pt.y) - 7, 14, 14);
+      g.fill(); g.stroke();
+      g.fillStyle = C.yellow;
+      g.fillRect(Math.round(pt.x) - 2, Math.round(pt.y) - 2, 4, 4);
+    }
   }
   g.restore();
   if (e.label){
@@ -197,9 +262,9 @@ function drawEdge(g, e, highlighted){
     setFont(g, FS, 'normal');
     const w = g.measureText(e.label).width + 18;
     const h = 26;
-    g.fillStyle = C.bg; g.strokeStyle = highlighted ? C.yellow : C.white; g.lineWidth = 2.5;
+    g.fillStyle = C.bg; g.strokeStyle = stroke; g.lineWidth = 2.5;
     g.beginPath(); g.rect(Math.round(m.x - w / 2), Math.round(m.y - h / 2), Math.round(w), h); g.fill(); g.stroke();
-    g.fillStyle = highlighted ? C.yellow : C.white; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = stroke; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(e.label, m.x, m.y + 1);
     g.restore();
   }
