@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>* GRAPHEON — 流程图 / 思维导图</title>
+
+<link rel="stylesheet" href="styles/theme-undertale.css">
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="ui">
+  <div id="brand" class="ud">* GRAPHEON<small>FLOWCHART / MINDMAP</small></div>
+
+  <div id="topbar">
+    <button class="ud-btn" id="b-mind">思维导图</button>
+    <button class="ud-btn" id="b-flow">流程图</button>
+    <button class="ud-btn" id="b-tidy">整理</button>
+    <span id="sep"></span>
+    <button class="ud-btn" id="b-undo">撤销</button>
+    <button class="ud-btn" id="b-redo">重做</button>
+    <span id="sep"></span>
+    <button class="ud-btn" id="b-new">新建</button>
+    <button class="ud-btn" id="b-open">打开</button>
+    <button class="ud-btn" id="b-save">保存</button>
+    <button class="ud-btn" id="b-png">导出</button>
+    <button class="ud-btn" id="b-fit">居中</button>
+    <button class="ud-btn" id="b-help">?</button>
+  </div>
+
+  <div id="dialogue" class="ud">
+    <div style="flex:1">
+      <div id="dlgText"></div>
+      <div id="dlgHint"></div>
+    </div>
+    <span id="dlgArrow">▼</span>
+    <div id="dlgMeta"></div>
+  </div>
+</div>
+
+<textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
+<div id="ctx" class="ud"></div>
+
+<div id="exp" class="ud">
+  <h2>* 导出为图片</h2>
+  <div class="row">
+    <span class="lab">文件名</span>
+    <input id="expName" class="ud-input" spellcheck="false" autocomplete="off" autocapitalize="off">
+    <span class="ext">.png</span>
+  </div>
+  <div class="row">
+    <span class="lab">标题</span>
+    <input id="expTitle" class="ud-input" spellcheck="false" autocomplete="off"
+           placeholder="（留空则不显示）" maxlength="80">
+  </div>
+  <div class="row" style="align-items:flex-start">
+    <span class="lab">导出范围</span>
+    <div id="expScopes"></div>
+  </div>
+  <div id="expInfo" class="info"></div>
+  <div class="acts">
+    <button class="ud-btn" id="expGo">导出</button>
+    <button class="ud-btn" id="expCancel">取消</button>
+  </div>
+</div>
+
+<div id="help" class="ud">
+  <h2>* 操作指南</h2>
+  <table>
+    <tr><td class="sec" colspan="2">— 快速生成（选中节点后）—</td></tr>
+    <tr><td>方向键 或 WASD</td><td>在「该方向」新建节点，并自动连好线</td></tr>
+    <tr><td>　├ 流程图</td><td>空间方向：上 / 下 / 左 / 右 直接摆放，自动避开同一排的已有节点</td></tr>
+    <tr><td>　└ 思维导图</td><td>结构方向：→ 子节点　← 父节点　↑ 前一个兄弟　↓ 后一个兄弟</td></tr>
+    <tr><td>Tab</td><td>添加子节点（等于思维导图里的 →）</td></tr>
+    <tr><td>Enter</td><td>添加兄弟节点（等于思维导图里的 ↓）</td></tr>
+    <tr><td>Ctrl + 方向键</td><td>只跳转选择，不新建节点</td></tr>
+    <tr><td class="sec" colspan="2">— 编辑 —</td></tr>
+    <tr><td>F2 / 双击节点</td><td>重命名（Shift+Enter 换行）</td></tr>
+    <tr><td>直接打字</td><td>覆盖文本重新命名（w/a/s/d 已让给生成节点）</td></tr>
+    <tr><td>Delete / Backspace</td><td>删除节点及其所有子孙（根节点不可删）</td></tr>
+    <tr><td>Space</td><td>折叠 / 展开子树</td></tr>
+    <tr><td class="sec" colspan="2">— 导航 —</td></tr>
+    <tr><td>拖拽空白 / 中键拖</td><td>平移画布</td></tr>
+    <tr><td>滚轮</td><td>以光标为中心缩放</td></tr>
+    <tr><td>Shift + 拖拽空白</td><td>框选</td></tr>
+    <tr><td>双击空白</td><td>新建一个自由节点</td></tr>
+    <tr><td>Esc</td><td>取消选择 / 关闭浮层</td></tr>
+    <tr><td class="sec" colspan="2">— 连线 —</td></tr>
+    <tr><td>拖拽节点边缘方块</td><td>拉出一条连线到另一个节点</td></tr>
+    <tr><td>Shift + 点击两个节点</td><td>快速建立连线</td></tr>
+    <tr><td>双击连线</td><td>编辑连线标签（如「是 / 否」）</td></tr>
+    <tr><td>右键节点/连线</td><td>打开菜单：形状、删除等</td></tr>
+    <tr><td class="sec" colspan="2">— 文件与视图 —</td></tr>
+    <tr><td>顶栏「新建」</td><td>菜单：空白文件 / 示例文档（会覆盖当前内容）</td></tr>
+    <tr><td>Ctrl+Z / Ctrl+Shift+Z</td><td>撤销 / 重做</td></tr>
+    <tr><td>Ctrl+S / Ctrl+O</td><td>保存 JSON / 打开 JSON</td></tr>
+    <tr><td>Ctrl+E</td><td>打开导出面板（选范围、填标题、改文件名）</td></tr>
+    <tr><td>Ctrl+L</td><td>重新整理布局（思维导图自动排版）</td></tr>
+    <tr><td>Ctrl+A</td><td>全选</td></tr>
+    <tr><td>1 / 2</td><td>切换 思维导图 / 流程图</td></tr>
+    <tr><td>H 或 ?</td><td>开关本帮助</td></tr>
+  </table>
+  <div class="foot">* 关闭：按 H / Esc，或点击此框外任意处。</div>
+</div>
+
+<input type="file" id="file" accept=".json,application/json" hidden style="display:none">
+<!-- 红心光标：颜色由 CSS 的 --r 决定（见 styles/theme-undertale.css），换主题会自动跟着变 -->
+<svg id="heart" viewBox="0 0 7 6" width="18" height="15" preserveAspectRatio="none" shape-rendering="crispEdges">
+  <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>
+  <rect x="0" y="1" width="7" height="2"/>
+  <rect x="1" y="3" width="5" height="1"/>
+  <rect x="2" y="4" width="3" height="1"/>
+  <rect x="3" y="5" width="1" height="1"/>
+</svg>
+
+<!-- 模块按依赖顺序加载：core → view → interact → 界面组件 → 文档层 → 装配层。
+     最后三个有严格次序：document/demo 必须先于 toolbar（toolbar 在加载期就取它们的函数值），
+     而 main.js 里会调 boot()，必须最后。全部是普通脚本，所以双击用 file:// 打开也能跑
+     （换成 ES module 会被 file:// 的 CORS 拦掉）。 -->
+<script src="src/core/util.js"></script>
+<script src="src/core/theme.js"></script>
+<script src="src/view/stage.js"></script>
+<script src="src/core/text.js"></script>
+<script src="src/core/state.js"></script>
+<script src="src/core/history.js"></script>
+<script src="src/core/layout.js"></script>
+<script src="src/core/routing.js"></script>
+<script src="src/view/render.js"></script>
+<script src="src/view/camera.js"></script>
+<script src="src/view/hit.js"></script>
+<script src="src/interact/editing.js"></script>
+<script src="src/interact/commands.js"></script>
+<script src="src/interact/pointer.js"></script>
+<script src="src/interact/keys.js"></script>
+<script src="src/ui/dialogue.js"></script>
+<script src="src/ui/menu.js"></script>
+<script src="src/ui/help.js"></script>
+<script src="src/ui/exporter.js"></script>
+<script src="src/ui/cursor.js"></script>
+<script src="src/app/document.js"></script>
+<script src="src/app/demo.js"></script>
+<script src="src/ui/toolbar.js"></script>
+<script src="src/app/main.js"></script>
+</body>
+</html>

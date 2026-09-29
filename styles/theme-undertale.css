@@ -1,0 +1,152 @@
+﻿/* ==========================================================================
+   GRAPHEON · 主题：Undertale
+   全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
+   加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
+   字体字号约定见文件末尾注释。
+   ========================================================================== */
+
+:root{
+  /* 默认调色板 = Undertale 主题。运行时会被 src/core/theme.js 的 applyTheme() 覆盖，
+     变量名与 THEMES[id].canvas 的键一一对应（theme.js 里的 THEME_VARS）。 */
+  --bg:#000000;
+  --w:#ffffff; --y:#ffd800; --r:#ff0000; --g:#8a8a8a; --d:#4a4a4a; --grid:#151515;
+  /* GNU Unifont 是按 16px 点阵网格设计的：16px 时 ASCII 8px/字、CJK 16px/字。
+     字号请统一用 16 的整数倍（16 / 32），否则会糊。它只有 Regular，没有粗体。 */
+  --font:Unifont,"GNU Unifont","Courier New",Consolas,"Microsoft YaHei",monospace;
+  /* 像素心做成遮罩，颜色由 --r 决定，所以换主题时所有红心自动跟着变 */
+  --heart-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 6' preserveAspectRatio='none' shape-rendering='crispEdges'><g fill='%23000'><rect x='1' y='0' width='2' height='1'/><rect x='4' y='0' width='2' height='1'/><rect x='0' y='1' width='7' height='2'/><rect x='1' y='3' width='5' height='1'/><rect x='2' y='4' width='3' height='1'/><rect x='3' y='5' width='1' height='1'/></g></svg>");
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--w);
+  font-family:var(--font);font-size:16px;letter-spacing:1px;
+  -webkit-font-smoothing:none;font-smooth:never;
+  user-select:none;-webkit-user-select:none;
+}
+body.dsh-ready{cursor:none}
+::selection{background:var(--y);color:var(--bg)}
+
+#stage{position:fixed;inset:0;display:block;touch-action:none;cursor:none}
+
+/* ---------- Undertale 通用框 ---------- */
+.ud{
+  background:var(--bg);border:3px solid var(--w);
+  padding:8px 12px;line-height:1.5;
+}
+.ud-btn{
+  pointer-events:auto;background:var(--bg);color:var(--w);
+  border:3px solid var(--w);font-family:var(--font);font-size:16px;letter-spacing:1px;
+  padding:3px 9px;white-space:nowrap;transition:none;
+}
+.ud-btn::before{
+  content:"";display:inline-block;width:14px;height:12px;margin-right:7px;
+  vertical-align:-1px;opacity:0;background-color:var(--r);
+  -webkit-mask:var(--heart-mask) no-repeat center/contain;
+          mask:var(--heart-mask) no-repeat center/contain;
+}
+.ud-btn:hover{color:var(--y);border-color:var(--y)}
+.ud-btn:hover::before{opacity:1}
+.ud-btn:active{background:var(--w);color:var(--bg)}
+.ud-btn.on{color:var(--y);border-color:var(--y)}
+.ud-btn.on::before{opacity:1}
+
+/* ---------- 布局层 ---------- */
+#ui{position:fixed;inset:0;pointer-events:none;z-index:20}
+#brand{
+  position:absolute;left:16px;top:16px;
+  font-size:16px;letter-spacing:1px;
+}
+#brand small{display:block;font-size:16px;color:var(--g);letter-spacing:1px;margin-top:2px}
+#topbar{
+  position:absolute;right:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;
+  max-width:min(1300px,calc(100vw - 300px));
+}
+#sep{width:3px;background:#333;align-self:stretch}
+#dialogue{
+  position:absolute;left:16px;right:16px;bottom:16px;min-height:96px;
+  display:flex;align-items:flex-start;gap:12px;
+  pointer-events:auto;cursor:pointer;
+}
+#dlgText{flex:1;white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.5;min-height:1.5em}
+#dlgArrow{color:var(--w);animation:blink 1s steps(1,end) infinite;align-self:flex-end;font-size:16px}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+#dlgMeta{align-self:flex-end;color:var(--g);font-size:16px;white-space:nowrap;padding-left:24px}
+#dlgHint{margin-top:4px;font-size:16px;color:var(--g);white-space:pre-wrap;line-height:1.4}
+
+/* ---------- 文本编辑 ---------- */
+#editor{
+  position:fixed;display:none;z-index:60;margin:0;
+  background:var(--bg);color:var(--y);border:3px solid var(--y);
+  font-family:var(--font);letter-spacing:1px;text-align:center;
+  resize:none;outline:none;overflow:hidden;padding:0;
+  caret-color:var(--y);cursor:text;
+}
+
+/* ---------- 右键菜单 ---------- */
+#ctx{
+  position:fixed;display:none;z-index:70;pointer-events:auto;
+  padding:5px;min-width:226px;
+}
+#ctx .item{
+  padding:4px 10px;font-size:16px;color:var(--w);white-space:nowrap;display:flex;justify-content:space-between;gap:20px;
+}
+#ctx .item:hover{background:var(--w);color:var(--bg)}
+#ctx .item:hover .k{color:var(--bg)}
+#ctx .k{color:var(--g);font-size:16px}
+#ctx .hr{height:3px;background:#333;margin:5px 0}
+
+/* ---------- 帮助 ---------- */
+#help{
+  position:fixed;display:none;z-index:80;left:50%;top:47%;transform:translate(-50%,-50%);
+  width:min(900px,calc(100vw - 80px));max-height:calc(100vh - 250px);overflow:auto;
+  pointer-events:auto;padding:18px 22px;
+}
+#help h2{margin:0 0 14px;font-size:32px;letter-spacing:2px}
+#help table{border-collapse:collapse;width:100%;font-size:16px}
+#help td{padding:3px 8px;vertical-align:top;line-height:1.45}
+#help td:first-child{color:var(--y);white-space:nowrap;width:215px}
+#help .sec{color:var(--g);padding-top:14px;font-size:16px}
+#help .foot{margin-top:14px;color:var(--g);font-size:16px}
+
+#heart{position:fixed;left:0;top:0;z-index:200;pointer-events:none;display:none;fill:var(--r)}
+
+/* ---------- 导出面板 ---------- */
+#exp{
+  position:fixed;display:none;z-index:90;left:50%;top:47%;transform:translate(-50%,-50%);
+  width:min(700px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
+}
+#exp h2{margin:0 0 18px;font-size:32px;letter-spacing:2px}
+#exp .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+#exp .lab{width:110px;flex:none;color:var(--g)}
+#exp .ext{color:var(--g)}
+.ud-input{
+  flex:1;min-width:0;background:var(--bg);color:var(--y);border:3px solid var(--w);
+  font-family:var(--font);font-size:16px;letter-spacing:1px;padding:3px 9px;
+  outline:none;cursor:text;border-radius:0;
+}
+.ud-input:focus{border-color:var(--y)}
+.ud-input::placeholder{color:var(--d)}
+#expScopes{flex:1;min-width:0}
+#exp .opt{
+  display:flex;align-items:center;gap:10px;padding:3px 0;color:var(--w);
+}
+#exp .opt:not(.off){cursor:none}
+#exp .opt .hrt{
+  width:14px;height:12px;flex:none;opacity:0;
+  background-color:var(--r);
+  -webkit-mask:var(--heart-mask) no-repeat center/contain;
+          mask:var(--heart-mask) no-repeat center/contain;
+}
+#exp .opt:not(.off):hover{color:var(--y)}
+#exp .opt.on{color:var(--y)}
+#exp .opt.on .hrt{opacity:1}
+#exp .opt.off{color:var(--d)}
+#exp .opt .cnt{margin-left:auto;color:var(--g);padding-left:20px}
+#exp .opt.on .cnt{color:var(--y)}
+#exp .info{
+  color:var(--g);margin:12px 0 18px;padding-top:12px;border-top:3px solid #333;
+}
+#exp .acts{display:flex;gap:12px;justify-content:flex-end}
+.ud-btn:disabled{color:var(--d);border-color:var(--d)}
+.ud-btn:disabled::before{opacity:0}
+.ud-btn:disabled:hover{color:var(--d);border-color:var(--d)}
