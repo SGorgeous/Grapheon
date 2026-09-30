@@ -76,9 +76,11 @@ function sizeVarNode(n){
   const desc = displayTextOf(n);
   const v = normalizeVarDef(n.varDef);
   // 控件节点也是「名字格 + 本体」两段，宽度按同一套算
-  const inner = (v.control === 'plain')
+  let inner = (v.control === 'plain')
     ? VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W
     : VAR_PAD * 2 + VAR_NAME_W + 10 + CONTROL_MIN_W;
+  // 广播节点右上角有个 wifi 符号，留出位置
+  if (n.kind === 'broadcast') inner += 22;
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
@@ -130,7 +132,7 @@ function sizeNode(n){
   if (n.kind === 'table'){ sizeTableNode(n); return; }
   if (n.kind === 'out'){ sizeOutNode(n); return; }
   if (n.kind === 'embed'){ sizeEmbedNode(n); return; }
-  if (n.kind === 'var'){ sizeVarNode(n); return; }
+  if (n.kind === 'var' || n.kind === 'broadcast'){ sizeVarNode(n); return; }   // 广播节点同一套尺寸
   if (n.kind === 'op'){ sizeOpNode(n); return; }
   const size = nodeFontSize(n);
   const family = nodeFontFamily(n);

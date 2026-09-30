@@ -485,6 +485,25 @@ function drawSwitchControl(g, L, v){
   g.fillText(v.on ? '已接通' : '已断开', cx + 14, cy + 1);
   g.restore();
 }
+/* 广播符号：底下一个小点 + 上面三道张开的弧 —— 一眼看出「广播出去」。
+   全是弧和点，和主题颜色走，不额外依赖任何图片资源。 */
+function drawWifiIcon(g, x, y, size, color){
+  const dotY = y + size * 0.62;
+  g.save();
+  g.strokeStyle = color;
+  g.fillStyle = color;
+  g.lineCap = 'round';
+  g.lineWidth = Math.max(2, size * 0.15);
+  g.beginPath();
+  g.arc(x, dotY, Math.max(1.5, size * 0.10), 0, Math.PI * 2);
+  g.fill();
+  for (let i = 1; i <= 3; i++){
+    g.beginPath();
+    g.arc(x, dotY, size * (0.24 + i * 0.25), -Math.PI * 0.76, -Math.PI * 0.24);
+    g.stroke();
+  }
+  g.restore();
+}
 function drawVarNode(g, n, b, selected, hov){
   const v = normalizeVarDef(n.varDef);
   const L = varBoxes(n);
@@ -505,6 +524,9 @@ function drawVarNode(g, n, b, selected, hov){
   /* 广播节点：右边显示**实际输出**（只读）—— 值来自输入，不能自己填 */
   if (isBroadcast(n)){
     drawField(g, L.valBox, valueToText(defValueIn(liveCtx(), n)), C.gray);
+    // 右上角一个 wifi 符号 —— 一看就知道这个节点的值是「广播出去」的
+    drawWifiIcon(g, b.x + b.w - 18, b.y + 14, 14,
+                 entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white));
     g.restore();
     return;
   }
@@ -606,7 +628,7 @@ function drawNode(g, n){
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
   if (n.kind === 'image') drawImageNode(g, n, b, selected, hov);
   else if (n.kind === 'embed') drawEmbedNode(g, n, b, selected, hov);
-  else if (n.kind === 'var') drawVarNode(g, n, b, selected, hov);
+  else if (n.kind === 'var' || n.kind === 'broadcast') drawVarNode(g, n, b, selected, hov);   // 广播节点同一套画法
   else if (n.kind === 'op')  drawOpNode(g, n, b, selected, hov);
   else if (n.kind === 'out') drawOutNode(g, n, b, selected, hov);
   else if (n.kind === 'table') drawTableNode(g, n, b, selected, hov);

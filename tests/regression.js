@@ -7778,6 +7778,44 @@
     }
   });
 
+
+  T('BR02 广播节点右上角一个 wifi 符号', () => {
+    fresh(); layoutMind(); resize(); fitView();
+    const bc = addBroadcastNode(0, 0, { name:'广播值' });
+    reindex(); sizeAll();
+    const b = nodeBox(byId(bc.id));
+    ok('BR02 节点够宽，符号不压到文字',
+      b.w >= VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W + 22, b.w);
+    // 只画这个符号，数右上角那一带的像素
+    const g = cv.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = C.bg; g.fillRect(0, 0, VW, VH);
+    g.save(); g.translate(view.x, view.y); g.scale(view.z, view.z);
+    drawWifiIcon(g, b.x + b.w - 18, b.y + 14, 14, '#ffffff');
+    g.restore();
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let lit = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i+1] > 200 && d[i+2] > 200) lit++;
+    ok('BR02b wifi 符号画得出来（有像素）', lit > 30, lit);
+    // 而且必须落在节点**右上角**那一带
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    for (let y = 0; y < cv.height; y++){
+      for (let x = 0; x < cv.width; x++){
+        const i = (y * cv.width + x) * 4;
+        if (d[i] > 200 && d[i+1] > 200 && d[i+2] > 200){
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+    const cx = (minX + maxX) / 2 / DPR, cy = (minY + maxY) / 2 / DPR;
+    const wantX = (b.x + b.w - 18) * view.z + view.x, wantY = (b.y + 14) * view.z + view.y;
+    ok('BR02c 符号画在右上角那个位置',
+      Math.abs(cx - wantX) < 6 && Math.abs(cy - wantY) < 6,
+      JSON.stringify({ got:[Math.round(cx), Math.round(cy)], want:[Math.round(wantX), Math.round(wantY)] }));
+    ok('BR02d 整张图画得出来', (dirty = true, draw(), true));
+    ok('BR02e 选中时也画得出来', (selectOnly(bc.id), draw(), true));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

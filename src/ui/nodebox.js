@@ -78,7 +78,7 @@ function renderNodeBox(){
   nbProgBtn.textContent = prog ? '转回普通节点' : '转成程序节点';
 
   // ---- 变量定义 ----
-  const isVar = n.kind === 'var', isOpr = n.kind === 'op';
+  const isVar = (n.kind === 'var' || n.kind === 'broadcast'), isOpr = n.kind === 'op';
   nbVarSecEl.style.display = isVar ? 'block' : 'none';
   nbOprSecEl.style.display = isOpr ? 'block' : 'none';
   if (isVar){
