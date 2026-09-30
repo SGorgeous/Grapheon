@@ -106,48 +106,81 @@ function tableCellAt(n, p){
   return { r, c };
 }
 
-/* 右下角外面那一对加号：**斜 45° 排开**，下面那个加行、右边那个加列。
-   它们在节点**外面**，所以 hitNode 抓不到 —— 得单独做命中（见 hitTableButton）。 */
-const TBL_BTN = 16, TBL_BTN_GAP = 7;
-function tableAddButtons(n){
-  const b = nodeBox(n);
-  const s = TBL_BTN;
-  const cx = b.x + b.w, cy = b.y + b.h;            // 右下角
-  const d = TBL_BTN_GAP + s / 2;
-  return {
-    // 往**下**偏：加行
-    row: { x: cx - s / 2, y: cy + d - s / 2 + d, w: s, h: s },
-    // 往**右**偏：加列
-    col: { x: cx + d - s / 2 + d, y: cy - s / 2, w: s, h: s }
-  };
+/* =========================================================================
+   表格的增删按钮
+   -------------------------------------------------------------------------
+   每**列**的下方一对（− +），每**行**的右侧一对（− +）：
+     · 加号 → 在**右侧 / 下方**插入一列 / 一行
+     · 减号 → 删掉这一列 / 这一行（表里有数据时先确认一次）
+   这些按钮都在节点**外面**，hitNode 抓不到，得单独做命中（hitTableButton）。
+   ========================================================================== */
+const TBL_BTN = 15, TBL_BTN_GAP = 6, TBL_BTN_SP = 2;
+function tableCellHasData(n){
+  const t = tableOf(n);
+  for (let r = 0; r < t.rows; r++)
+    for (let c = 0; c < t.cols; c++)
+      if (String((t.cells[r] || [])[c] || '').trim() !== '') return true;
+  return false;
 }
-/* 命中加减号。返回 { node, kind:'row'|'col' } 或 null */
+/* 这一行 / 这一列里有没有东西 —— 删之前的确认就靠它 */
+function tableRowHasData(n, r){
+  const t = tableOf(n);
+  for (let c = 0; c < t.cols; c++) if (String((t.cells[r] || [])[c] || '').trim() !== '') return true;
+  return false;
+}
+function tableColHasData(n, c){
+  const t = tableOf(n);
+  for (let r = 0; r < t.rows; r++) if (String((t.cells[r] || [])[c] || '').trim() !== '') return true;
+  return false;
+}
+/* 所有按钮的位置。绘制和命中用同一份 —— 不可能对不上。 */
+function tableButtons(n){
+  const G = tableGeom(n);
+  const s = TBL_BTN, out = [];
+  const half = s / 2 + TBL_BTN_SP / 2;
+  // 每一列：下方一对
+  for (let c = 0; c < G.t.cols; c++){
+    const cx = (G.xs[c] + G.xs[c + 1]) / 2;
+    const cy = G.y + G.h + TBL_BTN_GAP + s / 2;
+    out.push({ kind:'col', index:c, action:'del', box:{ x:cx - half - s / 2, y:cy - s / 2, w:s, h:s } });
+    out.push({ kind:'col', index:c, action:'add', box:{ x:cx + half - s / 2, y:cy - s / 2, w:s, h:s } });
+  }
+  // 每一行：右侧一对
+  for (let r = 0; r < G.t.rows; r++){
+    const cy = (G.ys[r] + G.ys[r + 1]) / 2;
+    const cx = G.x + G.w + TBL_BTN_GAP + s / 2;
+    out.push({ kind:'row', index:r, action:'del', box:{ x:cx - s / 2, y:cy - half - s / 2, w:s, h:s } });
+    out.push({ kind:'row', index:r, action:'add', box:{ x:cx - s / 2, y:cy + half - s / 2, w:s, h:s } });
+  }
+  return out;
+}
+/* 命中：返回 { node, kind, index, action } 或 null */
 function hitTableButton(p){
   for (const n of doc.nodes){
     if (!isTableNode(n) || isHidden(n.id)) continue;
     // 只在选中或悬停时才算 —— 不然画布上到处是隐形的按钮
     if (!(typeof portsShowLabel === 'function' && portsShowLabel(n))) continue;
-    const B = tableAddButtons(n);
-    if (inBox(B.row, p)) return { node:n, kind:'row' };
-    if (inBox(B.col, p)) return { node:n, kind:'col' };
+    for (const b of tableButtons(n)){
+      if (inBox(b.box, p)) return { node:n, kind:b.kind, index:b.index, action:b.action };
+    }
   }
   return null;
 }
-function drawTableAddButtons(g, n, color){
-  const B = tableAddButtons(n);
+function drawTableButtons(g, n, color){
   g.save();
-  g.lineWidth = 2.5;
-  for (const [box, kind] of [[B.row, 'row'], [B.col, 'col']]){
+  g.lineWidth = 2.2;
+  g.lineCap = 'round';
+  for (const b of tableButtons(n)){
+    const box = b.box;
     g.fillStyle = C.bg;
     g.fillRect(box.x, box.y, box.w, box.h);
-    g.strokeStyle = color;
+    g.strokeStyle = (b.action === 'del') ? (C.dim || color) : color;
     g.strokeRect(box.x, box.y, box.w, box.h);
-    // 里面的 + 号
-    const mx = box.x + box.w / 2, my = box.y + box.h / 2, r = box.w * 0.24;
+    const mx = box.x + box.w / 2, my = box.y + box.h / 2, r = box.w * 0.22;
+    g.strokeStyle = (b.action === 'del') ? (C.dim || color) : color;
     g.beginPath();
-    g.moveTo(mx - r, my); g.lineTo(mx + r, my);
-    if (kind === 'row'){ g.moveTo(mx, my - r); g.lineTo(mx, my + r); }   // 加行：竖着的 +
-    else { g.moveTo(mx, my - r); g.lineTo(mx, my + r); }
+    g.moveTo(mx - r, my); g.lineTo(mx + r, my);          // 两个都是「横」
+    if (b.action === 'add'){ g.moveTo(mx, my - r); g.lineTo(mx, my + r); }  // 加号才加「竖」
     g.stroke();
   }
   g.restore();
@@ -192,6 +225,6 @@ function drawTableNode(g, n, b, selected, hov){
   g.lineWidth = 3; g.strokeStyle = stroke;
   g.strokeRect(G.x, G.y, G.w, G.h);
   g.restore();
-  // 选中 / 悬停时，右下角外面亮出那对加号
-  if (selected || hov) drawTableAddButtons(g, n, C.yellow);
+  // 选中 / 悬停时，每行每列外面亮出加减号
+  if (selected || hov) drawTableButtons(g, n, C.yellow);
 }

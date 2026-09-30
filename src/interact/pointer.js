@@ -26,10 +26,29 @@ canvas.addEventListener('pointerdown', (ev) => {
   const tb = (typeof hitTableButton === 'function') ? hitTableButton(p) : null;
   if (tb){
     selectOnly(tb.node.id);
-    if (tb.kind === 'row') tableAddRow(tb.node);
-    else tableAddCol(tb.node);
+    const n2 = tb.node;
+    if (tb.action === 'add'){
+      pendingTableDel = null;
+      if (tb.kind === 'row') tableAddRow(n2, tb.index);      // 在**下方**插一行
+      else tableAddCol(n2, tb.index);                        // 在**右侧**插一列
+      return;
+    }
+    /* 减号：这一行 / 这一列**有数据**就先提醒一次，再点一下才真删。
+       （用对话框当提醒，不弹浏览器的 confirm —— 和整体风格一致，也不阻塞。） */
+    const has = (tb.kind === 'row') ? tableRowHasData(n2, tb.index) : tableColHasData(n2, tb.index);
+    const same = pendingTableDel && pendingTableDel.nodeId === n2.id
+              && pendingTableDel.kind === tb.kind && pendingTableDel.index === tb.index;
+    if (has && !same){
+      pendingTableDel = { nodeId:n2.id, kind:tb.kind, index:tb.index };
+      say('* 这' + (tb.kind === 'row' ? '行' : '列') + '里有数据，再点一次减号就删掉。');
+      return;
+    }
+    pendingTableDel = null;
+    if (tb.kind === 'row') tableDelRow(n2, tb.index);
+    else tableDelCol(n2, tb.index);
     return;
   }
+  pendingTableDel = null;
   // 选中连线的端点手柄：它正好压在节点边框上，不先判会被 hitNode 抢走
   const handle = hitEdgeHandle(p);
   if (handle){

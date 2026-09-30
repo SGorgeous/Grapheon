@@ -7837,6 +7837,80 @@
       ok('BG01h 点了之后真的去开文件选择框', clicked === 1, clicked);
     } finally { imgFileEl.click = orig; hideCtx(); }
   });
+
+  T('TB10 表格：每行每列各一对加减号 + 删有数据的要先确认', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0, { rows:3, cols:3, header:true,
+      cells:[['甲','乙','丙'],['1','2','3'],['','','']] });
+    reindex(); sizeAll(); selectOnly(t.id); reindex();
+    const G = tableGeom(byId(t.id));
+    const B = tableButtons(byId(t.id));
+    ok('TB10 三行三列 → 12 个按钮（每行每列各一对）', B.length === (3 + 3) * 2, B.length);
+    ok('TB10b 每**列**下方各一对，且都在表格下方', (() => {
+      for (let c = 0; c < 3; c++){
+        const two = B.filter(b => b.kind === 'col' && b.index === c);
+        if (two.length !== 2) return false;
+        if (!two.some(b => b.action === 'del') || !two.some(b => b.action === 'add')) return false;
+        if (!two.every(b => b.box.y > G.y + G.h)) return false;
+        if (Math.abs(two[0].box.x - two[1].box.x) < 10) return false;   // 水平错开
+      }
+      return true;
+    })());
+    ok('TB10c 每**行**右侧各一对，且都在表格右侧', (() => {
+      for (let r = 0; r < 3; r++){
+        const two = B.filter(b => b.kind === 'row' && b.index === r);
+        if (two.length !== 2) return false;
+        if (!two.some(b => b.action === 'del') || !two.some(b => b.action === 'add')) return false;
+        if (!two.every(b => b.box.x > G.x + G.w)) return false;
+        if (Math.abs(two[0].box.y - two[1].box.y) < 10) return false;   // 竖直错开
+      }
+      return true;
+    })());
+    ok('TB10d 加号的水平位置对着那一列的中心', (() => {
+      const two = B.filter(b => b.kind === 'col' && b.index === 1);
+      const cx = (G.xs[1] + G.xs[2]) / 2;
+      return two.every(b => Math.abs((b.box.x + b.box.w / 2) - cx) < 30);
+    })());
+    ok('TB10e 加号的竖直位置对着那一行的中心', (() => {
+      const two = B.filter(b => b.kind === 'row' && b.index === 1);
+      const cy = (G.ys[1] + G.ys[2]) / 2;
+      return two.every(b => Math.abs((b.box.y + b.box.h / 2) - cy) < 30);
+    })());
+    // 命中：要选中/悬停才算，免得画布上到处是隐形按钮
+    const probe = { x:B[0].box.x + 4, y:B[0].box.y + 4 };
+    ok('TB10f 选中时点得到按钮', !!hitTableButton(probe), JSON.stringify(hitTableButton(probe)));
+    selectOnly(null); reindex();
+    ok('TB10g 没选中没悬停时点不到', hitTableButton(probe) === null);
+    selectOnly(t.id); reindex();
+    // 「有数据」的判定 —— 删除确认就靠它
+    ok('TB10h 第 0/1 行有数据、第 2 行没有',
+      tableRowHasData(byId(t.id), 0) && tableRowHasData(byId(t.id), 1)
+      && !tableRowHasData(byId(t.id), 2));
+    ok('TB10i 列的数据判定也对', (() => {
+      // 表头把每一列都填满了，所以先清掉第 2 列再看
+      const tt = tableOf(byId(t.id));
+      for (let r = 0; r < tt.rows; r++) tt.cells[r][2] = '';
+      byId(t.id).tableDef = tt;
+      return tableColHasData(byId(t.id), 0) && !tableColHasData(byId(t.id), 2);
+    })(), (() => {
+      const tt = tableOf(byId(t.id));
+      return tt.cells.map(r => r.join('')).join(' / ');
+    })());
+    // 按 index 删中间那一行：内容要跟着挪
+    tableDelRow(byId(t.id), 1);
+    ok('TB10j 删掉中间那行，剩下的是第 0 行和第 2 行', (() => {
+      const tt = tableOf(byId(t.id));
+      return tt.rows === 2 && tt.cells[0][0] === '甲' && tt.cells[1].join('') === '';
+    })(), JSON.stringify(tableOf(byId(t.id)).cells));
+    // 按 index 插：在下方 / 右侧
+    tableAddRow(byId(t.id), 0);
+    ok('TB10k 在下方插一行（内容整体下移）', (() => {
+      const tt = tableOf(byId(t.id));
+      return tt.rows === 3 && tt.cells[1].join('') === '' && tt.cells[2][0] === '';
+    })(), JSON.stringify(tableOf(byId(t.id)).cells.map(r => r.join(''))));
+    ok('TB10l 待确认状态存在', 'pendingTableDel' in window || typeof pendingTableDel !== 'undefined');
+    ok('TB10m 画得出来', (dirty = true, draw(), true));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

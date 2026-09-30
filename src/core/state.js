@@ -58,6 +58,8 @@ let selGroups = new Set();     // 选中的分组：可以多个，也可以和�
 let view = { x:0, y:0, z:1 };
 let hover = null, hoverPort = null, hoverEdge = null, hoverGrp = null;
 let drag = null, marquee = null, linking = null, relink = null;
+/* 表格减号的「再点一次确认」：记住上一次点的是哪一行/列 */
+let pendingTableDel = null;
 let editing = null;
 let lastClickNode = null;      // Shift 连线的第一个节点
 let dirty = true;
