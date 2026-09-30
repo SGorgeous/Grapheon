@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/endbox.js
    连线端点面板 —— 从**节点**右键菜单进入，逐个指定「这个节点上的每条连线接在哪条边」。
@@ -28,6 +28,7 @@ function openEndBox(n){
   if (!nodeEdges(n).length){ say('* 这个节点上还没有连线。'); return; }
   hideCtx(); closeHelp(); closeExport();
   if (typeof closeEdgeBox === 'function') closeEdgeBox();
+  if (typeof closeNodeBox === 'function') closeNodeBox();
   endNodeId = n.id;
   sel.clear(); sel.add(n.id); selEdgeId = null;
   renderEndBox();

@@ -69,6 +69,7 @@ function openExport(){
   hideCtx(); closeHelp();
   if (typeof closeEdgeBox === 'function') closeEdgeBox();
   if (typeof closeEndBox === 'function') closeEndBox();
+  if (typeof closeNodeBox === 'function') closeNodeBox();
   if (!exportScopes()[expScope].nodes.length) expScope = 'all';
   if (!expNameEl.value) expNameEl.value = 'grapheon-' + new Date().toISOString().slice(0, 10);
   renderScopes();

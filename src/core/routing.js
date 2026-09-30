@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/routing.js
    连线几何：四向锚点、正交折线（含走廊错位）、贝塞尔。
@@ -90,7 +90,7 @@ function orthoGeom(a, b, bias, ka, kb){
 function waypointGeom(e){
   const wps = e.waypoints;
   if (!wps || !wps.length) return null;
-  const a = byId(e.s), b = byId(e.t);
+  const a = anchorOf(e.s), b = anchorOf(e.t);
   if (!a || !b) return null;
   const A0 = anchorsFor(a), B0 = anchorsFor(b);
   const first = wps[0], last = wps[wps.length - 1];
@@ -104,7 +104,7 @@ function waypointGeom(e){
 function edgeGeomFor(e){
   const wg = waypointGeom(e);
   if (wg) return wg;
-  const a = byId(e.s), b = byId(e.t);
+  const a = anchorOf(e.s), b = anchorOf(e.t);
   if (!a || !b) return null;
   if (e.route === 'curve') return bezierGeom(a, b, e.aSide, e.bSide);
   // 正交折线：按 id 哈希给每条线一点走廊偏移，避免平行线完全重叠

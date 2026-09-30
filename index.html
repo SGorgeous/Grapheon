@@ -88,6 +88,35 @@
   </div>
 </div>
 
+<div id="nodebox" class="ud">
+  <h2>* 节点样式</h2>
+  <div class="sub" id="nbSub"></div>
+  <div class="row">
+    <span class="lab">字号</span>
+    <div id="nbFs" class="opts"></div>
+  </div>
+  <div class="row">
+    <span class="lab">字体</span>
+    <div id="nbFont" class="opts"></div>
+  </div>
+  <div class="row">
+    <span class="lab">字色</span>
+    <div id="nbColor" class="swatches"></div>
+  </div>
+  <div class="row">
+    <span class="lab">外框</span>
+    <div id="nbBorder" class="swatches"></div>
+  </div>
+  <div class="row">
+    <span class="lab">尺寸</span>
+    <div id="nbSize" class="opts"></div>
+  </div>
+  <div class="acts">
+    <button class="ud-btn" id="nbReset">全部恢复默认</button>
+    <button class="ud-btn" id="nbClose">完成</button>
+  </div>
+</div>
+
 <div id="endbox" class="ud">
   <h2>* 连线端点</h2>
   <div class="sub" id="endSub"></div>
@@ -108,6 +137,8 @@
     <tr><td class="sec" colspan="2">— 连线 —</td></tr>
     <tr><td>点选连线</td><td>选中它（节点选择被清掉），两端出现可拖的手柄</td></tr>
     <tr><td>拖拽端点手柄</td><td>把这一端取下来，接到别的节点上；松开在空白处 = 取消</td></tr>
+    <tr><td>E / 右键「节点样式…」</td><td>节点样式面板：字号 / 字体 / 字色 / 外框色</td></tr>
+    <tr><td>拖节点右下角手柄</td><td>自由调整节点尺寸；面板里可一键恢复自适应</td></tr>
     <tr><td>拖拽已选中的连线</td><td>拉出一个拐点，自由改变走向；拉成直线会自动收掉</td></tr>
     <tr><td>拖拽拐点方块 / 双击拐点</td><td>移动它 / 删掉它</td></tr>
     <tr><td>右键连线「在此添加拐点」</td><td>在指定位置插一个拐点；「清除全部拐点」一次清完</td></tr>
@@ -133,6 +164,14 @@
     <tr><td>Shift + 拖拽空白</td><td>框选</td></tr>
     <tr><td>双击空白</td><td>新建一个自由节点</td></tr>
     <tr><td>Esc</td><td>取消选择 / 关闭浮层</td></tr>
+    <tr><td class="sec" colspan="2">— 分组 —</td></tr>
+    <tr><td>选中多个节点 → Ctrl+G</td><td>成组（也可以右键空白处或用菜单）</td></tr>
+    <tr><td>拖分组标题栏</td><td>整体搬动组内所有节点，相对位置不变</td></tr>
+    <tr><td>拖分组边框 / 点标题</td><td>选中这个分组</td></tr>
+    <tr><td>双击分组标题 / F2</td><td>给分组改名</td></tr>
+    <tr><td>选中分组后有 4 个端点</td><td>可以从分组拉线到节点，也可以把线连到分组上</td></tr>
+    <tr><td>右键分组</td><td>改名 / 加节点 / 换颜色 / 解散（解散只拆容器，成员和连线都留着）</td></tr>
+    <tr><td>选中分组后按 Del</td><td>解散分组</td></tr>
     <tr><td class="sec" colspan="2">— 文件与视图 —</td></tr>
     <tr><td>顶栏「新建」</td><td>菜单：空白文件 / 示例文档（会覆盖当前内容）</td></tr>
     <tr><td>顶栏「排版」</td><td>按树形把节点摆一次（一次性操作，之后可以随便拖）</td></tr>
@@ -181,6 +220,7 @@
 <script src="src/ui/exporter.js"></script>
 <script src="src/ui/edgebox.js"></script>
 <script src="src/ui/endbox.js"></script>
+<script src="src/ui/nodebox.js"></script>
 <script src="src/ui/cursor.js"></script>
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>

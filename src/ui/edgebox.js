@@ -21,6 +21,7 @@ function openEdgeBox(){
   if (!e){ say('* 先点选一条连线，再打开样式面板。'); return; }
   hideCtx(); closeHelp(); closeExport();
   if (typeof closeEndBox === 'function') closeEndBox();
+  if (typeof closeNodeBox === 'function') closeNodeBox();
   ebEdgeId = e.id;
   renderEdgeBox();
   edgeBoxEl.style.display = 'block';
@@ -31,16 +32,7 @@ function closeEdgeBox(){
   ebEdgeId = null;
   mark();
 }
-/* 一排单选：点一下就换，立即作用到真实的那条连线上 */
-function buildOpts(host, list, cur, onPick){
-  host.innerHTML = '';
-  for (const [val, label] of list){
-    const on = String(cur) === String(val);
-    const d = el('div', 'opt' + (on ? ' on' : ''), '<span class="hrt"></span><span>' + label + '</span>');
-    d.onclick = () => onPick(val);
-    host.appendChild(d);
-  }
-}
+/* 单选行的实现在 core/util.js 的 buildOpts()，nodebox 也用它 */
 function renderEdgeBox(){
   const e = doc.edges.find(x => x.id === ebEdgeId);
   if (!e){ closeEdgeBox(); return; }

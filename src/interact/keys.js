@@ -53,7 +53,8 @@ function defaultBindings(){
     'ctrl+arrowleft':  'node.nav.left',
     'ctrl+arrowdown':  'node.nav.down',
     'ctrl+arrowright': 'node.nav.right',
-    'e':          'edge.style',
+    'e':          'style.open',
+    'ctrl+g':     'group.create',
     'h':          'ui.help',
     '?':          'ui.help',
     'escape':     'ui.escape',
@@ -71,6 +72,7 @@ function defaultBindings(){
 /* 动作表。overlay:true 表示浮层打开时仍然生效（目前只有 Esc）。 */
 const ACTIONS = {
   'ui.escape':        { label:'关闭浮层 / 取消选择', group:'界面', overlay:true, run(){
+      if (nodeBoxEl.style.display === 'block'){ closeNodeBox(); return; }
       if (endBoxEl.style.display === 'block'){ closeEndBox(); return; }
       if (edgeBoxEl.style.display === 'block'){ closeEdgeBox(); return; }
       if (expEl.style.display === 'block'){ closeExport(); return; }
@@ -80,12 +82,20 @@ const ACTIONS = {
       selectOnly(null); lastClickNode = null;
   }},
   'ui.help':          { label:'操作指南', group:'界面', run(){ openHelp(); } },
-
-  /* 没选中连线时返回 false，让兜底逻辑去处理（按 e 仍然可以直接起手改名） */
-  'edge.style':       { label:'连线样式面板', group:'连线', run(){
-      if (!selEdgeId) return false;
-      openEdgeBox();
+  'group.create':     { label:'把选中的节点加入分组', group:'分组', run(){ createGroup(); } },
+  'group.dissolve':   { label:'解散选中的分组', group:'分组', run(){
+      const grp = selectedGroup();
+      if (!grp) return false;
+      dissolveGroup(grp);
       return true;
+  }},
+
+  /* E = 样式面板，选中什么就开什么。都没有就返回 false 交给兜底逻辑。 */
+  'style.open':       { label:'样式面板（节点 / 连线）', group:'样式', run(){
+      if (selEdgeId){ openEdgeBox(); return true; }
+      const n = soleSel();
+      if (n){ openNodeBox(n); return true; }
+      return false;
   }},
   'edge.dash':        { label:'实线 / 虚线', group:'连线', run(){
       const e = selectedEdge(); if (!e) return false;
@@ -187,7 +197,8 @@ function dispatchKey(ev){
   const helpOpen = helpEl.style.display === 'block';
   const boxOpen  = edgeBoxEl.style.display === 'block';
   const endOpen  = endBoxEl.style.display === 'block';
-  if (!act.overlay && (expOpen || helpOpen || boxOpen || endOpen)) return false;   // 浮层打开时屏蔽其它快捷键
+  const nboxOpen = nodeBoxEl.style.display === 'block';
+  if (!act.overlay && (expOpen || helpOpen || boxOpen || endOpen || nboxOpen)) return false;   // 浮层打开时屏蔽其它快捷键
 
   // run() 返回 false 表示「当前不适用」，交回给兜底逻辑（见下面的可打印字符改名）
   if (act.run(ev) === false) return false;
@@ -205,7 +216,8 @@ window.addEventListener('keydown', (ev) => {
   const helpOpen = helpEl.style.display === 'block';
   const boxOpen  = edgeBoxEl.style.display === 'block';
   const endOpen  = endBoxEl.style.display === 'block';
-  if (expOpen || boxOpen || endOpen) return;                       // 面板打开时不再兜底
+  const nboxOpen = nodeBoxEl.style.display === 'block';
+  if (expOpen || boxOpen || endOpen || nboxOpen) return;                       // 面板打开时不再兜底
   if (helpOpen){
     if (ev.key === 'h' || ev.key === 'H' || ev.key === '?'){ ev.preventDefault(); closeHelp(); }
     return;

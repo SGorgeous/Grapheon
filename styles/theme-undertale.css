@@ -115,9 +115,9 @@ body.dsh-ready{cursor:none}
   position:fixed;display:none;z-index:90;left:50%;top:47%;transform:translate(-50%,-50%);
   width:min(700px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
 }
-#exp h2,#edgebox h2{margin:0 0 18px;font-size:32px;letter-spacing:2px}
-#exp .row,#edgebox .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-#exp .lab,#edgebox .lab{width:110px;flex:none;color:var(--g)}
+#exp h2,#edgebox h2,#endbox h2,#nodebox h2{margin:0 0 18px;font-size:32px;letter-spacing:2px}
+#exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+#exp .lab,#edgebox .lab,#endbox .lab,#nodebox .lab{width:110px;flex:none;color:var(--g)}
 #exp .ext{color:var(--g)}
 .ud-input{
   flex:1;min-width:0;background:var(--bg);color:var(--y);border:3px solid var(--w);
@@ -127,26 +127,26 @@ body.dsh-ready{cursor:none}
 .ud-input:focus{border-color:var(--y)}
 .ud-input::placeholder{color:var(--d)}
 #expScopes{flex:1;min-width:0}
-#exp .opt,#edgebox .opt{
+#exp .opt,#edgebox .opt,#endbox .opt,#nodebox .opt{
   display:flex;align-items:center;gap:10px;padding:3px 0;color:var(--w);
 }
-#exp .opt:not(.off),#edgebox .opt{cursor:none}
-#exp .opt .hrt,#edgebox .opt .hrt{
+#exp .opt:not(.off),#edgebox .opt,#endbox .opt:not(.off),#nodebox .opt:not(.off){cursor:none}
+#exp .opt .hrt,#edgebox .opt .hrt,#endbox .opt .hrt,#nodebox .opt .hrt{
   width:14px;height:12px;flex:none;opacity:0;
   background-color:var(--r);
   -webkit-mask:var(--heart-mask) no-repeat center/contain;
           mask:var(--heart-mask) no-repeat center/contain;
 }
-#exp .opt:not(.off):hover,#edgebox .opt:hover{color:var(--y)}
-#exp .opt.on,#edgebox .opt.on{color:var(--y)}
-#exp .opt.on .hrt,#edgebox .opt.on .hrt{opacity:1}
-#exp .opt.off{color:var(--d)}
+#exp .opt:not(.off):hover,#edgebox .opt:hover,#endbox .opt:not(.off):hover,#nodebox .opt:not(.off):hover{color:var(--y)}
+#exp .opt.on,#edgebox .opt.on,#endbox .opt.on,#nodebox .opt.on{color:var(--y)}
+#exp .opt.on .hrt,#edgebox .opt.on .hrt,#endbox .opt.on .hrt,#nodebox .opt.on .hrt{opacity:1}
+#exp .opt.off,#endbox .opt.off,#nodebox .opt.off{color:var(--d)}
 #exp .opt .cnt{margin-left:auto;color:var(--g);padding-left:20px}
 #exp .opt.on .cnt{color:var(--y)}
 #exp .info{
   color:var(--g);margin:12px 0 18px;padding-top:12px;border-top:3px solid #333;
 }
-#exp .acts,#edgebox .acts{display:flex;gap:12px;justify-content:flex-end}
+#exp .acts,#edgebox .acts,#endbox .acts,#nodebox .acts{display:flex;gap:12px;justify-content:flex-end}
 .ud-btn:disabled{color:var(--d);border-color:var(--d)}
 .ud-btn:disabled::before{opacity:0}
 .ud-btn:disabled:hover{color:var(--d);border-color:var(--d)}
@@ -171,4 +171,24 @@ body.dsh-ready{cursor:none}
 }
 #endbox .endrow:last-child{border-bottom:0}
 #endbox .endname{color:var(--y);flex:none;min-width:220px}
+#endbox .opts{display:flex;gap:16px;flex-wrap:wrap}
+
+/* ---------- 节点样式面板 ---------- */
+#nodebox{
+  position:fixed;display:none;z-index:90;left:50%;top:47%;transform:translate(-50%,-50%);
+  width:min(900px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
+}
+#nodebox .sub{color:var(--g);margin:-8px 0 14px}
+#nodebox .opts{flex:1;min-width:0;display:flex;gap:18px;flex-wrap:wrap}
+#nodebox .swatches{flex:1;min-width:0;display:flex;gap:10px;flex-wrap:wrap}
+.sw{
+  width:30px;height:26px;border:3px solid var(--d);cursor:none;box-sizing:border-box;
+}
+.sw:hover{border-color:var(--y)}
+.sw.on{border-color:var(--y);outline:3px solid var(--y);outline-offset:1px}
+.sw-auto{background:var(--bg);position:relative}
+.sw-auto::after{
+  content:"—";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--g);font-size:16px;line-height:1;
+}
 #endbox .opts{display:flex;gap:16px;flex-wrap:wrap}

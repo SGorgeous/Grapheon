@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -12,7 +12,7 @@ const dlgArrow = document.getElementById('dlgArrow');
 const dlgMeta  = document.getElementById('dlgMeta');
 const dlgHint  = document.getElementById('dlgHint');
 let dlg = { full:'', shown:0, timer:null };
-const HINT = '方向键/WASD 生成节点 · Tab 子节点 · Enter 兄弟 · E 改连线样式 · 拖端点可改接 · Del 删除 · H 帮助';
+const HINT = '方向键/WASD 生成节点 · Tab 子节点 · Enter 兄弟 · E 样式面板 · Ctrl+G 分组 · Del 删除 · H 帮助';
 function say(msg){
   dlg.full = msg; dlg.shown = 0;
   clearInterval(dlg.timer);
@@ -43,9 +43,14 @@ function updateMeta(){
     const wp = (e && e.waypoints && e.waypoints.length) ? ' · ' + e.waypoints.length + ' 拐点' : '';
     selTxt = ' · 选中连线（' + (e ? edgeStyleLabel(e) + wp : '') + '）';
   }
+  if (selGroupId){
+    const grp = selectedGroup();
+    if (grp) selTxt = ' · 选中分组「' + (grp.title || '分组') + '」（' + grp.members.length + ' 个成员）';
+  }
   const hid = idx.hidden ? idx.hidden.size : 0;
+  const gN = (doc.groups || []).length;
   dlgMeta.textContent = doc.nodes.length + ' 节点' + (hid ? '（隐藏 ' + hid + '）' : '') +
-    ' / ' + doc.edges.length + ' 连线' + selTxt +
+    ' / ' + doc.edges.length + ' 连线' + (gN ? ' / ' + gN + ' 分组' : '') + selTxt +
     ' · ' + Math.round(view.z * 100) + '%';
   dlgHint.textContent = HINT;
 }

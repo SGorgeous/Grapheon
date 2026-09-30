@@ -52,6 +52,7 @@ function drawGrid(){
   ctx.restore();
 }
 function drawGraph(g){
+  for (const grp of (doc.groups || [])) drawGroup(g, grp);   // 分组框在最底层
   for (const e of doc.edges){
     if (!edgeVisible(e)) continue;                    // 被折叠藏起来的不画
     if (relink && relink.edgeId === e.id) continue;   // 正在拖端点的那条改用预览画
@@ -81,7 +82,7 @@ function drawGraph(g){
   }
   // 拉新连线的预览
   if (linking){
-    const a = byId(linking.node);
+    const a = anchorOf(linking.node);
     if (a){
       const A = anchorsFor(a)[linking.side];
       const to = linking.to;
@@ -185,7 +186,7 @@ function roundRect(g, x, y, w, h, r){
 function drawNode(g, n){
   const selected = sel.has(n.id);
   const hov = hover && hover.id === n.id;
-  const stroke = selected ? C.yellow : (hov ? C.yellow : C.white);
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (n.border || C.white));
   g.save();
   g.lineJoin = 'round';
   g.lineWidth = isRoot(n) ? 4 : 3;
@@ -195,10 +196,10 @@ function drawNode(g, n){
   g.fill();
   g.stroke();
 
-  setFont(g, n.fs, n.fw);
+  setFont(g, n.fs, n.fw, n.fam);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = selected ? C.yellow : C.white;
+  g.fillStyle = n.color || (selected ? C.yellow : C.white);
   const startY = n.y + n.h / 2 - ((n.lines.length - 1) * n.lh) / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], n.x + n.w / 2, startY + i * n.lh);
 
@@ -223,6 +224,40 @@ function drawNode(g, n){
     g.fill(); g.stroke();
     g.fillStyle = C.yellow;
     g.fillRect(Math.round(r.x + r.w - 8), Math.round(r.y + r.h - 8), 5, 5);
+  }
+  g.restore();
+}
+/* 分组：虚线外框 + 左上角标题。外框几何完全由成员算出，永远包住成员。 */
+function drawGroup(g, grp){
+  const r = groupBox(grp);
+  const sel = (grp.id === selGroupId);
+  const col = sel ? C.yellow : (grp.color || C.gray);
+  g.save();
+  g.strokeStyle = col;
+  g.lineWidth = 3;
+  g.setLineDash(sel ? [] : [12, 8]);
+  g.strokeRect(Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
+  g.setLineDash([]);
+  // 标题
+  const tb = groupTitleBox(grp);
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = col;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(fitText(g, grp.title || '分组', tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
+  // 选中时四个端点
+  if (sel){
+    const P = anchorsFor(r);
+    for (const k of ['r', 'l', 't', 'b']){
+      const a = P[k];
+      const on = hoverPort && hoverPort.node === grp.id && hoverPort.side === k;
+      g.fillStyle = on ? C.yellow : C.bg;
+      g.strokeStyle = C.yellow;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.rect(Math.round(a.x) - 5, Math.round(a.y) - 5, 10, 10);
+      g.fill(); g.stroke();
+    }
   }
   g.restore();
 }

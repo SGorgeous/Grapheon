@@ -1,11 +1,11 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
    ========================================================================== */
 
 /* ---------------- 文档模型 ---------------- */
-let doc = { v:2, nodes:[], edges:[] };
+let doc = { v:2, nodes:[], edges:[], groups:[] };
 
 /* 连线的「类型」＝ 三个互相独立的属性。arrow: none|end|both，dash: 实线/虚线，
    route: ortho 正交折线 / curve 曲线。老文件没有这些字段，由 normalizeEdge 补默认值。 */
@@ -42,9 +42,10 @@ function mkId(prefix, set){
   return id;
 }
 const uid = (p) => mkId(p || 'n', usedIds);
-let idx = { children:new Map(), parent:new Map(), byId:new Map() };
+let idx = { children:new Map(), parent:new Map(), byId:new Map(), groups:new Map(), hidden:new Set() };
 let sel = new Set();
 let selEdgeId = null;          // 选中的连线（与节点选择互斥）
+let selGroupId = null;         // 选中的分组（同上）
 let view = { x:0, y:0, z:1 };
 let hover = null, hoverPort = null, hoverEdge = null;
 let drag = null, marquee = null, linking = null, relink = null;
@@ -56,13 +57,20 @@ const byId   = (id) => idx.byId.get(id);
 const mark   = () => { dirty = true; };
 
 function reindex(){
-  idx.children = new Map(); idx.parent = new Map(); idx.byId = new Map();
+  idx.children = new Map(); idx.parent = new Map(); idx.byId = new Map(); idx.groups = new Map();
   for (const n of doc.nodes) { idx.children.set(n.id, []); idx.byId.set(n.id, n); }
+  // 分组：丢掉已经不在文档里的成员；空了的分组自动消失
+  if (!Array.isArray(doc.groups)) doc.groups = [];
+  doc.groups = doc.groups.filter(g => {
+    g.members = (g.members || []).filter(id => idx.byId.has(id));
+    return g.members.length > 0;
+  });
+  for (const g of doc.groups) idx.groups.set(g.id, g);
   const seen = new Set();
   for (const e of doc.edges){
     if (seen.has(e.id)) continue; seen.add(e.id);
     if (e.s === e.t) continue;
-    if (!idx.byId.has(e.s) || !idx.byId.has(e.t)) continue;
+    if (!idx.byId.has(e.s) || !idx.byId.has(e.t)) continue;   // 端点可以是分组，那就不进树
     if (idx.parent.has(e.t)) continue;
     if (reachUp(e.s, e.t)) continue;               // 防环
     idx.parent.set(e.t, e.s);
@@ -86,14 +94,50 @@ function reindex(){
     const e = doc.edges.find(x => x.id === selEdgeId);
     if (e && (idx.hidden.has(e.s) || idx.hidden.has(e.t))) selEdgeId = null;
   }
+  if (selGroupId && !idx.groups.has(selGroupId)) selGroupId = null;
   // 重建 id 占用表，uid() 靠它保证不与既有 id 冲突
   usedIds = new Set();
   for (const n of doc.nodes) usedIds.add(n.id);
   for (const e of doc.edges) usedIds.add(e.id);
+  for (const g of doc.groups) usedIds.add(g.id);
 }
 const isHidden = (id) => idx.hidden.has(id);
 /* 这条线整体可见吗（两端都没被折叠藏起来） */
 const edgeVisible = (e) => !idx.hidden.has(e.s) && !idx.hidden.has(e.t);
+const byGroup = (id) => idx.groups.get(id);
+/* 端点可以是节点、也可以是分组。统一按「有 id/x/y/w/h 的东西」对待，路由就不用分情况了。 */
+function anchorOf(id){
+  const n = idx.byId.get(id);
+  if (n) return n;
+  const g = idx.groups.get(id);
+  if (g) return groupBox(g);
+  return null;
+}
+/* 分组的外框完全由成员算出来：永远包住成员，成员一动框就跟着动，不会脱节。 */
+function groupBox(g){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const id of g.members){
+    const n = idx.byId.get(id);
+    if (!n) continue;
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  if (!isFinite(minX)) return { id:g.id, isGroup:true, group:g, x:0, y:0, w:0, h:0 };
+  return {
+    id:g.id, isGroup:true, group:g,
+    x: minX - GROUP_PAD,
+    y: minY - GROUP_TITLE_H,
+    w: (maxX - minX) + GROUP_PAD * 2,
+    h: (maxY - minY) + GROUP_TITLE_H + GROUP_PAD
+  };
+}
+/* 分组标题栏的矩形（命中测试和绘制共用） */
+function groupTitleBox(g){
+  const r = groupBox(g);
+  setFont(mctx, FS, 'normal', FONT);
+  const tw = Math.min(r.w - 20, mctx.measureText(g.title || '分组').width + 16);
+  return { x:r.x + 6, y:r.y + 4, w:Math.max(48, tw), h:GROUP_TITLE_H - 8 };
+}
 function reachUp(from, target){
   let cur = from, guard = 0;
   while (cur !== undefined && guard++ < 5000){
@@ -117,18 +161,23 @@ function serialize(){
   return {
     v:2, nid,
     nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape,
-      collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null })),
+      collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null,
+      font:n.font || null, fsPx:n.fsPx || null, color:n.color || null, border:n.border || null,
+      kind:(n.kind === 'program' ? 'program' : 'node') })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
       waypoints:(e.waypoints && e.waypoints.length)
         ? e.waypoints.map(p => ({ x:Math.round(p.x), y:Math.round(p.y) })) : null
+    })),
+    groups: (doc.groups || []).map(g => ({
+      id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null
     }))
   };
 }
 function deserialize(d){
   if (!d || !Array.isArray(d.nodes)) throw new Error('bad file');
-  doc = { v:2, nodes:[], edges:[] };
+  doc = { v:2, nodes:[], edges:[], groups:[] };
   nid = d.nid || 1;
   // v1 的文件用 mode 决定走线：mind 是曲线、flow 是正交。
   // 现在没有模式了，就把旧的 mode 一次性翻译成每条线的 route，老存档打开后长相不变。
@@ -139,7 +188,11 @@ function deserialize(d){
     if (!id || seen.has(id)) id = mkId('n', seen); else seen.add(id);
     doc.nodes.push({ id, text:n.text == null ? '' : String(n.text),
       x:+n.x || 0, y:+n.y || 0, w:0, h:0, shape:n.shape || 'rect', collapsed:!!n.collapsed,
-      fixedW:(+n.fixedW > 0) ? +n.fixedW : null, fixedH:(+n.fixedH > 0) ? +n.fixedH : null });
+      fixedW:(+n.fixedW > 0) ? +n.fixedW : null, fixedH:(+n.fixedH > 0) ? +n.fixedH : null,
+      font:NODE_FONTS[n.font] ? n.font : null,
+      fsPx:(+n.fsPx > 0) ? +n.fsPx : ((+n.fs > 0) ? +n.fs : null),   // 也认早期写成 fs 的档
+      color:n.color || null, border:n.border || null,
+      kind:(n.kind === 'program') ? 'program' : 'node' });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const e of (d.edges || [])){
@@ -152,7 +205,13 @@ function deserialize(d){
       waypoints:Array.isArray(e.waypoints) ? e.waypoints.map(p => ({ x:+p.x || 0, y:+p.y || 0 })) : null
     }));
   }
-  sel.clear(); selEdgeId = null; editing = null; hideEditor();
+  for (const g of (d.groups || [])){
+    let id = g.id;
+    if (!id || seen.has(id)) id = mkId('g', seen); else seen.add(id);
+    doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
+      members:(g.members || []).slice(), color:g.color || null });
+  }
+  sel.clear(); selEdgeId = null; selGroupId = null; editing = null; hideEditor();
   reindex(); sizeAll();
 }
 

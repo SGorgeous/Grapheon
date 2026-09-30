@@ -317,19 +317,24 @@
     ok('G05j 面板已关闭', edgeBoxEl.style.display === 'none');
     ok('G05k 样式改动进了撤销栈', (() => { undo(); const e2 = doc.edges.find(x => x.id === e.id); return !e2 || e2.label !== '是'; })());
   });
-  T('G06 E 键打开面板；没选中连线时仍可用于改名', () => {
+  T('G06 E 键是通用样式面板：选中什么就开什么', () => {
     fresh();
     const st = nodeByText('节点');
     selectOnly(st.id);
-    keyRaw('e');                                        // 没选中连线 → 应当起手改名
-    ok('G06 没选中连线时 e 触发改名', !!editing && editor.value === 'e', editor.value + '/' + !!editing);
-    cancelEdit();
+    keyRaw('e');
+    ok('G06 选中节点时 e 打开节点样式', nodeBoxEl.style.display === 'block');
+    keyRaw('Escape');
+    ok('G06b Esc 关掉它', nodeBoxEl.style.display === 'none');
     const e = doc.edges[0];
     selectEdge(e.id);
     keyRaw('e');
-    ok('G06b 选中连线时 e 打开样式面板', edgeBoxEl.style.display === 'block');
+    ok('G06c 选中连线时 e 打开连线样式', edgeBoxEl.style.display === 'block');
+    ok('G06d 不会同时开着节点面板', nodeBoxEl.style.display === 'none');
     keyRaw('Escape');
-    ok('G06c Esc 关闭面板', edgeBoxEl.style.display === 'none');
+    ok('G06e Esc 关掉它', edgeBoxEl.style.display === 'none');
+    selectOnly(null);
+    keyRaw('e');
+    ok('G06f 什么都没选中时不弹面板', nodeBoxEl.style.display === 'none' && edgeBoxEl.style.display === 'none');
   });
   T('G07 右键连线的菜单里有样式项', () => {
     fresh();
@@ -574,8 +579,9 @@
     const b = GP.keys.bindings;
     ok('K02 Tab → 子节点', b['tab'] === 'node.child');
     ok('K02b WASD 与方向键都有', ['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].every(k => !!b[k]));
-    ok('K02c e → 连线样式', b['e'] === 'edge.style');
+    ok('K02c e → 样式面板（节点/连线通用）', b['e'] === 'style.open');
     ok('K02d 模式键位已移除', !b['1'] && !b['2'] && !GP.keys.actions['mode.mind'] && !GP.keys.actions['mode.flow']);
+    ok('K02e Ctrl+G = 加入分组', b['ctrl+g'] === 'group.create');
     ok('K02e 全部绑定都指向已注册动作', Object.keys(b).every(k => !!GP.keys.actions[b[k]]),
       Object.keys(b).filter(k => !GP.keys.actions[b[k]]).join(','));
     ok('K02f 动作表带中文标签', Object.values(GP.keys.actions).every(a => a.label && a.group));
@@ -1160,6 +1166,280 @@
     ok('V09b 离远了不命中', hitWaypoint({ x:100, y:100 }) === null);
     selEdgeId = null;
     ok('V09c 没选中连线时不命中拐点', hitWaypoint({ x:600, y:600 }) === null);
+  });
+
+  /* ==================== 节点外观 ==================== */
+  T('P01 默认全部跟随主题', () => {
+    fresh();
+    ok('P01 外观字段都是 null', doc.nodes.every(n =>
+      !n.font && !n.fsPx && !n.color && !n.border), '有节点被改过');
+    ok('P01b 默认字体就是主题字体', nodeFontFamily(doc.nodes[0]) === FONT);
+    ok('P01c 默认字号 16 / 根节点 32', nodeFontSize(nodeByText('节点')) === FS &&
+      nodeFontSize(doc.nodes.find(n => !idx.parent.has(n.id))) === FS_BIG);
+  });
+  T('P02 节点样式面板：打开 / 列选项 / 关闭', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);
+    openNodeBox(n);
+    ok('P02 面板打开', nodeBoxEl.style.display === 'block');
+    ok('P02b 字号 5 个选项', nbFsEl.querySelectorAll('.opt').length === NODE_FS_CHOICES.length,
+      nbFsEl.querySelectorAll('.opt').length);
+    ok('P02c 字体 4 个选项', nbFontEl.querySelectorAll('.opt').length === Object.keys(NODE_FONTS).length,
+      nbFontEl.querySelectorAll('.opt').length);
+    ok('P02d 色板 = 默认 + ' + NODE_COLORS.length + ' 色',
+      nbColorEl.querySelectorAll('.sw').length === NODE_COLORS.length + 1 &&
+      nbBorderEl.querySelectorAll('.sw').length === NODE_COLORS.length + 1);
+    ok('P02e 默认项高亮', nbFsEl.querySelectorAll('.opt')[0].className.indexOf('on') >= 0 &&
+      nbColorEl.querySelectorAll('.sw')[0].className.indexOf('on') >= 0);
+    closeNodeBox();
+    ok('P02f 面板关闭', nodeBoxEl.style.display === 'none');
+  });
+  T('P03 改字号：画出的是新字号，尺寸跟着重算', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const h0 = n.h, lh0 = n.lh;
+    selectOnly(n.id); openNodeBox(n);
+    const opts = [...nbFsEl.querySelectorAll('.opt')];
+    opts[3].click();                                   // 32
+    ok('P03 fsPx 已设置', n.fsPx === 32 && n.fs === 32, n.fsPx + '/' + n.fs);
+    ok('P03b 行高跟着变', n.lh > lh0, lh0 + ' -> ' + n.lh);
+    ok('P03c 高度跟着变', n.h > h0, h0 + ' -> ' + n.h);
+    ok('P03d 面板同步高亮', [...nbFsEl.querySelectorAll('.opt')][3].className.indexOf('on') >= 0);
+    const opts2 = [...nbFsEl.querySelectorAll('.opt')];
+    opts2[0].click();                                  // 回到自动
+    ok('P03e 可以回到自动', n.fsPx === null && n.lh === lh0, n.fsPx);
+    closeNodeBox();
+  });
+  T('P04 改字体：折行按新字体重算', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('矩形 / 圆角 / 菱形 / 椭圆');
+    const w0 = n.w;
+    setNodeStyle(n, { font:'sans' });
+    ok('P04 字体已记录', n.font === 'sans' && n.fam === NODE_FONTS.sans);
+    ok('P04b 宽度按新字体重算', n.w !== w0, w0 + ' -> ' + n.w);
+    ok('P04c 仍然能折行', Array.isArray(n.lines) && n.lines.length >= 1);
+    setNodeStyle(n, { font:'auto' });
+    ok('P04d 回到主题字体', nodeFontFamily(n) === FONT);
+  });
+  T('P05 改字色 / 外框色并真的用上', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setNodeStyle(n, { color:'#00ffff', border:'#ff7f27' });
+    ok('P05 两个颜色都记下了', n.color === '#00ffff' && n.border === '#ff7f27');
+    dirty = true; draw();
+    ok('P05b 用自定义颜色绘制不报错', true);
+    const c = buildExportCanvas([n]);
+    ok('P05c 导出也带着颜色', c.width > 0);
+  });
+  T('P06 一键恢复默认 / 非法值被规整', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setNodeStyle(n, { font:'sans', fsPx:32, color:'#ff0000', border:'#00ff00' });
+    resetNodeStyle(n);
+    ok('P06 全部回到 null', !n.font && !n.fsPx && !n.color && !n.border);
+    ok('P06b 字体回到主题字体', nodeFontFamily(n) === FONT);
+    setNodeStyle(n, { font:'不存在的字体', fsPx:-5, color:'', border:'' });
+    ok('P06c 非法字体 → null', n.font === null);
+    ok('P06d 非法字号 → null', n.fsPx === null);
+    ok('P06e 空颜色 → null', n.color === null && n.border === null);
+  });
+  T('P07 外观能存下来', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setNodeStyle(n, { font:'serif', fsPx:24, color:'#b967ff', border:'#ffd800' });
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const n2 = nodeByText('节点');
+    ok('P07 往返保留', n2.font === 'serif' && n2.fsPx === 24 &&
+      n2.color === '#b967ff' && n2.border === '#ffd800',
+      [n2.font, n2.fs, n2.color, n2.border].join('/'));
+    ok('P07b 反序列化后尺寸也是按新字号算的', n2.lh === Math.round(24 * 1.32), n2.lh);
+  });
+
+  /* ==================== 分组 ==================== */
+  T('U01 至少两个节点才能成组', () => {
+    fresh(); layoutMind();
+    const before = (doc.groups || []).length;
+    selectOnly(nodeByText('节点').id);
+    createGroup();
+    ok('U01 单个节点被拒绝', (doc.groups || []).length === before, (doc.groups || []).length);
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    ok('U01b 两个节点可以成组', !!grp && doc.groups.length === before + 1);
+    ok('U01c 成员正确', grp.members.length === 2 && grp.members.indexOf(a.id) >= 0 && grp.members.indexOf(b.id) >= 0);
+  });
+  T('U02 成组不改变连接关系', () => {
+    fresh(); layoutMind();
+    const n0 = doc.nodes.length, e0 = doc.edges.length;
+    const before = doc.edges.map(e => e.s + '>' + e.t).sort().join(',');
+    sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
+    createGroup();
+    ok('U02 节点数不变', doc.nodes.length === n0, doc.nodes.length);
+    ok('U02b 连线数不变', doc.edges.length === e0, doc.edges.length);
+    ok('U02c 连线的两端也没变', doc.edges.map(e => e.s + '>' + e.t).sort().join(',') === before);
+  });
+  T('U03 外框永远包住所有成员', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const r = groupBox(grp);
+    ok('U03 成员都在框里', [a, b].every(n =>
+      n.x >= r.x && n.y >= r.y && n.x + n.w <= r.x + r.w && n.y + n.h <= r.y + r.h),
+      JSON.stringify(r));
+    a.x += 400; a.y += 200;                            // 成员一动框就跟着变
+    const r2 = groupBox(grp);
+    ok('U03b 成员移动后框跟着长大/移动', r2.x !== r.x || r2.w !== r.w, JSON.stringify(r2));
+    ok('U03c 移动后依然包住', [a, b].every(n =>
+      n.x >= r2.x && n.y >= r2.y && n.x + n.w <= r2.x + r2.w && n.y + n.h <= r2.y + r2.h));
+  });
+  T('U04 分组可以重命名', () => {
+    fresh(); layoutMind();
+    sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
+    const grp = createGroup();
+    renameGroup(grp, '前置处理');
+    ok('U04 标题已改', grp.title === '前置处理', grp.title);
+    renameGroup(grp, '  ');
+    ok('U04b 空标题兜底', grp.title === '分组', grp.title);
+    renameGroup(grp, '多行\n标题');
+    ok('U04c 换行被压平', grp.title.indexOf('\n') < 0, grp.title);
+  });
+  T('U05 拖分组标题会整体搬动成员', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const p0 = { ax:a.x, ay:a.y, bx:b.x, by:b.y };
+    const tb = groupTitleBox(grp);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    ok('U05 进入分组拖拽', drag && drag.mode === 'group', drag && drag.mode);
+    pe('pointermove', h.x + 120, h.y + 80);
+    pe('pointerup', h.x + 120, h.y + 80);
+    const dx = 120 / view.z, dy = 80 / view.z;
+    ok('U05b 成员整体位移', Math.abs(a.x - p0.ax - dx) < 2 && Math.abs(a.y - p0.ay - dy) < 2,
+      Math.round(a.x - p0.ax) + ',' + Math.round(a.y - p0.ay));
+    ok('U05c 相对位置不变', Math.abs((b.x - a.x) - (p0.bx - p0.ax)) < 0.01);
+    ok('U05d 拖完清干净了', !drag);
+  });
+  T('U06 分组外框有四个端点且能命中', () => {
+    fresh(); layoutMind();
+    sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
+    const grp = createGroup();
+    const r = groupBox(grp);
+    const P = anchorsFor(r);
+    for (const k of ['r', 'l', 't', 'b']){
+      const hit = hitPort({ x:P[k].x, y:P[k].y });
+      if (!hit || hit.node !== grp.id || hit.side !== k) throw new Error('端点 ' + k + ' 没命中');
+    }
+    ok('U06 四个端点都能命中', true);
+    ok('U06b 分组框上确实是 4 个锚点', Object.keys(P).length === 4);
+  });
+  T('U07 可以从分组端点拉一条线到节点', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const r = groupBox(grp);
+    const before = doc.edges.length;
+    const port = S(anchorsFor(r).l), tgt = center(c);
+    pe('pointerdown', port.x, port.y);
+    ok('U07 进入连线态', !!linking && linking.node === grp.id, linking && linking.node);
+    pe('pointermove', tgt.x, tgt.y);
+    pe('pointerup', tgt.x, tgt.y);
+    ok('U07b 新增了一条从分组出发的线',
+      doc.edges.length === before + 1 && doc.edges.some(e => e.s === grp.id && e.t === c.id),
+      doc.edges.length);
+    const e = doc.edges.find(x => x.s === grp.id && x.t === c.id);
+    ok('U07c 这条线能算出几何（分组被当作端点）', !!edgeGeomFor(e));
+    dirty = true; draw();
+    ok('U07d 能正常绘制', true);
+  });
+  T('U08 连线也可以指到分组上', () => {
+    fresh(); layoutMind();
+    const c = nodeByText('操作');
+    sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
+    const grp = createGroup();
+    const e = linkNodes(c.id, grp.id);
+    ok('U08 建线成功', !!e);
+    reindex();
+    const ep = edgeEndpoints(e);
+    const r = groupBox(grp);
+    ok('U08b 终点落在分组框的某条边上', (() => {
+      const P = anchorsFor(r);
+      return ['r','l','t','b'].some(k => Math.abs(ep.b.x - P[k].x) < 0.01 && Math.abs(ep.b.y - P[k].y) < 0.01);
+    })(), JSON.stringify(ep.b));
+    ok('U08c 不影响树的父子关系（分组不进树）',
+      doc.nodes.filter(n => !idx.parent.has(n.id)).length >= 1);
+  });
+  T('U09 成员被删掉后分组会自动收缩 / 消失', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('返回') || nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    ok('U09 前置：2 个成员', grp.members.length === 2);
+    // 直接删掉一个成员（绕过 UI，模拟别处删节点）
+    doc.nodes = doc.nodes.filter(n => n.id !== a.id);
+    doc.edges = doc.edges.filter(e => e.s !== a.id && e.t !== a.id);
+    reindex();
+    ok('U09b 分组只剩 1 个成员', grp.members.length === 1, grp.members.length);
+    doc.nodes = doc.nodes.filter(n => n.id !== b.id);
+    doc.edges = doc.edges.filter(e => e.s !== b.id && e.t !== b.id);
+    reindex();
+    ok('U09c 空分组自动消失', (doc.groups || []).indexOf(grp) < 0, doc.groups.length);
+  });
+  T('U10 解散分组：成员和连线都留着', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const n0 = doc.nodes.length, e0 = doc.edges.length;
+    selectGroup(grp.id);
+    deleteSelection();                                  // 选中分组后按 Del = 解散
+    ok('U10 分组没了', (doc.groups || []).indexOf(grp) < 0);
+    ok('U10b 节点一个没少', doc.nodes.length === n0, doc.nodes.length);
+    ok('U10c 连线也一条没少', doc.edges.length === e0, doc.edges.length);
+    ok('U10d 选中态已清', selGroupId === null);
+  });
+  T('U11 分组能存下来', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    renameGroup(grp, '我的分组');
+    grp.color = '#ff7f27';
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('U11 序列化里有 groups', Array.isArray(snap.groups) && snap.groups.length === 1, JSON.stringify(snap.groups));
+    deserialize(snap);
+    const g2 = (doc.groups || [])[0];
+    ok('U11b 往返保留', !!g2 && g2.title === '我的分组' && g2.members.length === 2 && g2.color === '#ff7f27',
+      g2 && g2.title + '/' + g2.members.length + '/' + g2.color);
+  });
+  T('U12 点到框里面不会选中分组（留给成员节点）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const r = groupBox(grp);
+    // 框内部的空白处（避开成员）：取框内中心，若正好压到成员就换一个点
+    const c = { x:r.x + r.w / 2, y:r.y + r.h / 2 };
+    ok('U12 内部点不会命中分组边框', hitGroupBorder(c) === null);
+    ok('U12b 但整个区域算这个分组（用于拖线落点）', (hitGroupArea(c) || {}).id === grp.id);
+    const tb = groupTitleBox(grp);
+    ok('U12c 标题栏可以命中分组', (hitGroupTitle({ x:tb.x + 4, y:tb.y + tb.h / 2 }) || {}).id === grp.id);
+  });
+  T('U13 Ctrl+G 把选中的节点加入分组', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    keyRaw('g', { ctrlKey:true });
+    ok('U13 Ctrl+G 建组', (doc.groups || []).length === 1, (doc.groups || []).length);
+    const c = nodeByText('操作');
+    selectOnly(c.id);
+    keyRaw('g', { ctrlKey:true });
+    ok('U13b 单个节点不会建新组', (doc.groups || []).length === 1);
   });
 
   });

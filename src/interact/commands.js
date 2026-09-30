@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/commands.js
    结构操作：子/兄弟/父节点、删除、折叠、形状、方向生成、连线样式。
@@ -117,6 +117,8 @@ function spawnPos(n, dir, w, h, skip){
   return { x: n.x + n.w / 2 - w / 2, y: sign > 0 ? edge + GAP : edge - GAP - h };
 }
 function deleteSelection(){
+  const grp = selectedGroup();
+  if (grp){ dissolveGroup(grp); return; }   // 删分组 = 解散，不动成员
   const ed = selectedEdge();
   if (ed){ deleteEdgeOnly(ed); return; }
   if (!sel.size){ say('* 没有选中的东西。'); return; }
@@ -186,11 +188,12 @@ function setNodeSize(n, w, h){
   sizeNode(n);
   mark();
 }
-function selectOnly(id){ sel.clear(); selEdgeId = null; if (id) sel.add(id); mark(); }
-function selectEdge(id){ sel.clear(); selEdgeId = id || null; mark(); }
+function selectOnly(id){ sel.clear(); selEdgeId = null; selGroupId = null; if (id) sel.add(id); mark(); }
+function selectEdge(id){ sel.clear(); selEdgeId = id || null; selGroupId = null; mark(); }
+function selectGroup(id){ sel.clear(); selEdgeId = null; selGroupId = id || null; mark(); }
 function selectAll(){
   sel = new Set(doc.nodes.filter(n => !isHidden(n.id)).map(n => n.id));
-  selEdgeId = null;
+  selEdgeId = null; selGroupId = null;
   mark();
 }
 
@@ -285,4 +288,83 @@ function navigate(dir){
     if (s < bs){ bs = s; best = m; }
   }
   if (best) selectOnly(best.id);
+}
+
+/* =========================================================================
+   节点外观
+   ========================================================================= */
+/* 只改传进来的那几项；传 null 就是「跟随主题」。改完要重算尺寸（字号变了）。 */
+function setNodeStyle(n, patch){
+  if (!n) return;
+  Object.assign(n, patch);
+  if (n.font != null && !NODE_FONTS[n.font]) n.font = null;
+  if (!(+n.fsPx > 0)) n.fsPx = null;
+  if (!n.color) n.color = null;
+  if (!n.border) n.border = null;
+  sizeNode(n);
+  mark();
+}
+function resetNodeStyle(n){
+  if (!n) return;
+  n.font = null; n.fsPx = null; n.color = null; n.border = null;
+  sizeNode(n); mark();
+  say('* 外观已恢复成跟随主题。');
+}
+const nodeStyleText = (n) => [
+  NODE_FONT_LABEL[n.font] || NODE_FONT_LABEL.auto,
+  NODE_FS_LABEL(n.fsPx),
+  n.color ? '字色' : '默认字色',
+  n.border ? '外框色' : '默认外框'
+].join(' · ');
+
+/* =========================================================================
+   分组
+   ========================================================================= */
+const selectedGroup = () => (selGroupId ? byGroup(selGroupId) : null);
+function createGroup(){
+  const ids = [...sel].filter(id => byId(id) && !isHidden(id));
+  if (ids.length < 2){ say('* 至少选中两个节点才能成组（Shift 点选或 Shift 拖拽框选）。'); return null; }
+  doc.groups = doc.groups || [];
+  const grp = { id:uid('g'), title:'分组 ' + (doc.groups.length + 1), members:ids.slice(), color:null };
+  doc.groups.push(grp);
+  reindex();
+  selectGroup(grp.id);
+  pushHist();
+  say('* 已把 ' + ids.length + ' 个节点组进「' + grp.title + '」，成员之间的连线关系不变。');
+  return grp;
+}
+function dissolveGroup(grp){
+  if (!grp) return;
+  doc.groups = (doc.groups || []).filter(g => g !== grp);
+  if (selGroupId === grp.id) selGroupId = null;
+  reindex(); pushHist(); mark();
+  say('* 已解散「' + (grp.title || '分组') + '」，成员节点和连线都保留。');
+}
+function renameGroup(grp, title){
+  if (!grp) return;
+  grp.title = String(title == null ? '' : title).replace(/[\r\n]+/g, ' ').trim() || '分组';
+  pushHist(); mark();
+}
+function moveGroupBy(grp, dx, dy){
+  if (!grp) return;
+  for (const id of grp.members){ const n = byId(id); if (n){ n.x += dx; n.y += dy; } }
+  mark();
+}
+/* 把选中的节点塞进一个已有分组 */
+function addSelectionToGroup(grp){
+  if (!grp) return;
+  const ids = [...sel].filter(id => byId(id) && grp.members.indexOf(id) < 0);
+  if (!ids.length){ say('* 没有新的节点可以加进去。'); return; }
+  grp.members = grp.members.concat(ids);
+  reindex(); pushHist(); mark();
+  say('* 已把 ' + ids.length + ' 个节点加入「' + grp.title + '」。');
+}
+function removeSelectionFromGroup(grp){
+  if (!grp) return;
+  for (const id of sel){
+    const i = grp.members.indexOf(id);
+    if (i >= 0) grp.members.splice(i, 1);
+  }
+  reindex(); pushHist(); mark();
+  say('* 已移出分组。');
 }

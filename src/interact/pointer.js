@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -52,6 +52,15 @@ canvas.addEventListener('pointerdown', (ev) => {
     toggleCollapseOf(cb);
     return;
   }
+  // 分组标题栏：选中整组并开始搬动成员
+  const gt = hitGroupTitle(p);
+  if (gt){
+    selectGroup(gt.id);
+    drag = { mode:'group', grpId:gt.id, p0:p,
+             starts:gt.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
+    mark();
+    return;
+  }
   const port = hitPort(p);
   if (port){
     drag = { mode:'link', from:port };
@@ -79,6 +88,15 @@ canvas.addEventListener('pointerdown', (ev) => {
     lastClickNode = n.id;
     const starts = [...sel].map(id => { const m = byId(id); return { id, x:m.x, y:m.y }; });
     drag = { mode:'node', p0:p, starts, moved:false };
+    mark();
+    return;
+  }
+  // 分组边框（框内部已经让给成员节点了）
+  const gb = hitGroupBorder(p);
+  if (gb){
+    selectGroup(gb.id);
+    drag = { mode:'group', grpId:gb.id, p0:p,
+             starts:gb.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
     mark();
     return;
   }
@@ -116,6 +134,11 @@ window.addEventListener('pointermove', (ev) => {
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
       for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
       mark();
+    } else if (drag.mode === 'group'){
+      const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
+      for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
+      mark();
     } else if (drag.mode === 'resize'){
       const n = byId(drag.nodeId);
       if (n){
@@ -127,10 +150,10 @@ window.addEventListener('pointermove', (ev) => {
       marquee.b = p; mark();
     } else if (drag.mode === 'link'){
       linking.to = p;
-      hover = hitNode(p);
+      hover = linkTargetAt(p);
       mark();
     } else if (drag.mode === 'relink'){
-      const t = hitNode(p);
+      const t = linkTargetAt(p);
       relink.to = p;
       relink.target = (t && t.id !== drag.otherId) ? t : null;   // 不许接到自己另一端造成自环
       drag.moved = true;
@@ -162,6 +185,8 @@ window.addEventListener('pointerup', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
   if (drag.mode === 'node' && drag.moved){
     pushHist();
+  } else if (drag.mode === 'group' && drag.moved){
+    pushHist();
   } else if (drag.mode === 'resize' && drag.moved){
     const n = byId(drag.nodeId);
     if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
@@ -185,7 +210,7 @@ window.addEventListener('pointerup', (ev) => {
     }
     if (sel.size) say('* 选中了 ' + sel.size + ' 个节点。');
   } else if (drag.mode === 'link'){
-    const t = hitNode(p);
+    const t = linkTargetAt(p);
     if (t && t.id !== drag.from.node){
       linkNodes(drag.from.node, t.id);
       reindex(); sizeAll();
@@ -194,7 +219,7 @@ window.addEventListener('pointerup', (ev) => {
     }
   } else if (drag.mode === 'relink'){
     const e = doc.edges.find(x => x.id === drag.edgeId);
-    const t = hitNode(p);
+    const t = linkTargetAt(p);
     if (e && t && t.id !== drag.otherId){
       const ns = drag.end === 's' ? t.id : e.s;
       const nt = drag.end === 't' ? t.id : e.t;
@@ -215,6 +240,9 @@ window.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('dblclick', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
+  // 双击分组标题 = 给分组改名
+  const gt = hitGroupTitle(p);
+  if (gt){ selectGroup(gt.id); startEdit('group', gt.id); return; }
   // 双击拐点 = 删掉它
   const wp = hitWaypoint(p);
   if (wp){
@@ -243,14 +271,17 @@ canvas.addEventListener('wheel', (ev) => {
 canvas.addEventListener('contextmenu', (ev) => {
   ev.preventDefault();
   const p = s2w(ev.clientX, ev.clientY);
-  const n = hitNode(p);
   const wp = hitWaypoint(p);
-  const e = n ? null : hitEdge(p);
+  const gt = wp ? null : hitGroup(p);
+  const n = (wp || gt) ? null : hitNode(p);
+  const e = (wp || gt || n) ? null : hitEdge(p);
   if (wp) selEdgeId = wp.edgeId;
+  else if (gt) selectGroup(gt.id);
   else if (n) selectOnly(n.id);
   else if (e) selectEdge(e.id);
   else selectOnly(null);
-  showCtx(ev.clientX, ev.clientY, n, wp ? doc.edges.find(x => x.id === wp.edgeId) : e, { p, waypoint:wp });
+  showCtx(ev.clientX, ev.clientY, n, wp ? doc.edges.find(x => x.id === wp.edgeId) : e,
+    { p, waypoint:wp, group:gt });
   mark();
 });
 

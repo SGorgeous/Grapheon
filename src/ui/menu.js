@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单。右键菜单和顶栏「新建」菜单都用它，以后加设置菜单也复用。
@@ -41,11 +41,25 @@ function showCtx(x, y, n, e, info){
     items.push(['椭圆', '', () => setShape('oval')]);
     if (n.fixedW || n.fixedH) items.push(['恢复自适应尺寸', '', () => autoSizeNode(n)]);
     items.push('hr');
+    items.push(['节点样式…', 'E', () => openNodeBox(n)]);
     if (doc.edges.some(x2 => x2.s === n.id || x2.t === n.id)){
       items.push(['连线端点吸附…', '', () => openEndBox(n)]);
     }
+    const owner = (doc.groups || []).find(grp => grp.members.indexOf(n.id) >= 0);
+    if (owner) items.push(['移出分组「' + (owner.title || '分组') + '」', '', () => { selectOnly(n.id); removeSelectionFromGroup(owner); }]);
     items.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', () => toggleCollapseOf(n)]);
     items.push(['删除节点', 'Del', () => { selectOnly(n.id); deleteSelection(); }]);
+  } else if (info.group){
+    const grp = info.group;
+    items.push(['重命名分组', '双击标题', () => startEdit('group', grp.id)]);
+    items.push(['把选中的节点加入', 'Ctrl+G', () => addSelectionToGroup(grp)]);
+    items.push('hr');
+    items.push(['分组颜色：' + (grp.color ? grp.color : '默认'), '▶', () => {
+      const i = NODE_COLORS.findIndex(c => c[0] === grp.color);
+      grp.color = (i + 1 >= NODE_COLORS.length) ? null : NODE_COLORS[i + 1][0];
+      mark(); pushHist(); say('* 分组颜色已切换。');
+    }]);
+    items.push(['解散分组（保留成员）', 'Del', () => dissolveGroup(grp)]);
   } else if (e){
     if (info.waypoint){
       items.push(['删除这个拐点', '双击', () => { removeWaypoint(e, info.waypoint.index); pushHist(); say('* 拐点已删除。'); }]);
@@ -71,6 +85,7 @@ function showCtx(x, y, n, e, info){
       reindex(); relayout(); selectOnly(nn.id); pushHist(); startEdit('node', nn.id, ''); mark();
     }]);
     items.push(['全选', 'Ctrl+A', selectAll]);
+    if (sel.size >= 2) items.push(['把选中的 ' + sel.size + ' 个节点加入分组', 'Ctrl+G', () => createGroup()]);
     items.push(['排版（按树形摆一次）', 'Ctrl+L', () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }]);
     items.push(['居中显示', '', fitView]);
   }
