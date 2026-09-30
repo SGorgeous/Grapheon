@@ -1046,7 +1046,10 @@
   });
   T('S03 指定端点后几何真的接在那条边上', () => {
     fresh(); layoutMind();
-    const b = nodeByText('连线');
+    const b = addVarNode('pl', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
+    const _tgt = addNodeAt('目标', 500, 0, 'rect');
+    linkNodes(b.id, _tgt.id);
+    reindex(); sizeAll();
     openEndBox(b);
     const row = endListEl.querySelectorAll('.endrow')[0];
     const opts = [...row.querySelectorAll('.opt')];
@@ -6707,7 +6710,7 @@
   /* ==================== B 期：端点模型 ==================== */
   T('PB01 默认端点：位置和以前那套四向中点完全一致', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     const L = portList(n);
     ok('PB01 默认一个输入一个输出', L.ins.length === 1 && L.outs.length === 1,
       L.ins.length + '/' + L.outs.length);
@@ -6728,7 +6731,7 @@
   });
   T('PB02 规矩：id 纯数字、正整数、节点内不重复', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     ok('PB02 改 id 成功', setPortId(byId(n.id), 'ins', 1, 7) === true);
     ok('PB02b 改成 7 了', portList(byId(n.id)).ins[0].id === 7, portList(byId(n.id)).ins[0].id);
     ok('PB02c 撞已有 id 会被拒绝', setPortId(byId(n.id), 'outs', 3, 7) === false);
@@ -6752,7 +6755,7 @@
   });
   T('PB03 标签：能改，默认空', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     ok('PB03 默认标签是空的', portList(byId(n.id)).ins[0].label === '');
     ok('PB03b 能改', setPortLabel(byId(n.id), 'ins', 1, '系数') === true);
     ok('PB03c 改上了', portList(byId(n.id)).ins[0].label === '系数',
@@ -6763,7 +6766,7 @@
   });
   T('PB04 加 / 删端点：同一路上会均匀铺开', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     const a = addPort(byId(n.id), 'ins');
     ok('PB04 加了一个输入端点', a && portList(byId(n.id)).ins.length === 2,
       portList(byId(n.id)).ins.length);
@@ -6813,7 +6816,7 @@
   });
   T('PB05 id 决定汇合顺序（所以它是求值依据，不只是标识）', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     addPort(byId(n.id), 'ins');
     const ins = portList(byId(n.id)).ins.slice().sort((a, b) => a.id - b.id);
     ok('PB05 端点能按 id 排出稳定顺序', ins.length === 2 && ins[0].id < ins[1].id,
@@ -6834,7 +6837,7 @@
   });
   T('PB06 显示规则：悬停或选中才显示标签', () => {
     fresh(); layoutMind();
-    const a = nodeByText('节点'), b = nodeByText('连线');
+    const a = addVarNode('pn', 0, 0), b = addVarNode('pl', 0, 0);
     ok('PB06 什么都没选中时不显示标签', !portsShowLabel(byId(a.id)));
     selectOnly(a.id);
     ok('PB06b 选中就显示', portsShowLabel(byId(a.id)));
@@ -6876,7 +6879,7 @@
   });
   T('PB08 端点表能存读往返', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     setPortLabel(byId(n.id), 'ins', 1, '左进');
     addPort(byId(n.id), 'ins');
     setPortId(byId(n.id), 'ins', portList(byId(n.id)).ins[1].id, 9);
@@ -6922,7 +6925,7 @@
   /* ==================== B 期补：拖动改方向 + 双击改 ID/标签 ==================== */
   T('PD01 端点往哪条边靠就挂哪条边', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     const b = nodeBox(n);
     ok('PD01 靠左边就是 l', sideFromPoint(byId(n.id), { x:b.x + 3, y:b.y + b.h/2 }) === 'l');
     ok('PD01b 靠右边就是 r', sideFromPoint(byId(n.id), { x:b.x + b.w - 3, y:b.y + b.h/2 }) === 'r');
@@ -6939,7 +6942,7 @@
   });
   T('PD02 拖一下：方向变了、位置也变了', () => {
     fresh(); layoutMind();
-    const n = nodeByText('节点');
+    const n = addVarNode('pn', 0, 0); reindex(); sizeAll();  // 端点只在程序节点上
     const b = nodeBox(n);
     ok('PD02 原来在左边', portList(byId(n.id)).ins[0].side === 'l');
     ok('PD02b 拖到上边', movePort(byId(n.id), 'ins', 1, { x:b.x + b.w * 0.3, y:b.y + 2 }) === true);
@@ -7379,7 +7382,10 @@
 
   T('LK07 锚点的方向 d 必须是 [dx,dy] 数组（线画不出来的真凶）', () => {
     fresh(); layoutMind();
-    const a = nodeByText('节点'), b = nodeByText('操作');
+    // ⚠ 三个节点别都摆在 (0,0) —— 叠在一起时 hitNode 会抓错，拉出来的边就重复了
+    const a = addVarNode('pn', 0, 0), b = addVarNode('po', 0, 0);
+    a.x = 0; a.y = 0; b.x = 700; b.y = 0;
+    reindex(); sizeAll();
     // 锚点形状：老的四向锚点长什么样，钉端点的就得长什么样
     const plain = anchorsFor(nodeBox(byId(a.id)));
     ok('LK07 老锚点的 d 是数组', Array.isArray(plain.r.d) && plain.r.d.length === 2,
@@ -7455,7 +7461,10 @@
 
   T('LK08 落点端点：拖到哪个端点，就连哪个（不再吸到同一条边）', () => {
     fresh(); layoutMind();
-    const a = nodeByText('节点'), b = nodeByText('操作');
+    // ⚠ 三个节点别都摆在 (0,0) —— 叠在一起时 hitNode 会抓错，拉出来的边就重复了
+    const a = addVarNode('pn', 0, 0), b = addVarNode('po', 0, 0);
+    a.x = 0; a.y = 0; b.x = 700; b.y = 0;
+    reindex(); sizeAll();
     // 给 b 弄两个输入端点，摆到不同的边上，好分辨
     addPort(byId(b.id), 'ins');
     reindex(); sizeAll();
@@ -7496,7 +7505,9 @@
     ok('LK08f 它的落点钉在左边那个端点上', e1 && e1.bPort === ins[0].id,
       e1 ? String(e1.bPort) : 'null');
     // 第二条连另一个端点
-    const c = nodeByText('连线');
+    const c = addVarNode('pl', 0, 0);
+    c.x = 0; c.y = 400;
+    reindex(); sizeAll();
     selectOnly(c.id);
     const cp = portPoint(byId(c.id), portList(byId(c.id)).outs[0]);
     pe('pointerdown', Math.round(cp.x * view.z + view.x), Math.round(cp.y * view.z + view.y));
@@ -7561,15 +7572,21 @@
     })(), JSON.stringify(pts.map(p => [Math.round(p.x), Math.round(p.y)])));
     // 两端仍然精确落在端点上（避让不许碰端点）
     ok('AV01c 起点还在出发端点上', (() => {
-      const p = portList(a).outs[0] || portList(a).ins[0];
-      const w = portPoint(byId(a.id), p);
-      return Math.hypot(pts[0].x - w.x, pts[0].y - w.y) < 1.5;
+      /* 普通节点有四个连接端点，自动挑边时到底挑哪个不该由测试猜 ——
+         这里只断言「端点仍然精确落在**某个真实端点**上」，这正是避让必须守住的约束。 */
+      const nA = byId(a.id);
+      return nodePorts(nA).some(p => {
+        const w = portPoint(nA, p);
+        return Math.hypot(pts[0].x - w.x, pts[0].y - w.y) < 1.5;
+      });
     })(), JSON.stringify(pts[0]));
     ok('AV01d 终点还在落点端点上', (() => {
-      const p = portList(b).ins[0] || portList(b).outs[0];
-      const w = portPoint(byId(b.id), p);
+      const nB = byId(b.id);
       const last = pts[pts.length - 1];
-      return Math.hypot(last.x - w.x, last.y - w.y) < 1.5;
+      return nodePorts(nB).some(p => {
+        const w = portPoint(nB, p);
+        return Math.hypot(last.x - w.x, last.y - w.y) < 1.5;
+      });
     })(), JSON.stringify(pts[pts.length - 1]));
     // 把障碍挪走 → 走线回到直连
     const far = edgeGeomFor(e).pts.length;

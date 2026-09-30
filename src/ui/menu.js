@@ -164,7 +164,7 @@ function showCtx(x, y, n, e, info){
       }
       portItems.push('hr');
       portItems.push(['端点 ID…', '纯数字，不能重复，决定汇合顺序', null,
-        portList(n).ins.concat(portList(n).outs).map(p => [
+        nodePorts(n).map(p => [
           '#' + p.id, p.side === 't' ? '上' : p.side === 'b' ? '下' : p.side === 'l' ? '左' : '右',
           () => startEdit('portId', n.id, String(p.id),
             { dir: portList(n).ins.indexOf(p) >= 0 ? 'ins' : 'outs', portId:p.id })

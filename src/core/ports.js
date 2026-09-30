@@ -60,6 +60,13 @@ function defaultPorts(n){
     return { ins:[{ id:1, side:'l', at:0.5, label:'条件' }],
              outs:[{ id:3, side:'r', at:0.5, label:'' }], conns:[] };
   }
+  /* ★ 变量节点 / 输出节点：还是老规矩，一进一出。
+     ⚠ 这个分支必须写在「普通节点」那条**前面** —— 否则会掉进 connd 默认，
+       变量节点就变成四个连接端点、一个输入输出都没有了。 */
+  if (n && (n.kind === 'var' || n.kind === 'out')){
+    return { ins:[{ id:1, side:'l', at:0.5, label:'' }],
+             outs:[{ id:3, side:'r', at:0.5, label:'' }], conns:[] };
+  }
   /* ★ 普通节点（以及图片 / 表格 / 嵌入）：**四条边各一个连接端点**。
      连接端点只管连不连得上，不参与求值。 */
   return {
@@ -243,7 +250,7 @@ function portIdAtPoint(p, node){
   if (!node || typeof portList !== 'function') return null;
   const tol = 12 / Math.max(0.2, view.z);
   let best = null, bestD = Infinity;
-  for (const q of portList(node).ins.concat(portList(node).outs)){
+  for (const q of nodePorts(node)){
     const pt = portPoint(node, q);
     const d = Math.hypot(pt.x - p.x, pt.y - p.y);
     if (d <= tol && d < bestD){ bestD = d; best = q; }

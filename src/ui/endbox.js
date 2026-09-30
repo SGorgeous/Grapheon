@@ -64,9 +64,13 @@ function renderEndBox(){
        分组没有端点表，还是退回四条边。 */
     const tn = byId(n.id);
     const PL = tn && (typeof portList === 'function') ? portList(tn) : null;
+    /* ★ 三类端点都要算上。普通节点没有 ins/outs，只有 conns ——
+       以前这里只看两个表，于是普通节点的面板里一个端点都列不出来。 */
+    const outLike = PL ? PL.outs.concat(PL.conns || []) : [];
+    const inLike  = PL ? PL.ins.concat(PL.conns || []) : [];
     const portOpts = PL
-      ? (which === 'a' ? (PL.outs.length ? PL.outs : PL.ins)
-                       : (PL.ins.length ? PL.ins : PL.outs))
+      ? (which === 'a' ? (outLike.length ? outLike : inLike)
+                       : (inLike.length ? inLike : outLike))
           .map(p => [String(p.id),
                      '#' + p.id + (p.label ? ' ' + p.label : '') +
                      '（' + ({ t:'上', b:'下', l:'左', r:'右' })[p.side] + '）'])
