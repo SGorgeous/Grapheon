@@ -44,7 +44,7 @@ const PRIO_OPTS  = [[1000, '最高 1000'], [100, '100'], [10, '10'], [0, '默认
 let nbNodeId = null;
 
 const FS_OPTS    = NODE_FS_CHOICES.map(v => [v, NODE_FS_LABEL(v)]);
-const FONT_OPTS  = Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]);
+/* 字体列表在打开面板时才算：从文件加载的自定义字体要能立刻出现在里面 */
 const OP_OPTS    = PROGRAM_OPS.map(o => [o, PROGRAM_OP_LABEL[o]]);
 const MODE_OPTS  = PROGRAM_MODES.map(m => [m, PROGRAM_MODE_LABEL[m]]);
 const SHAPE_OPTS = SHAPES.map(s => [s, SHAPE_LABEL[s]]);
@@ -126,7 +126,7 @@ function renderNodeBox(){
 
   // ---- 外观（读有效值：被程序节点改过就显示改过之后的） ----
   buildOpts(nbFsEl, FS_OPTS, effFsPx(n) || 0, (v) => { setNodeStyle(n, { fsPx: v || null }); afterNodeEdit(); });
-  buildOpts(nbFontEl, FONT_OPTS, effFont(n) || 'auto', (v) => { setNodeStyle(n, { font: v }); afterNodeEdit(); });
+  buildOpts(nbFontEl, Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]), effFont(n) || 'auto', (v) => { setNodeStyle(n, { font: v }); afterNodeEdit(); });
   buildSwatches(nbColorEl, effColor(n), (v) => { setNodeStyle(n, { color: v }); afterNodeEdit(); });
   buildSwatches(nbBorderEl, effBorder(n), (v) => { setNodeStyle(n, { border: v }); afterNodeEdit(); });
   nbSizeEl.innerHTML = '';

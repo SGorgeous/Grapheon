@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -56,7 +56,17 @@
 
   <div class="sec">默认节点外观</div>
   <div class="row"><span class="lab">字体</span><div id="setFont" class="opts"></div></div>
-  <div class="row"><span class="lab">字号</span><div id="setFs" class="opts"></div></div>
+  <div class="row">
+    <span class="lab">字号</span>
+    <input type="range" id="setFsRange" min="0" max="64" step="4">
+    <span class="numread" id="setFsRead">自动</span>
+  </div>
+  <div class="row">
+    <span class="lab">字体文件</span>
+    <button class="ud-btn" id="setFontLoad">从文件加载…</button>
+    <button class="ud-btn" id="setFontForget">清空</button>
+  </div>
+  <div class="row"><div class="sub" id="setFontNote">支持 .ttf / .otf / .woff / .woff2；加载后出现在上面的字体列表里</div></div>
   <div class="row"><span class="lab">新连线</span><div id="setEdge" class="opts"></div></div>
 
   <div class="sec">快捷键</div>
@@ -329,6 +339,7 @@
 <input type="file" id="file" accept=".json,application/json" hidden style="display:none">
 <input type="file" id="imgfile" accept="image/*" hidden style="display:none">
 <input type="file" id="gpkfile" accept=".json,application/json" hidden style="display:none">
+<input type="file" id="fontfile" accept=".ttf,.otf,.woff,.woff2,font/*" multiple hidden style="display:none">
 <!-- 红心光标：颜色由 CSS 的 --r 决定（见 styles/theme-undertale.css），换主题会自动跟着变 -->
 <svg id="heart" viewBox="0 0 7 6" width="18" height="15" preserveAspectRatio="none" shape-rendering="crispEdges">
   <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>

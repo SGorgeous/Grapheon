@@ -9,7 +9,12 @@ const setEl      = document.getElementById('set');
 const setThemeEl = document.getElementById('setTheme');
 const setGridEl  = document.getElementById('setGrid');
 const setFontEl  = document.getElementById('setFont');
-const setFsEl    = document.getElementById('setFs');
+const setFsRangeEl = document.getElementById('setFsRange');
+const setFsReadEl  = document.getElementById('setFsRead');
+const setFontLoadEl = document.getElementById('setFontLoad');
+const setFontForgetEl = document.getElementById('setFontForget');
+const setFontNoteEl = document.getElementById('setFontNote');
+const fontFileEl   = document.getElementById('fontfile');
 const setEdgeEl  = document.getElementById('setEdge');
 const setKeysEl  = document.getElementById('setKeys');
 
@@ -67,12 +72,14 @@ function renderSettings(){
     renderSettings();
   });
   // 默认字体 / 字号
-  buildOpts(setFontEl, Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]), defaults.font, (k) => {
+  buildOpts(setFontEl, fontChoices(), defaults.font, (k) => {
     defaults.font = k; saveDefaults(); renderSettings();
   });
-  buildOpts(setFsEl, NODE_FS_CHOICES.map(v => [v, NODE_FS_LABEL(v)]), defaults.fsPx, (v) => {
-    defaults.fsPx = +v; saveDefaults(); renderSettings();
-  });
+  // 字号：拉滑条，0 表示「自动」。拖动时实时看得到数字
+  setFsRangeEl.value = defaults.fsPx;
+  setFsReadEl.textContent = NODE_FS_LABEL(defaults.fsPx);
+  setFsRangeEl.oninput = () => { setFsReadEl.textContent = NODE_FS_LABEL(+setFsRangeEl.value); };
+  setFsRangeEl.onchange = () => { defaults.fsPx = +setFsRangeEl.value; saveDefaults(); renderSettings(); };
   // 新连线
   buildOpts(setEdgeEl, ARROW_KINDS.map(a => [a, ARROW_LABEL[a]]), defaults.edge.arrow, (a) => {
     defaults.edge.arrow = a; saveDefaults(); renderSettings();
@@ -88,6 +95,58 @@ function renderSettings(){
     setKeysEl.appendChild(d);
   }
 }
+
+/* ---------------- 从文件加载字体 ----------------
+   用 FontFace API 把用户选的字体喂给浏览器，然后就能按家族名用在节点上了。
+   只活在这一次会话里 —— 关掉页面就没了（要持久化得配「用户文件夹」，见 README）。 */
+const USER_FONTS = [];                      // [{ family, label, source }]
+function fontChoices(){
+  return Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]])
+    .concat(USER_FONTS.map(f => [f.family, f.label]));
+}
+/* 家族名：文件名 + 序号，避免重名打架 */
+function userFamilyOf(file, i){
+  const base = String(file.name || 'font').replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '') || 'User';
+  return 'GP-' + base + '-' + i;
+}
+function loadFontFiles(files){
+  const list = [...(files || [])];
+  if (!list.length) return Promise.resolve(0);
+  let done = 0;
+  const jobs = list.map((f, i) => new Promise((res) => {
+    const family = userFamilyOf(f, USER_FONTS.length + i);
+    const url = URL.createObjectURL(f);
+    const face = new FontFace(family, 'url(' + url + ')');
+    face.load().then(() => {
+      document.fonts.add(face);
+      const label = String(f.name || family).replace(/\.[^.]+$/, '');
+      // 塞进全局字体表，节点样式面板就能直接选它
+      NODE_FONTS[family] = family;
+      NODE_FONT_LABEL[family] = label;
+      USER_FONTS.push({ family, label, source:f.name });
+      done++;
+      res();
+    }).catch((e) => { URL.revokeObjectURL(url); res(); });
+  }));
+  return Promise.all(jobs).then(() => done);
+}
+setFontLoadEl.onclick = () => { fontFileEl.value = ''; fontFileEl.click(); };
+fontFileEl.addEventListener('change', async () => {
+  const n = await loadFontFiles(fontFileEl.files);
+  renderSettings();
+  setFontNoteEl.textContent = n
+    ? ('已加载 ' + n + ' 个字体：' + USER_FONTS.map(f => f.label).join('、'))
+    : '这个文件读不出字体（浏览器支持 .ttf / .otf / .woff / .woff2）';
+  if (n) say((themeStar() ? '* ' : '') + '加载了 ' + n + ' 个字体，可以在上面的字体列表里选。');
+});
+setFontForgetEl.onclick = () => {
+  for (const f of USER_FONTS){ delete NODE_FONTS[f.family]; delete NODE_FONT_LABEL[f.family]; }
+  USER_FONTS.length = 0;
+  if (NODE_FONTS[defaults.font] == null) defaults.font = 'auto';   // 选中的自定义字体没了就退回默认
+  saveDefaults();
+  renderSettings();
+  setFontNoteEl.textContent = '已清空（页面重新加载后本来也会清空）';
+};
 
 document.getElementById('setClose').onclick = () => closeSettings();
 document.getElementById('setKeysReset').onclick = () => {

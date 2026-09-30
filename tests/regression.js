@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · tests/regression.js
    在真实浏览器里跑的断言套件。用 node tests/run.mjs 执行。
    直接操作全局的模块函数（它们都是普通脚本，共享同一个全局作用域）。
@@ -4089,6 +4089,76 @@
     keyRaw('Escape');
     ok('T07h Esc 能关掉', !settingsOpen());
     setGridPref('theme');
+  });
+  T('T07i 棋盘主题下一颗红心都不留', () => {
+    fresh();
+    applyTheme('board');
+    ok('T07i body 上有 no-heart', document.body.classList.contains('no-heart'));
+    ok('T07i2 光标红心被藏起来', getComputedStyle(heartEl).display === 'none',
+      getComputedStyle(heartEl).display);
+    // 菜单里那个小标记也要塌掉
+    buildOpts(setThemeEl, themeIds().map(id => [id, THEMES[id].label]), themeId, () => {});
+    const hrt = setThemeEl.querySelector('.opt .hrt');
+    const cs = getComputedStyle(hrt);
+    ok('T07i3 选项前的红心标记没有遮罩', cs.maskImage === 'none' || cs.webkitMaskImage === 'none',
+      cs.maskImage + ' / ' + cs.webkitMaskImage);
+    applyTheme('undertale');
+    // 光标红心默认就是 display:none（要鼠标动过才显出来），所以只验 class 和遮罩
+    ok('T07i4 Undertale 下红心回来', !document.body.classList.contains('no-heart'));
+    ok('T07i5 标记的遮罩也回来了', (() => {
+      const h = setThemeEl.querySelector('.opt .hrt');
+      return getComputedStyle(h).maskImage !== 'none';
+    })());
+    applyTheme('board');
+  });
+  T('T07j 设置里选中项有高光', () => {
+    fresh();
+    toggleSettings();
+    const on = [...setThemeEl.querySelectorAll('.opt')].filter(d => d.classList.contains('on'));
+    ok('T07j 正好一个选中', on.length === 1, on.length);
+    const cs = getComputedStyle(on[0]);
+    ok('T07j2 选中项有边框颜色（不是默认灰）', cs.borderTopColor !== 'rgb(74, 74, 74)', cs.borderTopColor);
+    ok('T07j3 选中项文字是强调色', cs.color === 'rgb(255, 216, 0)', cs.color);
+    ok('T07j4 未选中项是灰的', (() => {
+      const off = [...setThemeEl.querySelectorAll('.opt')].find(d => !d.classList.contains('on'));
+      return off && getComputedStyle(off).color === 'rgb(138, 138, 138)';
+    })());
+    closeSettings();
+  });
+  T('T09 字号用滑条选', () => {
+    fresh();
+    toggleSettings();
+    ok('T09 是 range 控件', setFsRangeEl.type === 'range', setFsRangeEl.type);
+    ok('T09b 步长 4、上限 64', setFsRangeEl.step === '4' && setFsRangeEl.max === '64',
+      setFsRangeEl.step + '/' + setFsRangeEl.max);
+    setFsRangeEl.value = '32';
+    setFsRangeEl.dispatchEvent(new Event('input'));
+    ok('T09c 拖动时数字实时跟着变', setFsReadEl.textContent === '32', setFsReadEl.textContent);
+    setFsRangeEl.dispatchEvent(new Event('change'));
+    ok('T09d 松手才落盘', defaults.fsPx === 32, defaults.fsPx);
+    ok('T09e 存进了 localStorage', JSON.parse(localStorage.getItem('grapheon.defaults.v1')).fsPx === 32);
+    setFsRangeEl.value = '0';
+    setFsRangeEl.dispatchEvent(new Event('change'));
+    ok('T09f 0 = 自动', defaults.fsPx === 0 && setFsReadEl.textContent === '自动', setFsReadEl.textContent);
+    closeSettings();
+  });
+  await TA('T10 字体可以从文件加载', async () => {
+    fresh();
+    toggleSettings();
+    ok('T10 一开始列表里只有内置字体', fontChoices().length === Object.keys(NODE_FONTS).length,
+      fontChoices().length);
+    // 造一个假的字体文件，走完整加载链路（会失败，但不该炸）
+    const fake = new File([new Uint8Array([0, 1, 2, 3])], '我的字体.ttf', { type:'font/ttf' });
+    const n = await loadFontFiles([fake]);
+    ok('T10b 坏文件被挡下来（加载 0 个）', n === 0, n);
+    ok('T10c 没往字体表里塞垃圾', fontChoices().length === Object.keys(NODE_FONTS).length);
+    ok('T10d 家族名会把非法字符洗掉', userFamilyOf({ name:'我的 字体!.ttf' }, 0).indexOf(' ') < 0,
+      userFamilyOf({ name:'我的 字体!.ttf' }, 0));
+    ok('T10e 有「从文件加载」按钮', !!setFontLoadEl && !!fontFileEl);
+    ok('T10f 有清空按钮', !!setFontForgetEl);
+    setFontForgetEl.click();
+    ok('T10g 清空之后不报错', USER_FONTS.length === 0);
+    closeSettings();
   });
   T('T08 设置面板不会串到别的面板上', () => {
     fresh();

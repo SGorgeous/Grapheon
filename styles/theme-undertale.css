@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · 主题：Undertale
    全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
    加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
@@ -135,7 +135,7 @@ body.dsh-ready{cursor:none}
   display:flex;align-items:center;gap:10px;padding:3px 0;color:var(--w);
 }
 #exp .opt:not(.off),#edgebox .opt,#endbox .opt:not(.off),#nodebox .opt:not(.off){cursor:none}
-#exp .opt .hrt,#edgebox .opt .hrt,#endbox .opt .hrt,#nodebox .opt .hrt{
+#exp .opt .hrt,#edgebox .opt .hrt,#endbox .opt .hrt,#nodebox .opt .hrt,#set .opt .hrt{
   width:14px;height:12px;flex:none;opacity:0;
   background-color:var(--r);
   -webkit-mask:var(--heart-mask) no-repeat center/contain;
@@ -143,7 +143,7 @@ body.dsh-ready{cursor:none}
 }
 #exp .opt:not(.off):hover,#edgebox .opt:hover,#endbox .opt:not(.off):hover,#nodebox .opt:not(.off):hover{color:var(--y)}
 #exp .opt.on,#edgebox .opt.on,#endbox .opt.on,#nodebox .opt.on{color:var(--y)}
-#exp .opt.on .hrt,#edgebox .opt.on .hrt,#endbox .opt.on .hrt,#nodebox .opt.on .hrt{opacity:1}
+#exp .opt.on .hrt,#edgebox .opt.on .hrt,#endbox .opt.on .hrt,#nodebox .opt.on .hrt,#set .opt.on .hrt{opacity:1}
 #exp .opt.off,#endbox .opt.off,#nodebox .opt.off{color:var(--d)}
 #exp .opt .cnt{margin-left:auto;color:var(--g);padding-left:20px}
 #exp .opt.on .cnt{color:var(--y)}
@@ -244,3 +244,40 @@ body.no-star .star{ display:none; }
 #set .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 #set .lab{ color:var(--g); flex:none; }
 #set h2 .star{ color:var(--y); }
+
+/* ---------------- 主题说不要红心，就一颗都不留 ----------------
+   红心一共三处：节点旁边的选中标记（canvas 里，见 render.js 的 themeHeart）、
+   跟着鼠标的光标（#heart）、以及菜单 / 选项 / 按钮前面那个小标记（.hrt 和 .ud-btn::before）。
+   canvas 那处由 JS 控制，剩下三处靠这个 class 一次清掉。 */
+body.no-heart #heart{ display:none !important; }
+body.no-heart .hrt,
+body.no-heart .ud-btn::before{
+  /* 原规则是 `#set .opt .hrt` 这种带 id 的，特异性比这里高，必须 !important */
+  -webkit-mask:none !important; mask:none !important;
+  background:none !important;
+  width:0 !important; margin-right:0 !important;
+}
+/* 按钮前面本来留了位置，没红心了就把间距收掉 */
+body.no-heart .ud-btn::before{ content:none; }
+
+/* ---------------- 设置面板：选中项高光 ---------------- */
+#set .opt{
+  padding:2px 10px;
+  border:2px solid var(--d);
+  color:var(--g);
+}
+#set .opt.on{
+  border-color:var(--y);
+  color:var(--y);
+  background:rgba(255,216,0,.08);
+}
+#set .opt.on .hrt{ opacity:1; }
+/* 字号滑条 */
+#set input[type=range]{
+  flex:1; min-width:180px; height:22px;
+  accent-color:var(--y);
+  background:transparent;
+}
+#set .numread{
+  color:var(--y); min-width:64px; text-align:right;
+}

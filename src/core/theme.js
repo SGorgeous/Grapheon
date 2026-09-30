@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/theme.js
    主题注册表 —— 调色板只在这里定义一次，DOM（CSS 变量）和 canvas 共用同一份。
@@ -90,6 +90,7 @@ function applyTheme(id){
   for (const k in THEME_VARS) if (pal[k] != null) rootStyle.setProperty(THEME_VARS[k], pal[k]);
   // 主题性格：星号靠一个 body class 控制，CSS 里藏掉
   document.body.classList.toggle('no-star', !themeStar());
+  document.body.classList.toggle('no-heart', !themeHeart());
   try { localStorage.setItem(THEME_KEY, themeId); } catch (e) {}
   if (typeof mark === 'function') mark();
   return themeId;
