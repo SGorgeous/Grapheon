@@ -14,6 +14,7 @@ function boot(){
   loadBindings();       // 自定义快捷键
   loadOverlapPref();    // 防止节点重叠，默认开
   loadSakuraPref();     // 樱花特效开关（跟随主题 / 用户关掉）
+  loadAnimPref();       // 连线流动动画开关
   loadDefaults();      // 新节点的默认外观 / 新连线样式
   loadExportPrefs();    // 上次用过的文件名 / 标题 / 导出范围
   resize();

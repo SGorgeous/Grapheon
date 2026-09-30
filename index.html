@@ -14,7 +14,8 @@
 <div id="ui">
   <div id="brand" class="ud"><span class="star">* </span>GRAPHEON<small>NODES / CONNECTIONS</small></div>
 
-  <div id="topbar">
+  <div id="uiNote" class="ud" style="display:none">界面已隐藏 · 按 N 恢复</div>
+<div id="topbar">
     <button class="ud-btn" id="b-back" style="display:none">返回</button>
     <button class="ud-btn" id="b-undo">撤销</button>
     <button class="ud-btn" id="b-redo">重做</button>
@@ -78,6 +79,9 @@
   <div class="row"><div id="setGrid" class="opts"></div></div>
 
   <div class="row"><div id="setFx" class="opts"></div></div>
+
+  <div class="sec">动画效果</div>
+  <div class="row"><div id="setAnim" class="opts"></div></div>
 
   <div class="sec">默认节点外观</div>
   <div class="row"><span class="lab">字体</span><div id="setFont" class="opts"></div></div>
@@ -413,6 +417,7 @@
 <script src="src/core/layout.js"></script>
 <script src="src/core/routing.js"></script>
 <script src="src/view/render.js"></script>
+<script src="src/view/anim.js"></script>
 <script src="src/view/sakura.js"></script>
 <script src="src/view/render-components.js"></script>
 <script src="src/view/camera.js"></script>

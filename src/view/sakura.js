@@ -39,6 +39,8 @@ const sakuraEnabled = () => sakuraPref !== false;
 /* 系统说「减少动态效果」就别转 —— 尊重一下 */
 const sakuraMotionOK = () => !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 const sakuraWanted = () => themeEffect() === 'sakura' && sakuraEnabled() && sakuraMotionOK();
+/* 这个 rAF 循环是**樱花和连线流动共用的** —— 各开一个循环会互相抢 draw()，画面会闪 */
+const animNeeded = () => sakuraWanted() || (typeof flowWanted === 'function' && flowWanted());
 
 function rand(a, b){ return a + Math.random() * (b - a); }
 
@@ -112,7 +114,9 @@ function sakuraTick(ts){
   if (!sakuraRunning) return;
   const dt = sakuraLastTs ? Math.min(0.05, (ts - sakuraLastTs) / 1000) : 0.016;
   sakuraLastTs = ts;
-  sakuraStep(dt, ts / 1000);
+  // 花瓣只在樱花主题下动；流动点的时钟一直走（切主题回来相位是连续的）
+  if (sakuraWanted()) sakuraStep(dt, ts / 1000);
+  if (typeof flowStep === 'function') flowStep(dt);
   if (typeof draw === 'function') draw();
   sakuraRaf = requestAnimationFrame(sakuraTick);
 }
@@ -132,7 +136,7 @@ function stopSakura(){
 }
 /* 主题切换 / 开关变化时调这个：该转就转，该停就停 */
 function syncSakura(){
-  if (sakuraWanted()) startSakura(); else stopSakura();
+  if (animNeeded()) startSakura(); else stopSakura();
 }
 /* 窗口尺寸变了要重新铺一遍，不然花瓣会集中在一角 */
 function sakuraResize(){ if (sakuraRunning) sakuraInit(); }

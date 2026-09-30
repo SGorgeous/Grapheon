@@ -4902,14 +4902,16 @@
     applyTheme('sakura');
     ok('SK02b 樱花主题下要', sakuraWanted());
     setSakuraEnabled(false);
-    ok('SK02c 用户关掉就不要了', !sakuraWanted() && !sakuraRunning);
+    // 注意：rAF 循环现在是樱花和连线流动**共用**的，所以不能拿 sakuraRunning 当「樱花关了」的证据
+    ok('SK02c 用户关掉就不要了', !sakuraWanted());
+    ok('SK02c2 但流动动画还开着，所以共用循环还在转', sakuraRunning);
     ok('SK02d 记进 localStorage 了', localStorage.getItem('grapheon.sakura.v1') === '0');
     setSakuraEnabled(true);
-    ok('SK02e 打开又要了', sakuraWanted() && sakuraRunning);
+    ok('SK02e 打开又要了', sakuraWanted());
     ok('SK02f 尊重系统的「减少动态效果」（这里没开，所以还是 true）',
       typeof sakuraMotionOK() === 'boolean');
     applyTheme(DEFAULT_THEME);
-    ok('SK02g 切走之后循环停了', !sakuraRunning);
+    ok('SK02g 切走之后樱花不要了', !sakuraWanted());
     localStorage.removeItem('grapheon.sakura.v1');
   });
   T('SK03 花瓣：铺得均匀、会飘、落到底会重生', () => {
@@ -6357,6 +6359,165 @@
         !!varBoxes(byId(n.id)).nameBox && !!findVarDefIn(liveCtx(), 'k' + c, n.id),
         c);
     }
+  });
+
+
+  /* ==================== N 键隐藏界面 + 连线流动动画 ==================== */
+  const pinkish = (d, i) => d[i] > 230 && d[i+1] > 140 && d[i+2] > 180;
+  T('AN01 N 键隐藏 / 恢复界面', () => {
+    fresh(); layoutMind();
+    document.body.classList.remove('ui-hidden');
+    ok('AN01 默认不隐藏', !document.body.classList.contains('ui-hidden'));
+    ok('AN01b 有 #uiNote 这个提示元素', !!document.getElementById('uiNote'));
+    keyRaw('n');
+    ok('AN01c 按 N 隐藏了', document.body.classList.contains('ui-hidden'));
+    ok('AN01d 提示语说了怎么恢复', /N/.test(document.getElementById('uiNote').textContent),
+      document.getElementById('uiNote').textContent);
+    ok('AN01e #ui 真的看不见了',
+      getComputedStyle(document.getElementById('ui')).display === 'none',
+      getComputedStyle(document.getElementById('ui')).display);
+    ok('AN01f 提示条这时候是可见的',
+      getComputedStyle(document.getElementById('uiNote')).display !== 'none');
+    keyRaw('n');
+    ok('AN01g 再按一次回来了', !document.body.classList.contains('ui-hidden'));
+    ok('AN01h #ui 回来了',
+      getComputedStyle(document.getElementById('ui')).display !== 'none');
+    ok('AN01i 提示条又藏起来了',
+      getComputedStyle(document.getElementById('uiNote')).display === 'none');
+    ok('AN01j 快捷键表里有这一项', !!ACTIONS['ui.toggle'], Object.keys(ACTIONS).filter(k => /ui\./.test(k)).join(','));
+    ok('AN01k 它的标签和分组对得上',
+      ACTIONS['ui.toggle'].label === '隐藏 / 显示界面' && ACTIONS['ui.toggle'].group === '视图',
+      ACTIONS['ui.toggle'].label + ' / ' + ACTIONS['ui.toggle'].group);
+  });
+  T('AN02 流动动画：开关 / 相位 / 主题定制', () => {
+    fresh(); layoutMind();
+    setAnimFlow(true);
+    ok('AN02 默认开着', animFlowOn());
+    ok('AN02b 流动是想要的', flowWanted());
+    ok('AN02c 主题可以定制，没写就用默认',
+      themeFlow().speed === FLOW_DEFAULT.speed && themeFlow().gap === FLOW_DEFAULT.gap,
+      JSON.stringify(themeFlow()));
+    applyTheme('sakura');
+    ok('AN02d 樱花主题定制了流动点', themeFlow().color === '#ff9ec4',
+      JSON.stringify(themeFlow()));
+    applyTheme(DEFAULT_THEME);
+    // 相位只增
+    const t0 = animT;
+    flowStep(0.5); flowStep(0.5);
+    ok('AN02e 时钟按 dt 累加', Math.abs(animT - (t0 + 1)) < 1e-6);
+    // 主题显式关掉就不流
+    THEMES.__noflow = Object.assign({}, THEMES.board, { flow:{ on:false } });
+    applyTheme('__noflow');
+    ok('AN02f 主题能显式关掉流动', !flowWanted());
+    delete THEMES.__noflow;
+    // 用户关掉更彻底
+    setAnimFlow(false);
+    ok('AN02g 用户关掉之后不流了', !flowWanted());
+    ok('AN02h 记进 localStorage 了', /"flow":false/.test(localStorage.getItem('grapheon.anim.v1') || ''),
+      localStorage.getItem('grapheon.anim.v1'));
+    setAnimFlow(true);
+  });
+  T('AN03 折线按弧长取点', () => {
+    const pts = [{ x:0, y:0 }, { x:100, y:0 }, { x:100, y:100 }];
+    ok('AN03 总长 200', Math.abs(polyLen(pts) - 200) < 1e-6, polyLen(pts));
+    ok('AN03b 0 处是起点', (() => { const p = polyPointAt(pts, 0); return p.x === 0 && p.y === 0; })());
+    ok('AN03c 100 处是拐角', (() => { const p = polyPointAt(pts, 100); return Math.abs(p.x-100)<1e-6 && Math.abs(p.y-0)<1e-6; })());
+    ok('AN03d 150 处在第二段中间', (() => { const p = polyPointAt(pts, 150); return Math.abs(p.x-100)<1e-6 && Math.abs(p.y-50)<1e-6; })(),
+      JSON.stringify(polyPointAt(pts, 150)));
+    ok('AN03e 超过总长就停在终点', (() => { const p = polyPointAt(pts, 999); return Math.abs(p.y-100)<1e-6; })());
+  });
+  T('AN04 流动点真的画出来了，关掉就没有', () => {
+    fresh(); layoutMind();
+    resize(); fitView();
+    const e = doc.edges[0];
+    ok('AN04 前置：这条边够长', (() => {
+      const g = edgeGeomFor(e);
+      return g && polyLen(g.pts) >= 26;
+    })(), (() => { const g = edgeGeomFor(e); return g ? Math.round(polyLen(g.pts)) : -1; })());
+    setAnimFlow(true);
+    animT = 0;
+    // 只画这一条边，免得别的边的点混进采样
+    const g2 = cv.getContext('2d');
+    resize();
+    g2.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g2.fillStyle = C.bg; g2.fillRect(0, 0, VW, VH);
+    g2.save();
+    g2.translate(view.x, view.y); g2.scale(view.z, view.z);
+    drawEdgeFlow(g2, e);
+    g2.restore();
+    const d = g2.getImageData(0, 0, cv.width, cv.height).data;
+    let hit = 0;
+    for (let i = 0; i < d.length; i += 4){
+      if (d[i] !== parseInt(C.bg.slice(1,3),16) || d[i+1] !== parseInt(C.bg.slice(3,5),16)) hit++;
+    }
+    ok('AN04b 画布上有东西（流动点）', hit > 40, hit);
+    // ★ 决定性的一条：走真实的 draw() 路径，看 drawEdge 到底有没有把流动点调起来
+    ok('AN04b2 drawEdge 每条边都会调 drawEdgeFlow', (() => {
+      const orig = drawEdgeFlow;
+      let n = 0;
+      window.drawEdgeFlow = function(g, e){ n++; return orig(g, e); };
+      try { draw(); } finally { window.drawEdgeFlow = orig; }
+      return n === doc.edges.length;
+    })(), (() => {
+      const orig = drawEdgeFlow; let n = 0;
+      window.drawEdgeFlow = function(g, e){ n++; return orig(g, e); };
+      try { draw(); } finally { window.drawEdgeFlow = orig; }
+      return n + ' / ' + doc.edges.length;
+    })());
+    // 关掉再画一次
+    setAnimFlow(false);
+    g2.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g2.fillStyle = C.bg; g2.fillRect(0, 0, VW, VH);
+    g2.save();
+    g2.translate(view.x, view.y); g2.scale(view.z, view.z);
+    drawEdgeFlow(g2, e);
+    g2.restore();
+    const d2 = g2.getImageData(0, 0, cv.width, cv.height).data;
+    let hit2 = 0;
+    for (let i = 0; i < d2.length; i += 4){
+      if (d2[i] !== parseInt(C.bg.slice(1,3),16) || d2[i+1] !== parseInt(C.bg.slice(3,5),16)) hit2++;
+    }
+    ok('AN04c 关掉之后一个点都不画', hit2 === 0, hit2);
+    setAnimFlow(true);
+    ok('AN04d 所有边共用一个时钟（所以速度一致）', (() => {
+      const before = animT;
+      flowStep(1);
+      return animT === before + 1;
+    })());
+    ok('AN04e 选中的那条不画点（免得看不清）', (() => {
+      selectEdge(e.id);
+      const g3 = cv.getContext('2d');
+      g3.setTransform(DPR, 0, 0, DPR, 0, 0);
+      g3.fillStyle = C.bg; g3.fillRect(0, 0, VW, VH);
+      g3.save(); g3.translate(view.x, view.y); g3.scale(view.z, view.z);
+      drawEdgeFlow(g3, e);
+      g3.restore();
+      const dd = g3.getImageData(0, 0, cv.width, cv.height).data;
+      let h = 0;
+      for (let i = 0; i < dd.length; i += 4){
+        if (dd[i] !== parseInt(C.bg.slice(1,3),16) || dd[i+1] !== parseInt(C.bg.slice(3,5),16)) h++;
+      }
+      selEdgeId = null;
+      return h === 0;
+    })());
+  });
+  T('AN05 樱花和流动共用同一个 rAF 循环', () => {
+    fresh(); layoutMind();
+    setAnimFlow(false);
+    setSakuraEnabled(false);
+    applyTheme(DEFAULT_THEME);
+    ok('AN05 两个都关掉 → 循环停', !animNeeded() && !sakuraRunning);
+    setAnimFlow(true);
+    syncSakura();
+    ok('AN05b 只开流动 → 循环转（不用樱花也转）', animNeeded() && sakuraRunning);
+    setAnimFlow(false); syncSakura();
+    ok('AN05c 关掉流动 → 循环停', !sakuraRunning);
+    applyTheme('sakura');
+    setSakuraEnabled(true); syncSakura();
+    ok('AN05d 只开樱花 → 也转', animNeeded() && sakuraRunning);
+    applyTheme(DEFAULT_THEME); syncSakura();
+    ok('AN05e 都关掉又停', !sakuraRunning);
+    setAnimFlow(true); syncSakura();
   });
 
   /* ==================== 收尾 ==================== */

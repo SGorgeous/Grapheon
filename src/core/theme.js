@@ -42,6 +42,8 @@ const THEMES = {
     heart: true,
     star: false,
     effect: 'sakura',
+    // 这个主题下的流动点：淡粉、慢一点，和花瓣一个调子
+    flow: { color:'#ff9ec4', speed:70, gap:90, size:3, alpha:0.85 },
     canvas: {
       bg:    '#fff6f9',
       white: '#9c5a75',

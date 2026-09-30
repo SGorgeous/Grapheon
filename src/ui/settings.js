@@ -76,6 +76,11 @@ function renderSettings(){
     setGridPref(s);
     renderSettings();
   });
+  // 动画效果：连线流动点
+  buildOpts(setAnimEl, [[true, '连线流动点'], [false, '关掉（省电）']], animFlowOn(), (v) => {
+    setAnimFlow(v === true || v === 'true');
+    renderSettings();
+  });
   // 背景特效开关（目前只有樱花）
   const hasFx = themeEffect() === 'sakura';
   setFxEl.parentElement.style.display = hasFx ? 'flex' : 'none';
@@ -192,6 +197,7 @@ setFontForgetEl.onclick = () => {
 
 /* ---------------- 素材库（用户文件夹） ---------------- */
 const setFxEl = document.getElementById('setFx');
+const setAnimEl = document.getElementById('setAnim');
 const setUserDirEl = document.getElementById('setUserDir');
 const setUserNoteEl = document.getElementById('setUserNote');
 setUserDirEl.value = Store.dirName;

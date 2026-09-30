@@ -783,6 +783,8 @@ function drawEdge(g, e){
   pathGeom(g, geom, CORNER);
   g.stroke();
   g.setLineDash([]);
+  // 流动点：从起点流向终点，速度对所有边一致
+  if (typeof drawEdgeFlow === 'function') drawEdgeFlow(g, e);
   // 箭头：none / end（终点单向）/ both（双向）
   const ap = geomArrowPoints(geom);
   if (e.arrow !== 'none' && ap){

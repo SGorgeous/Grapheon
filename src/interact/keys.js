@@ -38,6 +38,7 @@ function defaultBindings(){
     'tab':        'node.child',
     'enter':      'node.sibling',
     'f2':         'node.rename',
+  'n':          'ui.toggle',
     'delete':     'node.delete',
     'backspace':  'node.delete',
     'space':      'node.collapse',
@@ -124,6 +125,10 @@ const ACTIONS = {
 
   'node.child':       { label:'添加子节点', group:'结构', run(){ addChild(); } },
   'node.sibling':     { label:'添加兄弟节点', group:'结构', run(){ addSibling(); } },
+  'ui.toggle':        { label:'隐藏 / 显示界面', group:'视图', run(){
+      const on = document.body.classList.toggle('ui-hidden');
+      say(on ? '* 界面已隐藏。再按一次 N 恢复。' : '* 界面回来了。');
+    } },
   'node.rename':      { label:'重命名', group:'结构', run(){
       if (soleSel()){ startEdit('node', soleSel().id); return; }
       const g = soleGroup();                       // 选中分组外框时改分组名
