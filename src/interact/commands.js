@@ -827,7 +827,7 @@ function addControlNode(control, x, y, opts){
   const base = { name: control === 'check' ? '选项' : control === 'slider' ? '数值' : '通路' };
   if (control === 'check')  Object.assign(base, { control:'check', options:['选项一', '选项二'], picked:[0], type:'string' });
   if (control === 'slider') Object.assign(base, { control:'slider', value:'50', min:0, max:100, step:1, type:'number' });
-  if (control === 'switch') Object.assign(base, { control:'switch', on:false, type:'string' });
+  if (control === 'cond')   Object.assign(base, { control:'cond', value:'1', type:'number' });
   n.varDef = normalizeVarDef(Object.assign(base, opts || {}));
   sizeNode(n);
   reindex(); sizeAll();

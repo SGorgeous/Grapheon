@@ -202,8 +202,10 @@ function showCtx(x, y, n, e, info){
           ['步长归 5', '', () => setSliderRange(n, { step:5 })]
         ]]);
       }
-      if (v.control === 'switch'){
-        items.push([(v.on ? '● 已接通' : '   已断开'), '点一下切换', () => { toggleSwitch(n); pushHist(); }]);
+      if (v.control === 'cond'){
+        const inc = (typeof gateOpenIn === 'function') ? valueFromUpstream(liveCtx(), n.id) : null;
+        items.push(['条件：输入 ' + (inc == null ? '（没接）' : String(inc))
+          + ' → ' + (gateOpenIn(liveCtx(), n) ? '通' : '不通'), '输入为 1 才通', null]);
       }
       items.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
         VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
@@ -310,7 +312,7 @@ function showCtx(x, y, n, e, info){
         }]
       ]],
       ['空组', '一个空的分组框，往里拖东西就自动收纳', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
-      ['程序节点', '变量 / 勾选 / 滑条 / 通路 / 输出', null, [
+      ['程序节点', '变量 / 勾选 / 滑条 / 条件 / 输出', null, [
         ['变量节点', '{name} 可引用，全局零连线可用', () => {
           const p = s2w(x, y);
           const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
@@ -329,11 +331,11 @@ function showCtx(x, y, n, e, info){
           selectOnly(nn.id); pushHist(); mark();
           say('* 滑条节点：拖圆点实时改值，引用它的地方跟着变。上下限 / 步长在面板或右键里设。');
         }],
-        ['通路节点', '断开时这条连接逻辑上不通', () => {
+        ['条件节点', '输入为 1 时才把所填的值放出去', () => {
           const p = s2w(x, y);
-          const nn = addControlNode('switch', Math.round(p.x - 140), Math.round(p.y - 60));
+          const nn = addControlNode('cond', Math.round(p.x - 140), Math.round(p.y - 60));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 通路节点：放在连接中间，断开之后这条连接在逻辑上就断了（值流不过去）。');
+          say('* 条件节点：一个输入一个输出。流进来的值是 1 就把「所填的值」放出去；不是 1 就不通。');
         }],
         ['输出节点', '声明本作用域的输出值', () => {
           const p = s2w(x, y);

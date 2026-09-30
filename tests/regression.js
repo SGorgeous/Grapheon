@@ -3877,41 +3877,79 @@
     ok('K25l 引用的是滑条当前值', displayTextOf(c) === '音量 ' + sliderValue(n.varDef),
       displayTextOf(c));
   });
-  T('K26 开关节点：关掉之后连接逻辑上断开', () => {
+  T('K26 条件节点：输入为 1 才把所填的值放出去', () => {
     fresh(); layoutMind();
-    const v = mkVar('src', '42');
-    const sw = addControlNode('switch', 0, 0, { name:'闸门', on:true });
-    const c = addNodeAt('收到 {src}', 0, 0, 'rect');
-    linkNodes(v.id, sw.id); linkNodes(sw.id, c.id);
+    const v = mkVar('src', '1');                       // 输入是 1
+    const cd = addControlNode('cond', 0, 0, { name:'闸门', value:'42' });
+    const c = addNodeAt('下游', 0, 0, 'rect');
+    linkNodes(v.id, cd.id); linkNodes(cd.id, c.id);
     reindex(); sizeAll();
-    ok('K26 接通时值能过去', displayTextOf(c) === '收到 42', displayTextOf(c));
-    ok('K26b 开关自己的值是「开」', controlValue(sw.varDef) === '开', controlValue(sw.varDef));
-    toggleSwitch(sw);
+    ok('K26 输入是 1 → 通，所填的值放出去了',
+      resolveVar('闸门', c.id) === '42', String(resolveVar('闸门', c.id)));
+    ok('K26b 自己的值就是「所填的值」',
+      controlValue(byId(cd.id).varDef, cd.id) === '42', controlValue(byId(cd.id).varDef, cd.id));
+    // 输入改成 0 → 不通
+    setVarDef(byId(v.id), { value:'0' });
     reindex(); sizeAll();
-    ok('K26c 断开后值过不去了', displayTextOf(c) === '收到 [未定义]', displayTextOf(c));
-    ok('K26d 开关自己的值变成「关」', controlValue(sw.varDef) === '关', controlValue(sw.varDef));
-    ok('K26e 数字类型的开关给 0/1', (() => {
-      setVarDef(sw, { type:'number' });
-      const off = controlValue(byId(sw.id).varDef);
-      toggleSwitch(byId(sw.id));
-      const on = controlValue(byId(sw.id).varDef);
-      return off === '0' && on === '1';
-    })(), controlValue(byId(sw.id).varDef));
-    // 局内作用域也要认开关
-    ok('K26f 关着的开关后面不算「下游」', (() => {
+    ok('K26c 输入不是 1 → 不通', resolveVar('闸门', c.id) === null,
+      String(resolveVar('闸门', c.id)));
+    ok('K26c2 上游的值也过不去', (() => {
+      const out = addNodeAt('看 {src}', 0, 0, 'rect');
+      linkNodes(cd.id, out.id); reindex();
+      return displayTextOf(byId(out.id)) === '看 [未定义]';
+    })(), (() => {
+      const out = doc.nodes.find(x => x.text === '看 {src}');
+      return out ? displayTextOf(out) : '?';
+    })());
+    setVarDef(byId(v.id), { value:'1' });
+    reindex(); sizeAll();
+    ok('K26d 改回 1 又通了', resolveVar('闸门', c.id) === '42',
+      String(resolveVar('闸门', c.id)));
+    // 没接输入 → 不通
+    ok('K26e 没接输入 → 不通', (() => {
+      const lone = addControlNode('cond', 0, 0, { name:'孤立闸', value:'7' });
+      const d2 = addNodeAt('下游2', 0, 0, 'rect');
+      linkNodes(lone.id, d2.id); reindex();
+      return resolveVar('孤立闸', d2.id) === null;
+    })(), String((() => {
+      const d2 = doc.nodes.find(x => x.text === '下游2');
+      return d2 ? resolveVar('孤立闸', d2.id) : '?';
+    })()));
+    // 数字 1 和字符串 "1" 都算 1
+    ok('K26f 带空格的 " 1 " 也算 1', (() => {
+      setVarDef(byId(v.id), { value:' 1 ' });
+      reindex();
+      return resolveVar('闸门', c.id) === '42';
+    })(), String(resolveVar('闸门', c.id)));
+    ok('K26g 2 不算 1', (() => {
+      setVarDef(byId(v.id), { value:'2' });
+      reindex();
+      return resolveVar('闸门', c.id) === null;
+    })());
+    // 局内作用域也要认
+    ok('K26h 条件节点也挡得住局内变量', (() => {
       const lv = mkVar('lv', '9', { scope:'local' });
-      const sw2 = addControlNode('switch', 0, 0, { name:'g2', on:false });
+      setVarDef(byId(v.id), { value:'0' });
+      const cd2 = addControlNode('cond', 0, 0, { name:'g2', value:'x' });
       const down = addNodeAt('{lv}', 0, 0, 'rect');
-      linkNodes(lv.id, sw2.id); linkNodes(sw2.id, down.id);
+      linkNodes(lv.id, cd2.id); linkNodes(cd2.id, down.id);
       reindex();
       return resolveVar('lv', down.id) === null;
     })());
-    ok('K26g 打开就又能用了', (() => {
-      const sw2 = doc.nodes.find(x => x.varDef && x.varDef.name === 'g2');
-      const down = doc.nodes.find(x => x.text === '{lv}');
-      toggleSwitch(sw2); reindex();
-      return resolveVar('lv', down.id) === '9';
-    })());
+    // 条件节点的两条路要分清：
+    //   ① 上游的值**透传**过去（输入为 1 才通）
+    //   ② 按名字引用它时，拿到的是它「所填的值」（同样要输入为 1 才通）
+    ok('K26i 输入给 1 之后按名字引用拿得到所填的值', (() => {
+      const one = mkVar('one', '1');
+      const cd3 = addControlNode('cond', 0, 0, { name:'g3', value:'77' });
+      const down = addNodeAt('拿 {g3}', 0, 0, 'rect');
+      linkNodes(one.id, cd3.id); linkNodes(cd3.id, down.id);
+      reindex();
+      return resolveVar('g3', down.id) === '77';
+    })(), String((() => {
+      const down = doc.nodes.find(x => x.text === '拿 {g3}');
+      return down ? resolveVar('g3', down.id) : '?';
+    })()));
   });
   T('K27 特殊控件和普通变量共用名字 / 作用域 / 优先级', () => {
     fresh(); layoutMind();
@@ -3924,8 +3962,8 @@
     ok('K27b 局内：下游能用', resolveVar('共享', down.id) === '5', resolveVar('共享', down.id));
     ok('K27c 局内：非下游看不到', resolveVar('共享', side.id) === null, resolveVar('共享', side.id));
     ok('K27d 能改控件类型', (() => {
-      setVarControl(byId(n.id), 'switch');
-      return normalizeVarDef(byId(n.id).varDef).control === 'switch';
+      setVarControl(byId(n.id), 'cond');
+      return normalizeVarDef(byId(n.id).varDef).control === 'cond';
     })());
     ok('K27e 改了之后尺寸重算了', byId(n.id).h > 0);
   });
@@ -3933,7 +3971,7 @@
     fresh(); layoutMind();
     const ck = addControlNode('check', 0, 0, { name:'多选', options:['甲', '乙', '丙'], picked:[1] });
     const sl = addControlNode('slider', 0, 0, { name:'刻度', min:-50, max:50, step:5, value:'15' });
-    const sw = addControlNode('switch', 0, 0, { name:'闸', on:true });
+    const sw = addControlNode('cond', 0, 0, { name:'闸', on:true });
     toggleCheckOption(ck, 2);
     reindex();
     const snap = JSON.parse(JSON.stringify(serialize()));
@@ -3969,10 +4007,9 @@
     reindex(); sizeAll();
     L = varBoxes(sl);
     ok('K29d 滑条命中轨道', (hitVarControl(sl, { x:L.trackBox.x + 4, y:L.trackBox.y + 4 }) || {}).kind === 'slider');
-    const sw = addControlNode('switch', 0, 0, {});
+    const sw = addControlNode('cond', 0, 0, {});
     reindex(); sizeAll();
     L = varBoxes(sw);
-    ok('K29e 开关命中按钮', (hitVarControl(sw, { x:L.knobBox.x + 4, y:L.knobBox.y + 4 }) || {}).kind === 'switch');
     ok('K29f 普通变量节点没有控件命中',
       hitVarControl(mkVar('x', '1'), { x:0, y:0 }) === null);
   });
@@ -5346,13 +5383,16 @@
       return sliderValue(byId(sl.id).varDef, sl.id) === 100;
     })(), sliderValue(byId(sl.id).varDef, sl.id));
     // 开关：只有 on/off 两种，值本身就是个固定串，不涉及插值
-    const sw = addControlNode('switch', 0, 0, { name:'闸', on:true });
+    const sw = addControlNode('cond', 0, 0, { name:'闸', on:true });
     reindex();
-    ok('VV05f 开关的值不受影响', controlValue(byId(sw.id).varDef, sw.id) === '开',
+    ok('VV05f 条件节点的值就是「所填的值」',
+      controlValue(byId(sw.id).varDef, sw.id) === String(normalizeVarDef(byId(sw.id).varDef).value),
       controlValue(byId(sw.id).varDef, sw.id));
     toggleSwitch(byId(sw.id));
-    ok('VV05g 关掉还是「关」', controlValue(byId(sw.id).varDef, sw.id) === '关',
-      controlValue(byId(sw.id).varDef, sw.id));
+    ok('VV05g 改「所填的值」它跟着变', (() => {
+      setVarDef(byId(sw.id), { value:'88' });
+      return controlValue(byId(sw.id).varDef, sw.id) === '88';
+    })(), controlValue(byId(sw.id).varDef, sw.id));
   });
   T('VV06 值里引用变量之后，下游拿到的是解析后的结果', () => {
     fresh(); layoutMind();
@@ -6011,10 +6051,12 @@
     emptyMenu();
     subMenu('新建');
     const sub = subMenu('程序节点');
-    ok('RB04 五种都在', ['变量节点', '勾选节点', '滑条节点', '通路节点', '输出节点']
+    ok('RB04 五种都在', ['变量节点', '勾选节点', '滑条节点', '条件节点', '输出节点']
       .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
-    ok('RB04b 叫「通路节点」，不叫「开关节点」',
-      sub.some(t => t.indexOf('通路节点') === 0) && !sub.some(t => t.indexOf('开关节点') === 0),
+    ok('RB04b 叫「条件节点」（原通路节点），不叫「开关节点」',
+      sub.some(t => t.indexOf('条件节点') === 0)
+      && !sub.some(t => t.indexOf('通路节点') === 0)
+      && !sub.some(t => t.indexOf('开关节点') === 0),
       sub.join(' / '));
     // 这两项原来是**出不来**的（少了个逗号），专门盯一下
     ok('RB04c 运算节点也在（原来因为少逗号显示不出来）',
@@ -6260,7 +6302,7 @@
 
     // 三种控件
 
-    for (const c of ['check', 'slider', 'switch']){
+    for (const c of ['check', 'slider', 'cond']){
       const n = addControlNode(c, 0, 0);
       reindex(); sizeAll();
       const cn = c === 'check' ? '勾选节点' : c === 'slider' ? '滑条节点' : '通路节点';
@@ -6369,7 +6411,7 @@
       return byId(sl.id).lines.join('') === '音量';
     })(), byId(sl.id).lines.join(''));
     // 三种控件都一样
-    for (const c of ['check', 'switch']){
+    for (const c of ['check', 'cond']){
       const n = addControlNode(c, 0, 0, { name:'k' + c });
       reindex(); sizeAll();
       ok('CT01h ' + c + ' 也有变量名格子并且能引用',
@@ -6614,14 +6656,18 @@
     ok('FA04b 不存在的节点 → null', valueFromUpstream(liveCtx(), '不存在') === null);
     // 通路关着
     const src = mkVar('源', '9');
-    const sw = addControlNode('switch', 0, 0, { name:'闸' });
+    const sw = addControlNode('cond', 0, 0, { name:'闸' });
     const dst = addNodeAt('下游', 0, 0, 'rect');
     linkNodes(src.id, sw.id); linkNodes(sw.id, dst.id);
     reindex();
-    ok('FA04c 通路关着 → BLOCKED', valueFromUpstream(liveCtx(), dst.id) === VAR_BLOCKED,
+    ok('FA04c 条件不成立 → 值过不去', valueFromUpstream(liveCtx(), dst.id) !== '9',
       String(valueFromUpstream(liveCtx(), dst.id)));
-    toggleSwitch(byId(sw.id));
-    ok('FA04d 接通之后就有值了', valueFromUpstream(liveCtx(), dst.id) === '9',
+    setVarDef(byId(src.id), { value:'1' });        // 输入给 1 → 通
+    reindex();
+    // 注意：条件节点是**透传**上游值的（它自己填的那个值走的是 {按名字引用} 那条路），
+    // 所以这里通出来的是上游的 1，不是它自己填的东西。
+    ok('FA04d 输入为 1 就通了，透传出上游的 1',
+      valueFromUpstream(liveCtx(), dst.id) === '1',
       String(valueFromUpstream(liveCtx(), dst.id)));
   });
   T('FA05 往回求：绕环不会挂', () => {

@@ -72,11 +72,20 @@ const opDefOf = (id) => OP_BY_ID.get(id) || OPERATORS[0];
 const opArity = (id) => opDefOf(id).arity;
 
 /* ---------------- 数据规范化 ---------------- */
-const VAR_CONTROLS = ['plain', 'check', 'slider', 'switch'];
-const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', switch:'通路' };
+/* 特殊控件。原「通路节点」已换成「条件节点」—— 它不再是个手动开关，
+   而是「输入为 1 才把所填的值放出去」。老存档的 switch 在 normalizeVarDef 里就地转过来。 */
+const VAR_CONTROLS = ['plain', 'check', 'slider', 'cond'];
+const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', cond:'条件' };
 function normalizeVarDef(v){
   const out = Object.assign({ name:'x', value:'0', type:'number', scope:'global',
     control:'plain', options:[], picked:[], min:0, max:100, step:1, on:false }, v || {});
+  /* 老存档：通路节点 → 条件节点（就地转换，用户不用管）。
+     原来是「开着」的就把所填的值设成 1（等价于「条件成立，放它过去」）；
+     关着的留空，永远不通。 */
+  if (out.control === 'switch'){
+    out.control = 'cond';
+    if (out.on && String(out.value == null ? '' : out.value) === '') out.value = '1';
+  }
   if (VAR_CONTROLS.indexOf(out.control) < 0) out.control = 'plain';
   // 勾选：选项列表 + 选中的下标
   out.options = (Array.isArray(out.options) ? out.options : [])
@@ -158,9 +167,21 @@ function controlValue(vd, fromId){
     VAR_RESOLVING.delete(fromId);
   }
 }
-/* 开关节点：关掉时「逻辑上断开」，值不往下游流 */
-const switchOpen = (n) => isVarNode(n) && normalizeVarDef(n.varDef).control === 'switch'
-  ? normalizeVarDef(n.varDef).on : true;
+/* 这个节点「通不通」。不通 = 这条连接逻辑上断开，值不往下游流。
+   ★ 条件节点：**看流进来的输入是不是 1**。
+     1 → 通，把「所填的值」放出去；不是 1 → 不通，下游拿不到值。
+   （老的 switch 已经不会出现，留着只是保险。） */
+function gateOpenIn(ctx, n){
+  if (!isVarNode(n)) return true;
+  const v = normalizeVarDef(n.varDef);
+  if (v.control === 'switch') return v.on;
+  if (v.control !== 'cond') return true;
+  const inc = valueFromUpstream(ctx, n.id);
+  if (inc == null || inc === VAR_BLOCKED) return false;
+  return Number(String(inc).trim()) === 1;
+}
+/* 没有 ctx 时的老接口：只知道它自己，不知道上游 —— 一律当通的 */
+const switchOpen = (n) => isVarNode(n) ? normalizeVarDef(n.varDef).control !== 'cond' : true;
 
 /* 节点的优先级：输出 > 变量 > 运算，其余看 n.priority，最后 0 */
 function priorityOf(n){
@@ -282,7 +303,7 @@ function downstreamOfIn(ctx, startId, inside){
         if (inside && (!inside.has(e.s) || !inside.has(e.t))) continue;
         if (seen.has(e.t)) continue;
         const m = ctx.byId.get(e.t);
-        if (m && isVarNode(m) && !switchOpen(m)) continue;   // 关着的开关后面不算下游
+        if (m && isVarNode(m) && !gateOpenIn(ctx, m)) continue;   // 条件不成立：后面不算下游
         seen.add(e.t);
         next.push(e.t);
       }
@@ -414,7 +435,7 @@ function evalFromIn(ctx, def, start, inside, targetId){
         if (seen.has(e.t)) continue;
         seen.add(e.t);
         const m = ctx.byId.get(e.t);
-        if (m && isVarNode(m) && !switchOpen(m)){ blocked = true; continue; }   // 开关关着 = 这条连接逻辑上断开
+        if (m && isVarNode(m) && !gateOpenIn(ctx, m)){ blocked = true; continue; }   // 条件不成立 = 这条连接逻辑上断开
         const out = applyNodeOut(ctx, m, cur.v);
         if (targetId && e.t === targetId){
           // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
@@ -452,7 +473,7 @@ function valueFromUpstream(ctx, nodeId, depth){
     const src = ctx.byId.get(e.s);
     if (!src) continue;
     // 关着的通路 = 这条路逻辑上断掉（和 evalFromIn 一致）
-    if (isVarNode(src) && !switchOpen(src)) return VAR_BLOCKED;
+    if (isVarNode(src) && !gateOpenIn(ctx, src)) return VAR_BLOCKED;
     const hasIn = ctx.edges.some(x => x.t === src.id);
     let incoming;
     if (hasIn){
@@ -478,6 +499,11 @@ function valueFromUpstream(ctx, nodeId, depth){
    指向函数分组的话，值就是那个分组声明出来的输出。 */
 function defValueIn(ctx, def){
   if (!def) return null;
+  /* ★ 条件节点不通 = 它自己没有值。
+     注意 evalFromIn 的门控只管「边指向的那个节点」——
+     从它**出发**往下的那条路不在那套检查里，所以必须在这里补一道，
+     否则「条件不成立」时它填的那个值还是会漏到下游去。 */
+  if (isVarNode(def) && !gateOpenIn(ctx, def)) return null;
   for (const e of ctx.edges){
     if (e.s !== def.id) continue;
     const grp = ctx.byGrp.get(e.t);
