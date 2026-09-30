@@ -229,13 +229,24 @@ window.addEventListener('pointerup', (ev) => {
     }
     pushHist();
   } else if (drag.mode === 'port'){
+    // 方块这个把手管两件事：
+    //   丢到**别的节点**上 → 连线（省得再去找那个小圆点）
+    //   丢在别处          → 把这个端点挪到那儿（换边 / 沿边挪位置）
+    const ownerId = drag.node.id;
+    const tgt = (typeof linkTargetAt === 'function') ? linkTargetAt(p) : null;
+    if (tgt && tgt.id !== ownerId && !isEmbed(byId(ownerId))){
+      drag = null; mark();
+      const e = linkNodes(ownerId, tgt.id);
+      if (e){ reindex(); pushHist(); }
+      return;
+    }
     if (drag.moved){
       const p2 = portById(drag.node, drag.portId);
       pushHist();
       reindex(); sizeAll();
       say('* 端点 #' + drag.portId + ' 挪到了'
         + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r']
-        + '。双击它可以改 ID 和标签。');
+        + '。双击它可以改 ID 和标签；把它拖到别的节点上就是连线。');
     }
     drag = null;
     mark();

@@ -7049,6 +7049,150 @@
     skipDlg();
   });
 
+
+  T('LK01 端到端：从端点拉线连到另一个节点', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    const before = doc.edges.length;
+    selectOnly(a.id);
+    const ba = nodeBox(byId(a.id));
+    // 从右边的输出端点圆点按下
+    const pt = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+    const hx = Math.round(pt.x * view.z + view.x), hy = Math.round(pt.y * view.z + view.y);
+    ok('LK01 前置：圆点位置就是盒子右边中点',
+      Math.abs(pt.x - (ba.x + ba.w)) < 1e-6 && Math.abs(pt.y - (ba.y + ba.h / 2)) < 1e-6,
+      JSON.stringify(pt));
+    ok('LK01b 前置：hitPort 认得出这个圆点',
+      !!hitPort(pt), JSON.stringify(hitPort(pt)));
+    ok('LK01c 前置：方块没压住圆点（两个手势不重叠）',
+      !portHandleAt(pt, null), '方块不该在这里命中');
+    pe('pointerdown', hx, hy);
+    ok('LK01d 按下进入了拉线状态',
+      !!drag && drag.mode === 'link', drag ? drag.mode : 'null');
+    // 拖到 b 的中心
+    const bb = nodeBox(byId(b.id));
+    const tx = Math.round((bb.x + bb.w / 2) * view.z + view.x);
+    const ty = Math.round((bb.y + bb.h / 2) * view.z + view.y);
+    pe('pointermove', tx, ty);
+    ok('LK01e 拖动中有落点', !!hover, hover ? hover.text : 'null');
+    pe('pointerup', tx, ty);
+    skipDlg();
+    ok('LK01f 新连线建出来了', doc.edges.length === before + 1,
+      before + ' → ' + doc.edges.length);
+    ok('LK01g 连的是 a → b', (() => {
+      const e = doc.edges.find(x => x.s === a.id && x.t === b.id);
+      return !!e;
+    })(), doc.edges.slice(-1).map(e => e.s + '→' + e.t).join(','));
+    // 落点在对方**端点**上（差几个像素）也要认
+    reindex();
+    const c = nodeByText('连线');
+    const n0 = doc.edges.length;
+    selectOnly(a.id);
+    const p2 = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+    pe('pointerdown', Math.round(p2.x * view.z + view.x), Math.round(p2.y * view.z + view.y));
+    const cb2 = nodeBox(byId(c.id));
+    // 故意落在对方右边缘**外面 6px**，模拟「拖到端点上差一点」
+    const ox = (cb2.x + cb2.w + 6) * view.z + view.x;
+    const oy = (cb2.y + cb2.h / 2) * view.z + view.y;
+    pe('pointermove', Math.round(ox), Math.round(oy));
+    ok('LK01h 落在节点边上一点也算落点', !!hover && hover.id === c.id,
+      hover ? (hover.text || hover.id) : 'null');
+    pe('pointerup', Math.round(ox), Math.round(oy));
+    skipDlg();
+    ok('LK01i 也连上了', doc.edges.length === n0 + 1, n0 + ' → ' + doc.edges.length);
+  });
+  T('LK02 没选中任何东西时，鼠标停在谁身上就能从谁的端点拉线', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    selectOnly(null);
+    ok('LK02 前置：什么都没选中', sel.size === 0);
+    const ba = nodeBox(a);
+    // 先把鼠标移到 a 身上（真实操作也会先移过去）
+    pe('pointermove', Math.round((ba.x + ba.w / 2) * view.z + view.x),
+                     Math.round((ba.y + ba.h / 2) * view.z + view.y));
+    ok('LK02b 移过去之后 hover 是它', hover && hover.id === a.id, hover ? hover.id : 'null');
+    const pt = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+    ok('LK02c 没选中也能命中端点（这是之前连不上的原因）', !!hitPort(pt),
+      JSON.stringify(hitPort(pt)));
+    const n0 = doc.edges.length;
+    pe('pointerdown', Math.round(pt.x * view.z + view.x), Math.round(pt.y * view.z + view.y));
+    ok('LK02d 进了拉线状态', !!drag && drag.mode === 'link', drag ? drag.mode : 'null');
+    const bb = nodeBox(b);
+    pe('pointermove', Math.round((bb.x + bb.w / 2) * view.z + view.x),
+                      Math.round((bb.y + bb.h / 2) * view.z + view.y));
+    pe('pointerup', Math.round((bb.x + bb.w / 2) * view.z + view.x),
+                    Math.round((bb.y + bb.h / 2) * view.z + view.y));
+    skipDlg();
+    ok('LK02e 连上了', doc.edges.length === n0 + 1, n0 + ' → ' + doc.edges.length);
+  });
+  T('LK03 连不上时要有说明，不能闷着', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    linkNodes(a.id, b.id);
+    reindex();
+    const n0 = doc.edges.length;
+    const r = linkNodes(a.id, b.id);            // 重复
+    skipDlg();
+    ok('LK03 重复的连线被拒绝', r === null && doc.edges.length === n0);
+    ok('LK03b 而且有提示（以前是静默失败）', /已经|重复|连过/.test(dlgText.textContent),
+      dlgText.textContent.slice(0, 40) || '（什么都没说）');
+    const r2 = linkNodes(a.id, a.id);           // 自环
+    skipDlg();
+    ok('LK03c 自环被拒绝', r2 === null);
+    ok('LK03d 也有提示', /自己|自环/.test(dlgText.textContent), dlgText.textContent.slice(0, 40));
+  });
+
+
+  T('LK04 端点搬到哪，就从哪能拉线（这才是「无法拉线」的真凶）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    selectOnly(a.id);
+    const bn = nodeBox(byId(a.id));
+    const port = portList(byId(a.id)).outs[0];
+    ok('LK04 前置：原本在右边中点', port.side === 'r' && port.at === 0.5);
+    const oldPt = portPoint(byId(a.id), port);
+    ok('LK04b 搬之前，右边中点能命中', !!hitPort(oldPt), JSON.stringify(hitPort(oldPt)));
+    // 把它搬到上边 0.3 处
+    movePort(byId(a.id), 'outs', port.id, { x:bn.x + bn.w * 0.3, y:bn.y + 2 });
+    reindex();
+    const moved = portList(byId(a.id)).outs[0];
+    ok('LK04c 搬到了上边', moved.side === 't', moved.side);
+    const newPt = portPoint(byId(a.id), moved);
+    ok('LK04d 新位置能命中', !!hitPort(newPt), JSON.stringify(hitPort(newPt)));
+    ok('LK04e ★ 旧位置**不再**命中（以前这里还会命中，因为用的还是那四个老中点）',
+      !hitPort(oldPt), JSON.stringify(hitPort(oldPt)));
+    ok('LK04f 命中的是同一个端点', (() => {
+      const h = hitPort(newPt);
+      return h && h.node === a.id && h.side === 't' && h.portId === moved.id;
+    })(), JSON.stringify(hitPort(newPt)));
+    // 端到端：从**搬过之后**的位置真的拉一条线
+    const n0 = doc.edges.length;
+    portList(byId(a.id)); reindex();
+    const pt2 = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+    pe('pointerdown', Math.round(pt2.x * view.z + view.x), Math.round(pt2.y * view.z + view.y));
+    ok('LK04g 从新位置能进入拉线态', !!drag && drag.mode === 'link', drag ? drag.mode : 'null');
+    const bb = nodeBox(byId(b.id));
+    const tx = Math.round((bb.x + bb.w / 2) * view.z + view.x);
+    const ty = Math.round((bb.y + bb.h / 2) * view.z + view.y);
+    pe('pointermove', tx, ty);
+    pe('pointerup', tx, ty);
+    skipDlg();
+    ok('LK04h 真的连上了', doc.edges.length === n0 + 1, n0 + ' → ' + doc.edges.length);
+    // 多个端点：每个都能单独命中
+    addPort(byId(a.id), 'outs');
+    reindex();
+    const outs = portList(byId(a.id)).outs;
+    ok('LK04i 现在有两个输出端点', outs.length === 2, outs.length);
+    ok('LK04j 两个端点各自都能命中，而且认得清是哪个', (() => {
+      const r = [];
+      for (const q of outs){
+        const h = hitPort(portPoint(byId(a.id), q));
+        r.push(!!h && h.portId === q.id);
+      }
+      return r.every(Boolean);
+    })(), outs.map(q => q.side + ':' + q.at.toFixed(2)).join(' / '));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

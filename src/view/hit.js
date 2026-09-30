@@ -84,10 +84,10 @@ function hitImagePart(n, p){
 }
 /* 选中对象的连接端口：选中的是节点就用节点，是分组就用分组框 */
 function hitPort(p){
-  let box = null, id = null;
+  let box = null, id = null, node = null;
   if (sel.size === 1){
     const n = byId([...sel][0]);
-    if (n && !isHidden(n.id) && !isEmbed(n)){ box = n; id = n.id; }   // 封闭节点不给端点
+    if (n && !isHidden(n.id) && !isEmbed(n)){ box = n; id = n.id; node = n; }   // 封闭节点不给端点
   } else {
     // 顺序要紧：选了分组就给分组的端点；什么都没选时，鼠标停在谁身上
     // 就允许从谁的端点拉线 —— 以前只有「恰好选中一个」才给端点，
@@ -95,10 +95,32 @@ function hitPort(p){
     const grp = soleGroup();          // 整个选择就是一个分组时才给端点
     if (grp){ box = groupBox(grp); id = grp.id; }
     else if (sel.size === 0 && hover && !isHidden(hover.id) && !isEmbed(hover)){
-      box = hover; id = hover.id;
+      box = hover; id = hover.id; node = hover;
     }
   }
   if (!box) return null;
+
+  /* ★ 节点：按**实际端点表**命中。
+     以前这里是 anchorsFor(box) —— 老的四个边中点，和端点表毫无关系。
+     结果是：从原来的中点能拉线，端点一旦被拖到别处就再也拉不动了。
+     （「端点无法拉线」的真凶就是这个。） */
+  if (node){
+    const tol = 9 / Math.max(0.2, view.z);
+    let best = null, bestD = Infinity;
+    const L = portList(node);
+    for (const dir of ['ins', 'outs']){
+      for (const q of L[dir]){
+        const pt = portPoint(node, q);
+        const d = Math.hypot(pt.x - p.x, pt.y - p.y);
+        if (d <= tol && d < bestD){
+          bestD = d;
+          best = { node:id, side:q.side, dir, portId:q.id };
+        }
+      }
+    }
+    return best;
+  }
+  // 分组暂时没有端点表，还是四个中点
   const P = anchorsFor(box);
   for (const k of ['r', 'l', 't', 'b']){
     const a = P[k];

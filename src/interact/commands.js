@@ -15,9 +15,10 @@ function addNodeAt(text, x, y, shape){
   return n;
 }
 function linkNodes(s, t){
-  if (s === t) return null;
+  // ⚠ 每一条拒绝都要有话说 —— 静默失败会让人以为是「拉不动」
+  if (s === t){ say('* 不能连到自己身上。'); return null; }
   if (isEmbed(byId(s)) || isEmbed(byId(t))){ say('* 嵌入节点是封闭的，连不了线。'); return null; }
-  if (doc.edges.some(e => e.s === s && e.t === t)) return null;
+  if (doc.edges.some(e => e.s === s && e.t === t)){ say('* 这两个之间已经有连线了。'); return null; }
   const e = makeEdge(s, t);
   doc.edges.push(e);
   return e;
