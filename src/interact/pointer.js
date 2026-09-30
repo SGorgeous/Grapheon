@@ -321,6 +321,15 @@ window.addEventListener('pointerup', (ev) => {
         say('* 这两个节点之间已经有一条连线了。');
       } else {
         e.s = ns; e.t = nt;
+        /* ★ 改接之后**原来的端点钉法就作废了**，必须清掉。
+           不清的话线会拿旧的端点 id 去新节点上找一个（碰巧同号的）端点，
+           或者带着旧的方向 —— 看起来就是「端点连线改不掉」。 */
+        if (drag.end === 's'){ e.aPort = null; e.aSide = null; }
+        else { e.bPort = null; e.bSide = null; }
+        // 落点正好压在某个端点上就钉上去（和拉新线一个待遇）
+        const tn = idx.byId.get(t.id);
+        const tp = (tn && typeof portIdAtPoint === 'function') ? portIdAtPoint(p, tn) : null;
+        if (tp) pinEdgePort(e, drag.end === 's' ? 'a' : 'b', tn, tp);
         reindex(); sizeAll(); pushHist();
         say('* 已把连线改接到「' + (t.text || '未命名') + '」。');
       }

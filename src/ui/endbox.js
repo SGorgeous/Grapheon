@@ -58,16 +58,44 @@ function renderEndBox(){
     row.appendChild(el('span', 'endname',
       (which === 'a' ? '→ 连到「' : '← 来自「') + otherName + '」'));
     const opts = el('div', 'opts');
-    for (const [val, label] of END_OPTS){
-      const cur = (which === 'a' ? e.aSide : e.bSide) || 'auto';
+    /* ★ 选项 = 这个节点**真实存在的端点**，不再是无脑四条固定边。
+       端口模型上来之后，「上/下/左/右」对默认节点（只有左/右两个端点）
+       是选不中的 —— 选了没反应，看起来就是「端点连线改不掉」。
+       分组没有端点表，还是退回四条边。 */
+    const tn = byId(n.id);
+    const PL = tn && (typeof portList === 'function') ? portList(tn) : null;
+    const portOpts = PL
+      ? (which === 'a' ? (PL.outs.length ? PL.outs : PL.ins)
+                       : (PL.ins.length ? PL.ins : PL.outs))
+          .map(p => [String(p.id),
+                     '#' + p.id + (p.label ? ' ' + p.label : '') +
+                     '（' + ({ t:'上', b:'下', l:'左', r:'右' })[p.side] + '）'])
+      : END_OPTS.map(([v, l]) => [v, l]);
+    const curPort = which === 'a' ? e.aPort : e.bPort;
+    const cur = (curPort == null) ? 'auto' : String(curPort);
+    // 注意 END_OPTS 里**本来就含「自动」**，端口那条路才需要自己补一个 —— 别补重了
+    const optList = PL ? [['auto', '自动']].concat(portOpts) : END_OPTS;
+    for (const [val, label] of optList){
       const on = cur === val;
       const d = el('div', 'opt' + (on ? ' on' : ''),
         '<span class="hrt"></span><span>' + label + '</span>');
       d.onclick = () => {
-        setEdgeSide(e, which, val === 'auto' ? null : val);
+        if (val === 'auto'){
+          if (which === 'a'){ e.aPort = null; e.aSide = null; }
+          else { e.bPort = null; e.bSide = null; }
+          say('* 端点：自动吸附。');
+        } else if (!PL){
+          // 分组没有端点表 —— 还是老的「钉死哪条边」
+          setEdgeSide(e, which, val);
+          say('* 端点：' + edgeSideText(e) + '。');
+        } else {
+          const p = portById(tn, +val);
+          if (p) pinEdgePort(e, which, tn, p);
+          say('* 端点：钉在 #' + val + (p && p.label ? ' ' + p.label : '') + '。');
+        }
+        reindex(); sizeAll();
         renderEndBox();
-        pushHist();
-        say('* 端点：' + edgeSideText(e) + (val === 'auto' ? '（自动吸附）' : '（已钉在' + label + '边）'));
+        pushHist(); mark();
       };
       opts.appendChild(d);
     }

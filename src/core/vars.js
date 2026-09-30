@@ -776,6 +776,17 @@ function varLayout(box, varDef, lineH){
   }
   R.scopeBox = { x:box.x + VAR_PAD, y:top + R.bodyH + 8, w:innerW, h:VAR_SCOPE_H };
   R.height = 8 + lineH + R.bodyH + 8 + VAR_SCOPE_H + 10;
+  /* ★ 手动把节点拉高了：多出来的高度**摊给本体那一段**，
+     里面的框跟着一起长 —— 不然框只会在顶上挤成一坨，下面一大片空白。 */
+  if (box.h && box.h > R.height){
+    const extra = box.h - R.height;
+    R.bodyH += extra;
+    for (const k of ['nameBox', 'valBox', 'listBox', 'trackBox', 'knobBox']){
+      if (R[k]) R[k].h += extra;
+    }
+    R.scopeBox.y += extra;
+    R.height = box.h;
+  }
   return R;
 }
 /* 滑条：世界坐标 → 值 */

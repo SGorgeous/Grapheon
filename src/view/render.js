@@ -356,6 +356,8 @@ function varBoxes(n){
 }
 function opBoxes(n){
   const b = nodeBox(n);
+  // 手动拉高过：把多出来的高度摊给算符框和运算值框 —— 内部 UI 跟着拉伸
+  const opExtra = Math.max(0, b.h - (8 + Math.max(1, n.lines.length) * n.lh + OP_BOX_H + 10));
   const textH = Math.max(1, n.lines.length) * n.lh + 8;
   const top = b.y + textH;
   const arity = opArity(normalizeOpDef(n.opDef).op);
@@ -366,13 +368,21 @@ function opBoxes(n){
     valBoxes.push({ x, y:top, w:OP_VAL_W, h:OP_BOX_H });
     x += OP_VAL_W + 8;
   }
+  if (opExtra > 0){
+    opBox.h += opExtra;
+    for (const vb of valBoxes) vb.h += opExtra;
+  }
   return { opBox, valBoxes, valBox:valBoxes[0] };     // valBox 是第一格，兼容老用法
 }
 /* 输出节点：左上角描述 + 一个变量名框 */
 function outBoxes(n){
   const b = nodeBox(n);
   const textH = Math.max(1, n.lines.length) * n.lh + 8;
-  return { nameBox:{ x:b.x + VAR_PAD, y:b.y + textH, w:Math.min(OUT_NAME_W, b.w - VAR_PAD * 2), h:OUT_BOX_H } };
+  // 手动拉高过：名字框跟着长
+  const oNat = 8 + Math.max(1, n.lines.length) * n.lh + OUT_BOX_H + 10;
+  const oExtra = Math.max(0, b.h - oNat);
+  return { nameBox:{ x:b.x + VAR_PAD, y:b.y + textH,
+                     w:Math.min(OUT_NAME_W, b.w - VAR_PAD * 2), h:OUT_BOX_H + oExtra } };
 }
 /* 一个小方框 + 居中的字 */
 function drawField(g, box, text, cur){

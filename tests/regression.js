@@ -1054,33 +1054,20 @@
     const targetId = doc.edges.find(e => e.s === b.id).t;
     const e = doc.edges.find(x => x.s === b.id && x.t === targetId);
     opts[1].click();                              // 上
-    ok('S03b aSide 变成 t', e.aSide === 't', e.aSide);
+    // ★ 现在面板列的是**该节点真实存在的端点**（不再是无脑四条固定边）
+    opts[1].click();
+    ok('S03b 钉到了第一个真实端点上（默认节点是右边那个）',
+      e.aPort === portList(byId(b.id)).outs[0].id && e.aSide === portList(byId(b.id)).outs[0].side,
+      'aPort=' + e.aPort + ' aSide=' + e.aSide);
     const ep = edgeEndpoints(e);
-    const want = anchorsFor(b).t;
-    // ★ 落点必须是**真实端点**：老的「四条边中点」已经废掉了。
-    //   节点上正好有那条边的端点才钉得住，没有就退回「哪个端口朝着对方」。
-    const realPort = portList(byId(b.id)).outs.filter(q => q.side === 't')[0];
-    if (realPort){
-      const want = portPoint(byId(b.id), realPort);
-      ok('S03c 起点锚点就在那个上边端点上',
-        Math.abs(ep.a.x - want.x) < 1.5 && Math.abs(ep.a.y - want.y) < 1.5,
-        JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
-    } else {
-      const autoP = autoPortFor(b.id, nodeBox(byId(targetId)), 'a', 't') || autoPortFor(b.id, nodeBox(byId(targetId)), 'a');
-      const want = portPoint(byId(b.id), autoP);
-      ok('S03c 上边没有端点，退回朝向对方的那个端点',
-        Math.abs(ep.a.x - want.x) < 1.5 && Math.abs(ep.a.y - want.y) < 1.5,
-        JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
-    }
-    // 给它加一个上边端点之后，aSide='t' 就该被采纳
-    const added = addPort(byId(b.id), 'outs');
-    movePort(byId(b.id), 'outs', added.id, { x:nodeBox(byId(b.id)).x + nodeBox(byId(b.id)).w * 0.5, y:nodeBox(byId(b.id)).y - 2 });
-    reindex();
-    const ep2 = edgeEndpoints(e);
-    const w2 = portPoint(byId(b.id), portList(byId(b.id)).outs.filter(q => q.side === 't')[0]);
-    ok('S03d ★ 边上真有端点时，aSide 就采纳它',
-      Math.abs(ep2.a.x - w2.x) < 1.5 && Math.abs(ep2.a.y - w2.y) < 1.5,
-      JSON.stringify(ep2.a) + ' vs ' + JSON.stringify(w2));
+    const want = portPoint(byId(b.id), portList(byId(b.id)).outs[0]);
+    ok('S03c 起点锚点就在那个端点上',
+      Math.abs(ep.a.x - want.x) < 1.5 && Math.abs(ep.a.y - want.y) < 1.5,
+      JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
+    // 选「自动」要能解钉
+    opts[0].click();
+    ok('S03d 选自动就解钉了', e.aPort == null && e.aSide == null,
+      'aPort=' + e.aPort + ' aSide=' + e.aSide);
   });
   T('S04 钉死的端点不随相对位置改变', () => {
     fresh(); layoutMind();
@@ -7815,6 +7802,41 @@
       JSON.stringify({ got:[Math.round(cx), Math.round(cy)], want:[Math.round(wantX), Math.round(wantY)] }));
     ok('BR02d 整张图画得出来', (dirty = true, draw(), true));
     ok('BR02e 选中时也画得出来', (selectOnly(bc.id), draw(), true));
+  });
+
+  T('BG01 探针：拖端点改接 + 插入图片节点', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    selectEdge(e.id); reindex();
+    ok('BG01 前置：连线选中了', selEdgeId === e.id);
+    const ep = edgeEndpoints(e);
+    ok('BG01b 端点位置算得出来', !!ep, JSON.stringify(ep));
+    ok('BG01c hitEdgeHandle 认得出这个端点', !!hitEdgeHandle(ep.a), JSON.stringify(hitEdgeHandle(ep.a)));
+    pe('pointerdown', Math.round(ep.a.x * view.z + view.x), Math.round(ep.a.y * view.z + view.y));
+    ok('BG01d 按在端点上进入 relink', !!drag && drag.mode === 'relink', drag ? drag.mode : 'null');
+    pe('pointerup', Math.round(ep.a.x * view.z + view.x), Math.round(ep.a.y * view.z + view.y));
+    skipDlg();
+    // 3) 插入图片
+    // 3) 插入图片节点
+    let clicked = 0;
+    const orig = imgFileEl.click;
+    imgFileEl.click = function(){ clicked++; };
+    try {
+      fresh();
+      selectOnly(null);
+      showCtx(600, 500, null, null, { p:{ x:0, y:0 } });
+      const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+      ok('BG01e 右键菜单顶层就三项', labels.length === 3, labels.join(' / '));
+      const it = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('新建') === 0);
+      it.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+      const it2 = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('节点') === 0);
+      ok('BG01f 找得到「节点」子菜单', !!it2);
+      it2.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+      const img = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('图片节点') === 0);
+      ok('BG01g 找得到「图片节点…」', !!img, [...document.querySelectorAll('.menu .item')].map(d => d.textContent).join(' / '));
+      if (img) img.dispatchEvent(new MouseEvent('click', { bubbles:true }));
+      ok('BG01h 点了之后真的去开文件选择框', clicked === 1, clicked);
+    } finally { imgFileEl.click = orig; hideCtx(); }
   });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {

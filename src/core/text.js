@@ -87,7 +87,9 @@ function sizeVarNode(n){
   n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
-  n.h = Math.round(varLayout({ x:0, y:0, w:n.w }, v, n.lines.length * n.lh).height);
+  // ★ fixedH：手动拉过高度就听它的（内部几行由 varLayout 摊开）
+  const natH = Math.round(varLayout({ x:0, y:0, w:n.w }, v, n.lines.length * n.lh).height);
+  n.h = (+n.fixedH > 0) ? Math.max(natH, Math.round(+n.fixedH)) : natH;
 }
 /* 运算节点：左上角描述 + 中间「算符 运算值」 */
 function sizeOpNode(n){
@@ -101,7 +103,8 @@ function sizeOpNode(n){
   n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
-  n.h = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
+  const opNat = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
+  n.h = (+n.fixedH > 0) ? Math.max(opNat, Math.round(+n.fixedH)) : opNat;   // ★ fixedH
 }
 /* 输出节点：左上角描述 + 一个变量名框 */
 function sizeOutNode(n){
@@ -113,7 +116,8 @@ function sizeOutNode(n){
   n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
-  n.h = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
+  const outNat = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
+  n.h = (+n.fixedH > 0) ? Math.max(outNat, Math.round(+n.fixedH)) : outNat;  // ★ fixedH
 }
 /* 表格节点：宽 = 各列宽之和，高 = 行数 × 行高。手动拉过宽度就按比例摊给各列。 */
 function sizeTableNode(n){
@@ -122,7 +126,8 @@ function sizeTableNode(n){
   const cols = tableColWidths(n);
   const natural = cols.reduce((a, x) => a + x, 0);
   n.w = (+n.fixedW > 0) ? Math.max(MIN_FIXED_W, +n.fixedW) : Math.max(MIN_FIXED_W, natural);
-  n.h = t.rows * tableRowH();
+  const tblNat = t.rows * tableRowH();
+  n.h = (+n.fixedH > 0) ? Math.max(tblNat, Math.round(+n.fixedH)) : tblNat;  // ★ fixedH
   n.lines = [''];
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;

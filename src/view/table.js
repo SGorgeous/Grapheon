@@ -49,9 +49,16 @@ function tableColWidths(n){
   }
   return out;
 }
-function tableRowH(){
+/* 一行多高。手动把表格拉高过就按可用高度摊 —— 内部格子跟着拉伸。
+   （节点尺寸那边算自然高度时传的是 undefined，拿到的还是自然行高。） */
+function tableRowH(n){
   setFont(mctx, FS, 'normal', FONT);
-  return FS + TBL_PADY * 2;
+  const nat = FS + TBL_PADY * 2;
+  if (n && +n.fixedH > 0){
+    const rows = normalizeTableDef(n.tableDef).rows || 1;
+    return Math.max(nat, Math.round(+n.fixedH) / rows);
+  }
+  return nat;
 }
 /* 表格的整体几何。绘制、命中、编辑器定位共用这一份。 */
 function tableGeom(n){
@@ -59,7 +66,7 @@ function tableGeom(n){
   const t = tableOf(n);
   const cols = tableColWidths(n);
   const total = cols.reduce((a, x) => a + x, 0);
-  const rh = tableRowH();
+  const rh = tableRowH(n);
   // 手动拉过宽度的话，把差值按比例摊给各列
   let xs = [], x = b.x;
   if (+n.fixedW > 0 && total > 0 && b.w !== total){
