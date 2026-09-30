@@ -124,7 +124,7 @@ function hitPort(p){
     const tol = 9 / Math.max(0.2, view.z);
     let best = null, bestD = Infinity;
     const L = portList(node);
-    for (const dir of ['ins', 'outs']){
+    for (const dir of PORT_DIRS){
       for (const q of L[dir]){
         const pt = portPoint(node, q);
         const d = Math.hypot(pt.x - p.x, pt.y - p.y);

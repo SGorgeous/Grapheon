@@ -148,7 +148,7 @@ function showCtx(x, y, n, e, info){
       const PL = portList(n);
       const dirLabel = (d) => d === 'ins' ? '输入' : '输出';
       const portItems = [];
-      for (const dir of ['ins', 'outs']){
+      for (const dir of PORT_DIRS){
         const list = PL[dir];
         portItems.push([dirLabel(dir) + '端点（' + list.length + '）', '', null,
           list.map(p => ['#' + p.id + (p.label ? ' ' + p.label : ''),
