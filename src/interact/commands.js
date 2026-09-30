@@ -369,12 +369,16 @@ function removeSelectionFromGroup(grp){
   say('* 已移出分组。');
 }
 
-/* 分组自由框：手动改尺寸（下限跟节点一样，别缩没） */
+/* 分组自由框：手动改尺寸。成员的外接框是硬下限 —— 拉不到比成员还小。 */
 function setGroupSize(grp, w, h){
   if (!grp) return;
-  const MINW2 = 120, MINH2 = 80;
-  grp.w = Math.max(MINW2, Math.round(w));
-  grp.h = Math.max(MINH2, Math.round(h));
+  grp.w = Math.max(120, Math.round(w));
+  grp.h = Math.max(80, Math.round(h));
+  const need = groupMinSize(grp);          // 成员要求的左下边界
+  if (need.x != null){
+    if (grp.x + grp.w < need.x + need.w) grp.w = need.x + need.w - grp.x;
+    if (grp.y + grp.h < need.y + need.h) grp.h = need.y + need.h - grp.y;
+  }
   mark();
 }
 /* 拖进拖出自动收纳：节点中心落在框里就加入，离开就移除。
@@ -395,6 +399,12 @@ function syncGroupMembership(ids){
   }
   if (changed) mark();
   return changed;
+}
+/* 拖完节点 / 改完尺寸后的统一收尾：先同步成员关系，再让所有框长大到装得下自己的成员 */
+function settleGroups(ids){
+  const movedMem = syncGroupMembership(ids);
+  const grew = growAllGroups();
+  return movedMem || grew;
 }
 /* 把框收缩到刚好包住成员 */
 function tidyGroup(grp){

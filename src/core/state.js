@@ -64,6 +64,7 @@ function reindex(){
   for (const g of doc.groups){
     g.members = (g.members || []).filter(id => idx.byId.has(id));
     if (!(+g.w > 0) || !(+g.h > 0)) fitGroupToMembers(g);   // 老档案没尺寸就按成员补一个
+    else groupGrowToFit(g);                                 // 维持不变量：框永远装得下成员
   }
   for (const g of doc.groups) idx.groups.set(g.id, g);
   const seen = new Set();
@@ -140,6 +141,44 @@ function fitGroupToMembers(g){
 /* 一个点（一般是节点中心）在不在这个框里 */
 function pointInGroup(g, x, y){
   return x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h;
+}
+/* 框只会「长大」：手动拉的尺寸是下限，成员超出就往那个方向扩，成员走了不缩。
+   向左/上扩要同时挪原点，否则右下角会跟着漂。 */
+function groupGrowToFit(grp){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const id of (grp.members || [])){
+    const n = idx.byId.get(id);
+    if (!n) continue;
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  if (!isFinite(minX)) return false;                 // 空框：保持你拉的样子
+  const needX = minX - GROUP_PAD, needY = minY - GROUP_TITLE_H;
+  const needR = maxX + GROUP_PAD, needB = maxY + GROUP_PAD;
+  let changed = false;
+  if (needX < grp.x){ grp.w += grp.x - needX; grp.x = needX; changed = true; }
+  if (needY < grp.y){ grp.h += grp.y - needY; grp.y = needY; changed = true; }
+  if (needR > grp.x + grp.w){ grp.w = needR - grp.x; changed = true; }
+  if (needB > grp.y + grp.h){ grp.h = needB - grp.y; changed = true; }
+  return changed;
+}
+function growAllGroups(){
+  let changed = false;
+  for (const grp of (doc.groups || [])) if (groupGrowToFit(grp)) changed = true;
+  return changed;
+}
+/* 这个框装得下现在的成员吗（用于夹住手动缩小） */
+function groupMinSize(grp){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const id of (grp.members || [])){
+    const n = idx.byId.get(id);
+    if (!n) continue;
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  if (!isFinite(minX)) return { x:null, y:null, w:0, h:0 };
+  return { x:minX - GROUP_PAD, y:minY - GROUP_TITLE_H,
+           w:(maxX - minX) + GROUP_PAD * 2, h:(maxY - minY) + GROUP_TITLE_H + GROUP_PAD };
 }
 /* 分组标题栏的矩形（命中测试和绘制共用） */
 function groupTitleBox(g){

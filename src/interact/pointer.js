@@ -188,8 +188,9 @@ window.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   const p = s2w(ev.clientX, ev.clientY);
   if (drag.mode === 'node' && drag.moved){
-    // 拖进 / 拖出分组框 → 自动收纳 / 移出
-    if (syncGroupMembership(drag.starts.map(s => s.id))) say('* 分组成员已按位置更新。');
+    // 顺序要紧：先按中心位置同步成员关系（拖出去的就不算成员了），
+    // 再让框长大到装得下剩下的成员。反过来的话，刚被移出的节点会把框撑大。
+    if (settleGroups(drag.starts.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
     pushHist();
   } else if (drag.mode === 'group' && drag.moved){
     pushHist();
@@ -199,6 +200,7 @@ window.addEventListener('pointerup', (ev) => {
       if (grp) say('* 分组框改成 ' + grp.w + ' × ' + grp.h + '。往框里拖节点就会自动收纳。');
     } else {
       const n = byId(drag.targetId);
+      settleGroups([drag.targetId]);           // 节点变大可能顶出分组框
       if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
     }
     pushHist();
@@ -267,7 +269,7 @@ canvas.addEventListener('dblclick', (ev) => {
   if (e){ selectEdge(e.id); startEdit('edge', e.id); return; }
   const nn = addNodeAt('新节点', p.x - 70, p.y - 24, 'rect');
   reindex(); relayout();
-  syncGroupMembership([nn.id]);          // 落在框里就直接收纳
+  settleGroups([nn.id]);                 // 落在框里就收纳，框跟着长大
   sel.clear(); sel.add(nn.id);
   pushHist(); mark();
   startEdit('node', nn.id, '');

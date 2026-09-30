@@ -1280,7 +1280,7 @@
     ok('U02b 连线数不变', doc.edges.length === e0, doc.edges.length);
     ok('U02c 连线的两端也没变', doc.edges.map(e => e.s + '>' + e.t).sort().join(',') === before);
   });
-  T('U03 新建分组给一个刚好装下成员的框；之后框是独立的', () => {
+  T('U03 新建分组给一个刚好装下成员的框', () => {
     fresh(); layoutMind();
     const a = nodeByText('节点'), b = nodeByText('连线');
     sel.clear(); sel.add(a.id); sel.add(b.id);
@@ -1290,12 +1290,47 @@
     ok('U03b 成员都在框里', [a, b].every(n =>
       n.x >= r.x && n.y >= r.y && n.x + n.w <= r.x + r.w && n.y + n.h <= r.y + r.h),
       JSON.stringify(r));
-    const before = { x:r.x, y:r.y, w:r.w, h:r.h };
-    a.x += 400; a.y += 200;                            // 自由框：成员自己动，框不动
+  });
+  T('U03c 框只会长大：成员顶出去就扩，成员回来不缩', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const r0 = groupBox(grp);
+    // 把成员 a 拖到框里但让它整个露出去（中心仍在框内 → 还是成员 → 框该长大）
+    const inside = { x:grp.x + grp.w - 6, y:grp.y + grp.h / 2 };
+    const ac = center(a);
+    const dst = S(inside);
+    pe('pointerdown', ac.x, ac.y);
+    pe('pointermove', dst.x, dst.y);
+    pe('pointerup', dst.x, dst.y);
+    ok('U03c 拖完还是成员', grp.members.indexOf(a.id) >= 0, JSON.stringify(grp.members));
+    const r1 = groupBox(grp);
+    ok('U03c2 框长大到整个成员都在里面',
+      a.x >= r1.x && a.y >= r1.y && a.x + a.w <= r1.x + r1.w && a.y + a.h <= r1.y + r1.h,
+      JSON.stringify({ r:r1, a:{ x:a.x, y:a.y, w:a.w, h:a.h } }));
+    ok('U03c3 确实比原来大', r1.w > r0.w + 1 || r1.h > r0.h + 1, r0.w + 'x' + r0.h + ' -> ' + r1.w + 'x' + r1.h);
+    // 再把它拖回框正中：框不会缩回去
+    const ac2 = center(a);
+    const back = S({ x:grp.x + grp.w / 2, y:grp.y + grp.h / 2 });
+    pe('pointerdown', ac2.x, ac2.y);
+    pe('pointermove', back.x, back.y);
+    pe('pointerup', back.x, back.y);
     const r2 = groupBox(grp);
-    ok('U03c 框不跟着成员跑（自由框，不是自动包络）',
-      r2.x === before.x && r2.y === before.y && r2.w === before.w && r2.h === before.h,
-      JSON.stringify(r2));
+    ok('U03c4 成员回来了框也不缩', r2.w >= r1.w - 1 && r2.h >= r1.h - 1,
+      r1.w + 'x' + r1.h + ' -> ' + r2.w + 'x' + r2.h);
+  });
+  T('U03i 手动拉不到比成员还小', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    setGroupSize(grp, 130, 90);                       // 想缩到很小
+    const need = groupMinSize(grp);
+    ok('U03i 被夹回成员的外接框', grp.w >= need.w - 0.5 && grp.h >= need.h - 0.5,
+      grp.w + 'x' + grp.h + ' vs min ' + Math.round(need.w) + 'x' + Math.round(need.h));
+    ok('U03i2 成员还是全都装得下', [a, b].every(n =>
+      n.x >= grp.x && n.y >= grp.y && n.x + n.w <= grp.x + grp.w && n.y + n.h <= grp.y + grp.h));
   });
   T('U03d 框能像节点一样拖右下角自由改尺寸', () => {
     fresh(); layoutMind();
