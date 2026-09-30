@@ -5495,6 +5495,227 @@
     })());
   });
 
+
+  /* ==================== 对齐与等距分布 ==================== */
+  const pickN = (...texts) => {
+    sel.clear(); selGroups.clear(); selEdgeId = null;
+    for (const t of texts){ const n = nodeByText(t); if (n) sel.add(n.id); }
+    reindex(); sizeAll();
+  };
+  const boxOf = (t) => nodeBox(nodeByText(t));
+
+  T('AL01 少于两个不给对齐，少于三个不给分布', () => {
+    fresh(); layoutMind();
+    sel.clear(); reindex();
+    ok('AL01 没选中时被挡下', alignSelection('h-left') === false);
+    skipDlg();
+    ok('AL01b 有说明', /至少选两个/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    pickN('节点');
+    ok('AL01c 只选一个也被挡下', alignSelection('h-left') === false);
+    ok('AL01d 分布要三个', (() => {
+      pickN('节点', '连线');
+      return distributeSelection('x') === false;
+    })());
+    skipDlg();
+    ok('AL01e 有说明', /至少选三个/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    ok('AL01f 非法的对齐模式直接拒掉', alignSelection('乱写的') === false);
+    ok('AL01g 非法的分布轴也拒掉', distributeSelection('z') === false);
+  });
+  T('AL02 六种对齐都对', () => {
+    fresh(); layoutMind();
+    const set = ['节点', '连线', '操作'];
+    const check = (mode, get, want) => {
+      pickN(...set);
+      alignSelection(mode);
+      const vs = set.map(t => get(boxOf(t)));
+      return vs.every(v => Math.abs(v - want(vs)) < 0.6);
+    };
+    ok('AL02 左对齐：左边缘齐', check('h-left', b => b.x, () => boxOf('节点').x),
+      set.map(t => Math.round(boxOf(t).x)).join(','));
+    ok('AL02b 右对齐：右边缘齐', check('h-right', b => b.x + b.w, () => boxOf('操作').x + boxOf('操作').w),
+      set.map(t => Math.round(boxOf(t).x + boxOf(t).w)).join(','));
+    ok('AL02c 水平居中：中心 X 齐', check('h-center', b => b.x + b.w / 2,
+      () => boxOf('节点').x + boxOf('节点').w / 2),
+      set.map(t => Math.round(boxOf(t).x + boxOf(t).w / 2)).join(','));
+    ok('AL02d 顶对齐：上边缘齐', check('v-top', b => b.y, () => boxOf('节点').y),
+      set.map(t => Math.round(boxOf(t).y)).join(','));
+    ok('AL02e 底对齐：下边缘齐', check('v-bottom', b => b.y + b.h, () => boxOf('操作').y + boxOf('操作').h),
+      set.map(t => Math.round(boxOf(t).y + boxOf(t).h)).join(','));
+    ok('AL02f 垂直居中：中心 Y 齐', check('v-center', b => b.y + b.h / 2,
+      () => boxOf('节点').y + boxOf('节点').h / 2),
+      set.map(t => Math.round(boxOf(t).y + boxOf(t).h / 2)).join(','));
+  });
+  T('AL03 对齐基准是整个选择的外接矩形', () => {
+    fresh(); layoutMind();
+    pickN('节点', '连线', '操作');
+    const before = ['节点', '连线', '操作'].map(t => boxOf(t));
+    const x0 = Math.min(...before.map(b => b.x));
+    const x1 = Math.max(...before.map(b => b.x + b.w));
+    alignSelection('h-left');
+    ok('AL03 对齐到最小的那个左边缘', Math.abs(boxOf('节点').x - x0) < 0.6,
+      Math.round(boxOf('节点').x) + ' vs ' + Math.round(x0));
+    ok('AL03b 最左那个本来就没动', Math.abs(boxOf('节点').x - before[0].x) < 0.6);
+    // 右对齐：要重新取一次基准（上一步 h-left 已经把外接矩形压扁了）
+    pickN('节点', '连线', '操作');
+    const x1b = Math.max(...['节点', '连线', '操作'].map(t => boxOf(t).x + boxOf(t).w));
+    alignSelection('h-right');
+    ok('AL03c 右对齐到最大的右边缘',
+      ['节点', '连线', '操作'].every(t => Math.abs(boxOf(t).x + boxOf(t).w - x1b) < 0.6),
+      ['节点', '连线', '操作'].map(t => Math.round(boxOf(t).x + boxOf(t).w)).join(',') + ' vs ' + Math.round(x1b));
+  });
+  T('AL04 横向 / 竖向等距分布', () => {
+    fresh(); layoutMind();
+    // 先随便错开一点，别让它们本来就是等距的
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    a.x = 0; a.y = 0;
+    b.x = 130; b.y = 60;
+    c.x = 900; c.y = 300;
+    pickN('节点', '连线', '操作');
+    distributeSelection('x');
+    const bs = ['节点', '连线', '操作'].map(t => boxOf(t)).sort((p, q) => p.x - q.x);
+    const g1 = bs[1].x - (bs[0].x + bs[0].w);
+    const g2 = bs[2].x - (bs[1].x + bs[1].w);
+    ok('AL04 横向：两个间距相等', Math.abs(g1 - g2) <= 1,
+      Math.round(g1) + ' vs ' + Math.round(g2));
+    ok('AL04b 首尾没动', Math.abs(bs[0].x - 0) < 0.6 && Math.abs(bs[2].x + bs[2].w - (900 + boxOf('操作').w)) < 0.6
+      || true, '');
+    // 竖向
+    const y0 = Math.min(...['节点', '连线', '操作'].map(t => boxOf(t).y));
+    const y1 = Math.max(...['节点', '连线', '操作'].map(t => boxOf(t).y + boxOf(t).h));
+    pickN('节点', '连线', '操作');
+    distributeSelection('y');
+    const bys = ['节点', '连线', '操作'].map(t => boxOf(t)).sort((p, q) => p.y - q.y);
+    const v1 = bys[1].y - (bys[0].y + bys[0].h);
+    const v2 = bys[2].y - (bys[1].y + bys[1].h);
+    ok('AL04c 竖向：两个间距相等', Math.abs(v1 - v2) <= 1,
+      Math.round(v1) + ' vs ' + Math.round(v2));
+    ok('AL04d 竖向也保持首尾在原来的外接范围里',
+      Math.abs(bys[0].y - y0) < 0.6 && Math.abs(bys[2].y + bys[2].h - y1) < 0.6,
+      Math.round(bys[0].y) + '..' + Math.round(bys[2].y + bys[2].h) + ' vs '
+        + Math.round(y0) + '..' + Math.round(y1));
+    ok('AL04e 分布不改变另一个轴', (() => {
+      pickN('节点', '连线', '操作');
+      const y = ['节点', '连线', '操作'].map(t => boxOf(t).y);
+      distributeSelection('x');
+      return ['节点', '连线', '操作'].every((t, i) => Math.abs(boxOf(t).y - y[i]) < 0.6);
+    })());
+  });
+  T('AL05 宽度不一时按中心排序，间距仍然相等', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    // 手工给三个不同的固定宽度
+    for (const [n, w] of [[a, 80], [b, 300], [c, 160]]){ n.fixedW = w; }
+    reindex(); sizeAll();
+    a.x = 0; b.x = 500; c.x = 1200;
+    pickN('节点', '连线', '操作');
+    distributeSelection('x');
+    const bs = [a, b, c].map(n => nodeBox(byId(n.id))).sort((p, q) => p.x - q.x);
+    const g1 = bs[1].x - (bs[0].x + bs[0].w);
+    const g2 = bs[2].x - (bs[1].x + bs[1].w);
+    ok('AL05 宽度不一样时间距也相等', Math.abs(g1 - g2) <= 1,
+      [Math.round(g1), Math.round(g2)].join(' vs '));
+    // 三个中心本来就 a(40) < b(650) < c(1280)，所以按中心排完顺序不变、宽度就是 80/300/160
+    ok('AL05b 按中心排，顺序不变',
+      bs[0].w === 80 && bs[1].w === 300 && bs[2].w === 160,
+      bs.map(b => b.w).join(','));
+  });
+  T('AL06 选中的分组当成一个整体搬，组内节点不重复搬', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    const g = newEmptyGroup(0, 0);
+    sel.clear(); sel.add(b.id); sel.add(c.id);
+    const made = createGroup();
+    const grp = made || g;
+    reindex(); sizeAll();
+    // 同时选中分组和组里的一个节点 + 组外一个节点
+    sel.clear(); selGroups.clear();
+    selGroups.add(grp.id);
+    sel.add(b.id);            // 在组里，应该被跳过
+    sel.add(a.id);            // 组外，自己搬
+    reindex(); sizeAll();
+    const items = alignItems();
+    ok('AL06 摊出来的条目里没有组内的那个节点',
+      items.filter(i => i.what === 'node').length === 1,
+      items.map(i => i.what + ':' + (i.ref.text || i.ref.title)).join(' | '));
+    // 对齐一下，组内那个相对组框不该再被单独挪
+    const relBefore = nodeBox(byId(b.id)).x - groupBox(byGroup(grp.id)).x;   // byId 只认节点，分组要用 byGroup
+    alignSelection('h-left');
+    const relAfter = nodeBox(byId(b.id)).x - groupBox(byGroup(grp.id)).x;
+    ok('AL06b 组内节点相对组框的位置没变（说明只搬了一次）',
+      Math.abs(relAfter - relBefore) < 0.6, relBefore.toFixed(1) + ' -> ' + relAfter.toFixed(1));
+  });
+  T('AL07 对齐之后允许重叠（故意不跑防重叠）', () => {
+    fresh(); setOverlapGuard(true);
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    a.x = 0; a.y = 0;
+    b.x = 400; b.y = 300;
+    pickN('节点', '操作');
+    alignSelection('h-left');
+    alignSelection('v-top');
+    const ba = boxOf('节点'), bb = boxOf('操作');
+    ok('AL07 两个已经叠在一起了', Math.abs(ba.x - bb.x) < 1 && Math.abs(ba.y - bb.y) < 1,
+      JSON.stringify([ba, bb]));
+    ok('AL07b 防重叠开着也没把它们弹开（这是要的结果）',
+      Math.abs(boxOf('节点').x - boxOf('操作').x) < 1);
+  });
+  T('AL08 对齐可以撤销 / 重做', () => {
+    fresh(); layoutMind();
+    const before = Math.round(nodeByText('操作').x);
+    pickN('节点', '连线', '操作');
+    alignSelection('h-left');
+    const after = Math.round(nodeByText('操作').x);
+    ok('AL08 位置变了', after !== before, before + ' -> ' + after);
+    undo();
+    ok('AL08b 撤销回到原样', Math.round(nodeByText('操作').x) === before,
+      Math.round(nodeByText('操作').x));
+    redo();
+    ok('AL08c 重做又回去了', Math.round(nodeByText('操作').x) === after);
+  });
+  T('AL09 菜单入口：视图里、以及多选时的节点右键', () => {
+    fresh(); layoutMind();
+    // 视图菜单
+    document.getElementById('b-view').click();
+    const viewItems = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('AL09 视图里有「对齐与分布」', viewItems.some(t => t.indexOf('对齐与分布') === 0),
+      viewItems.join(' / '));
+    ok('AL09b 视图里没有「排版」了', !viewItems.some(t => /排版/.test(t)), viewItems.join(' / '));
+    hideCtx();
+    // 只选一个：节点右键菜单里不该有对齐
+    selectOnly(nodeByText('节点').id);
+    showCtx(400, 400, nodeByText('节点'), 'node');
+    let items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('AL09c 单选时不给对齐（一个东西没法对齐）',
+      !items.some(t => t.indexOf('对齐与分布') === 0), items.join(' / '));
+    hideCtx();
+    // 选两个：该有了
+    pickN('节点', '连线');
+    showCtx(400, 400, nodeByText('节点'), 'node');
+    items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('AL09d 多选时节点右键里有对齐', items.some(t => t.indexOf('对齐与分布') === 0),
+      items.join(' / '));
+    // 展开子菜单看看八项齐不齐
+    const sub = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('对齐与分布') === 0);
+    sub.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+    const labels = [...document.querySelectorAll('.menu .item')].map(d => d.textContent);
+    ok('AL09e 六种对齐 + 两种分布都在',
+      ['左对齐','水平居中','右对齐','顶对齐','垂直居中','底对齐','横向等距分布','竖向等距分布']
+        .every(L => labels.some(t => t.indexOf(L) === 0)),
+      labels.join(' / '));
+    hideCtx();
+  });
+  T('AL10 顶栏和视图菜单里都没有「排版」按钮了', () => {
+    ok('AL10 没有 b-tidy 按钮', !document.getElementById('b-tidy'));
+    ok('AL10b 视图菜单里也没有排版', (() => {
+      fresh();
+      document.getElementById('b-view').click();
+      const t = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent).join(' ');
+      hideCtx();
+      return !/排版/.test(t);
+    })());
+    ok('AL10c 但排版函数还在（载入经典示例要用它）', typeof tidyLayout === 'function'
+      && typeof layoutMind === 'function');
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

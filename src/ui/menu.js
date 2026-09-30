@@ -122,6 +122,21 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
+    // 选了多个才给对齐相关的项（一个东西没法对齐）
+    if (sel.size + selGroups.size >= 2){
+      items.push(['对齐与分布', '▶', null, [
+        ['左对齐',      '', () => alignSelection('h-left')],
+        ['水平居中',    '', () => alignSelection('h-center')],
+        ['右对齐',      '', () => alignSelection('h-right')],
+        'hr',
+        ['顶对齐',      '', () => alignSelection('v-top')],
+        ['垂直居中',    '', () => alignSelection('v-center')],
+        ['底对齐',      '', () => alignSelection('v-bottom')],
+        'hr',
+        ['横向等距分布', '至少三个', () => distributeSelection('x')],
+        ['竖向等距分布', '至少三个', () => distributeSelection('y')]
+      ]]);
+    }
     items.push(['组件…', 'C', () => openComps()]);
     if (isVarNode(n)){
       const v = normalizeVarDef(n.varDef);
@@ -378,15 +393,24 @@ function showInsertMenu(anchor){
   showMenu(anchor.getBoundingClientRect().left, anchor.getBoundingClientRect().bottom + 6, items);
 }
 
-/* 视图菜单（顶栏「视图」）：居中 + 排版放一起 */
+/* 视图菜单（顶栏「视图」）：居中 + 对齐与分布 */
 function showViewMenu(anchor){
   const r = anchor.getBoundingClientRect();
   showMenu(r.left, r.bottom + 6, [
     ['居中', '把全部内容放进视野', () => { fitView(); say('* 已居中。'); }],
-    ['排版', '按树形重排一次', () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }],
     'hr',
-    ['居中并排版', '两步一起做', () => {
-      tidyLayout(); fitView(); pushHist(); say('* 已排版并居中。');
-    }]
+    // 「排版」按钮撤了，换成对齐与分布 —— 手动的、可预期的、随选随用
+    ['对齐与分布', '先选中几个', null, [
+      ['左对齐',      '', () => alignSelection('h-left')],
+      ['水平居中',    '', () => alignSelection('h-center')],
+      ['右对齐',      '', () => alignSelection('h-right')],
+      'hr',
+      ['顶对齐',      '', () => alignSelection('v-top')],
+      ['垂直居中',    '', () => alignSelection('v-center')],
+      ['底对齐',      '', () => alignSelection('v-bottom')],
+      'hr',
+      ['横向等距分布', '至少三个', () => distributeSelection('x')],
+      ['竖向等距分布', '至少三个', () => distributeSelection('y')]
+    ]]
   ]);
 }

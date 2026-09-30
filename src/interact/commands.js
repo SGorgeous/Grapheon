@@ -880,3 +880,94 @@ function setCheckOptions(n, text){
   sizeNode(n);
   reindex(); sizeAll(); mark();
 }
+
+/* =========================================================================
+   对齐与等距分布
+   -------------------------------------------------------------------------
+   作用于**选中的东西**：
+     · 选中的分组当成一个整体搬（它内部的节点会被跳过，否则同一个节点被搬两次）
+     · 其余选中的节点各自搬自己
+   对齐基准是**整个选择的外接矩形** —— 这样结果和眼睛看到的一致。
+
+   ⚠ 故意不跑防重叠：用户要的就是把它们排成一条线，弹开就白排了。
+   ========================================================================= */
+const ALIGN_LABELS = {
+  'h-left':'左对齐', 'h-center':'水平居中', 'h-right':'右对齐',
+  'v-top':'顶对齐',  'v-center':'垂直居中', 'v-bottom':'底对齐'
+};
+const ALIGN_MODES = Object.keys(ALIGN_LABELS);
+
+/* 把选择摊成可以搬的条目 */
+function alignItems(){
+  const gsel = selectedGroups();
+  const inside = new Set();
+  for (const g of gsel) for (const id of groupAllNodes(g.id)) inside.add(id);
+  const items = [];
+  for (const g of gsel){
+    const b = groupBox(g);
+    if (!b) continue;
+    items.push({ what:'group', ref:g, x:b.x, y:b.y, w:b.w, h:b.h,
+                 move:(dx, dy) => moveGroupBy(g, dx, dy) });
+  }
+  for (const id of sel){
+    if (inside.has(id)) continue;            // 已经在被搬的分组里了，别再搬一次
+    const n = byId(id);
+    if (!n) continue;
+    const b = nodeBox(n);
+    items.push({ what:'node', ref:n, x:b.x, y:b.y, w:b.w, h:b.h,
+                 move:(dx, dy) => { n.x += dx; n.y += dy; } });
+  }
+  return items;
+}
+function alignBounds(items){
+  const x0 = Math.min(...items.map(i => i.x));
+  const y0 = Math.min(...items.map(i => i.y));
+  const x1 = Math.max(...items.map(i => i.x + i.w));
+  const y1 = Math.max(...items.map(i => i.y + i.h));
+  return { x0, y0, x1, y1 };
+}
+function alignSelection(mode){
+  if (ALIGN_MODES.indexOf(mode) < 0) return false;
+  const items = alignItems();
+  if (items.length < 2){ say('* 至少选两个东西才能对齐。'); return false; }
+  const b = alignBounds(items);
+  let moved = 0;
+  for (const it of items){
+    let dx = 0, dy = 0;
+    if (mode === 'h-left')        dx = b.x0 - it.x;
+    else if (mode === 'h-center') dx = (b.x0 + b.x1) / 2 - (it.x + it.w / 2);
+    else if (mode === 'h-right')  dx = b.x1 - (it.x + it.w);
+    else if (mode === 'v-top')    dy = b.y0 - it.y;
+    else if (mode === 'v-center') dy = (b.y0 + b.y1) / 2 - (it.y + it.h / 2);
+    else if (mode === 'v-bottom') dy = b.y1 - (it.y + it.h);
+    dx = Math.round(dx); dy = Math.round(dy);
+    if (dx || dy){ it.move(dx, dy); moved++; }
+  }
+  reindex(); sizeAll(); pushHist(); mark();
+  say('* ' + ALIGN_LABELS[mode] + '：' + items.length + ' 个（' + moved + ' 个动了）。');
+  return true;
+}
+/* 等距分布：首尾不动，中间按「边到边的间距相等」重排。
+   按中心排序，所以不管谁宽谁窄，视觉顺序都是对的。 */
+function distributeSelection(axis){
+  if (axis !== 'x' && axis !== 'y') return false;
+  const items = alignItems();
+  if (items.length < 3){ say('* 至少选三个才能等距分布。'); return false; }
+  const pos = (axis === 'x') ? 'x' : 'y';
+  const size = (axis === 'x') ? 'w' : 'h';
+  const sorted = items.slice().sort((a, b) => (a[pos] + a[size] / 2) - (b[pos] + b[size] / 2));
+  const first = sorted[0], last = sorted[sorted.length - 1];
+  const span = (last[pos] + last[size]) - first[pos];
+  const total = sorted.reduce((t, it) => t + it[size], 0);
+  const gap = (span - total) / (sorted.length - 1);
+  let cur = first[pos];
+  for (const it of sorted){
+    const d = Math.round(cur - it[pos]);
+    if (d) it.move(pos === 'x' ? d : 0, pos === 'y' ? d : 0);
+    cur += it[size] + gap;
+  }
+  reindex(); sizeAll(); pushHist(); mark();
+  say('* ' + (axis === 'x' ? '横向' : '竖向') + '等距分布：' + sorted.length + ' 个，间距 '
+      + Math.round(gap) + 'px。');
+  return true;
+}
