@@ -175,10 +175,10 @@ function gateOpenIn(ctx, n){
   if (!isVarNode(n)) return true;
   const v = normalizeVarDef(n.varDef);
   if (v.control === 'switch') return v.on;
-  if (v.control !== 'cond') return true;
-  const inc = valueFromUpstream(ctx, n.id);
-  if (inc == null || inc === VAR_BLOCKED) return false;
-  return Number(String(inc).trim()) === 1;
+  // 条件节点自己就是个「值来源」：它总归输出点东西（所填的值 或「无」），
+  // 所以这里一律放行 —— 通不通由 applyNodeOut / condOutputIn 决定。
+  if (v.control === 'cond') return true;
+  return true;
 }
 /* 没有 ctx 时的老接口：只知道它自己，不知道上游 —— 一律当通的 */
 const switchOpen = (n) => isVarNode(n) ? normalizeVarDef(n.varDef).control !== 'cond' : true;
@@ -216,9 +216,23 @@ function toNum(v){
    ★ 所有节点变换都必须走这里 —— 别再在别处写 applyOperator，
      否则以后加多输入时又会漏掉一路。
    ========================================================================= */
+/* 条件节点的输出：流进来的等于 1 → 输出「所填的值」；否则 → 输出「无」。
+   ★ 注意它**不是透传上游** —— 它输出的是自己填的那个值。
+     （以前 applyNodeOut 对变量节点是恒等，于是通的时候把上游的值漏了出去。） */
+const COND_NONE = '无';
+function condOutputIn(ctx, node){
+  const v = normalizeVarDef(node.varDef);
+  const inc = valueFromUpstream(ctx, node.id);
+  if (inc == null || inc === VAR_BLOCKED) return COND_NONE;   // 没接 / 上游不通
+  return Number(String(inc).trim()) === 1 ? v.value : COND_NONE;
+}
 function applyNodeOut(ctx, node, incoming){
   if (!node) return incoming;
   if (isOpNode(node)) return applyOperator(incoming, node.opDef);
+  // 条件节点：输出自己的值（或「无」），不把上游的值放过去
+  if (isVarNode(node) && normalizeVarDef(node.varDef).control === 'cond'){
+    return condOutputIn(ctx, node);
+  }
   return incoming;                       // 其余节点原样透传
 }
 function applyOperator(v, od){
@@ -499,10 +513,11 @@ function valueFromUpstream(ctx, nodeId, depth){
    指向函数分组的话，值就是那个分组声明出来的输出。 */
 function defValueIn(ctx, def){
   if (!def) return null;
-  /* ★ 条件节点不通 = 它自己没有值。
-     注意 evalFromIn 的门控只管「边指向的那个节点」——
-     从它**出发**往下的那条路不在那套检查里，所以必须在这里补一道，
-     否则「条件不成立」时它填的那个值还是会漏到下游去。 */
+  /* ★ 条件节点：按名字引用它，拿到的就是 condOutputIn（所填的值，或「无」）。
+     它不是「不通就没值」—— 不通的时候输出的是「无」这个值。 */
+  if (isVarNode(def) && normalizeVarDef(def.varDef).control === 'cond'){
+    return condOutputIn(ctx, def);
+  }
   if (isVarNode(def) && !gateOpenIn(ctx, def)) return null;
   for (const e of ctx.edges){
     if (e.s !== def.id) continue;

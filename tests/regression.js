@@ -3891,12 +3891,12 @@
     // 输入改成 0 → 不通
     setVarDef(byId(v.id), { value:'0' });
     reindex(); sizeAll();
-    ok('K26c 输入不是 1 → 不通', resolveVar('闸门', c.id) === null,
+    ok('K26c 输入不是 1 → 输出「无」', resolveVar('闸门', c.id) === '无',
       String(resolveVar('闸门', c.id)));
     ok('K26c2 上游的值也过不去', (() => {
       const out = addNodeAt('看 {src}', 0, 0, 'rect');
       linkNodes(cd.id, out.id); reindex();
-      return displayTextOf(byId(out.id)) === '看 [未定义]';
+      return displayTextOf(byId(out.id)) === '看 无';
     })(), (() => {
       const out = doc.nodes.find(x => x.text === '看 {src}');
       return out ? displayTextOf(out) : '?';
@@ -3910,7 +3910,7 @@
       const lone = addControlNode('cond', 0, 0, { name:'孤立闸', value:'7' });
       const d2 = addNodeAt('下游2', 0, 0, 'rect');
       linkNodes(lone.id, d2.id); reindex();
-      return resolveVar('孤立闸', d2.id) === null;
+      return resolveVar('孤立闸', d2.id) === '无';
     })(), String((() => {
       const d2 = doc.nodes.find(x => x.text === '下游2');
       return d2 ? resolveVar('孤立闸', d2.id) : '?';
@@ -3921,11 +3921,11 @@
       reindex();
       return resolveVar('闸门', c.id) === '42';
     })(), String(resolveVar('闸门', c.id)));
-    ok('K26g 2 不算 1', (() => {
+    ok('K26g 2 不算 1，给「无」', (() => {
       setVarDef(byId(v.id), { value:'2' });
       reindex();
-      return resolveVar('闸门', c.id) === null;
-    })());
+      return resolveVar('闸门', c.id) === '无';
+    })(), String(resolveVar('闸门', c.id)));
     // 局内作用域也要认
     ok('K26h 条件节点也挡得住局内变量', (() => {
       const lv = mkVar('lv', '9', { scope:'local' });
@@ -3934,8 +3934,12 @@
       const down = addNodeAt('{lv}', 0, 0, 'rect');
       linkNodes(lv.id, cd2.id); linkNodes(cd2.id, down.id);
       reindex();
-      return resolveVar('lv', down.id) === null;
-    })());
+      // 条件节点不过上游的值 —— 它输出自己的（这里是「无」）
+      return resolveVar('lv', down.id) === '无';
+    })(), String((() => {
+      const down = doc.nodes.find(x => x.text === '{lv}');
+      return down ? resolveVar('lv', down.id) : '?';
+    })()));
     // 条件节点的两条路要分清：
     //   ① 上游的值**透传**过去（输入为 1 才通）
     //   ② 按名字引用它时，拿到的是它「所填的值」（同样要输入为 1 才通）
