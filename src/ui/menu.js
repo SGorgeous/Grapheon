@@ -146,7 +146,9 @@ function showCtx(x, y, n, e, info){
     // 端点：加 / 删 / 改 id / 改标签 / 恢复默认
     if (!isEmbed(n)){
       const PL = portList(n);
-      const dirLabel = (d) => d === 'ins' ? '输入' : '输出';
+      /* ⚠ 三类都要有名字。以前只有 ins/outs 两个分支，
+         连接端点掉进 else → 菜单里显示成「输出端点（4）」。 */
+      const dirLabel = (d) => d === 'ins' ? '输入' : (d === 'outs' ? '输出' : '连接');
       const portItems = [];
       for (const dir of PORT_DIRS){
         const list = PL[dir];
@@ -167,9 +169,10 @@ function showCtx(x, y, n, e, info){
         nodePorts(n).map(p => [
           '#' + p.id, p.side === 't' ? '上' : p.side === 'b' ? '下' : p.side === 'l' ? '左' : '右',
           () => startEdit('portId', n.id, String(p.id),
-            { dir: portList(n).ins.indexOf(p) >= 0 ? 'ins' : 'outs', portId:p.id })
+            { dir: PORT_DIRS.filter(d => (portList(n)[d] || []).indexOf(p) >= 0)[0] || 'ins',
+              portId:p.id })
         ])]);
-      portItems.push(['恢复默认端点', '回到左右各一个', () => resetPorts(n)]);
+      portItems.push(['恢复默认端点', '回到这个节点种类默认的样子', () => resetPorts(n)]);
       items.push(['端点', '点一下改标签', null, portItems]);
     }
     // 表格节点：行列的增删

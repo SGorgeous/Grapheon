@@ -69,6 +69,12 @@ function anchorsFor(x){
         A[s] = { x:best.x, y:best.y, d:[o.x, o.y] };
       }
     }
+    /* ★ 兜底：四条边**必须都有值**。
+       有空洞的话，调用方写的 anchorsFor(x)[side].x 会直接抛异常 ——
+       那是在 draw() 里面，一抛整帧就断，症状是「虚线没了 / 画一半」。
+       端点表整个是空的时候（理论上不该发生）退回盒子四向锚点。 */
+    const box = boxAnchors(n);
+    for (const s of PORT_SIDES){ if (!A[s]) A[s] = box[s]; }
     return A;
   }
   return boxAnchors(x);
