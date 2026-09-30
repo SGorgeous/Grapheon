@@ -460,9 +460,9 @@ function showInsertMenu(anchor){
       const n = addControlNode('slider', Math.round(c.x - 140), Math.round(c.y - 60));
       selectOnly(n.id); pushHist(); mark();
     }],
-    ['通路节点', '断开后这条连接逻辑上不通', () => {
+    ['条件节点', '输入为 1 时把所填的值放出去', () => {
       const c = viewCenter();
-      const n = addControlNode('switch', Math.round(c.x - 140), Math.round(c.y - 60));
+      const n = addControlNode('cond', Math.round(c.x - 140), Math.round(c.y - 60));
       selectOnly(n.id); pushHist(); mark();
     }]
   ];

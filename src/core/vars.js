@@ -810,9 +810,11 @@ function sliderFrac(vd, fromId){
 /* 变量节点上那行小字：作用域 + （控件类型或值类型） */
 function varScopeText(vd){
   const v = normalizeVarDef(vd);
+  /* ⚠ 别在这里手写控件名 —— 之前「通路 → 条件」改名时就是漏了这行，
+     界面上一直显示「全局 · 通路」。一律查 VAR_CONTROL_LABEL。 */
   const kind = v.control === 'plain' ? VAR_TYPE_LABEL[v.type]
              : v.control === 'check' ? '列表'
              : v.control === 'slider' ? (v.min + ' ~ ' + v.max + ' 步长 ' + v.step)
-             : '通路';
+             : VAR_CONTROL_LABEL[v.control];
   return VAR_SCOPE_LABEL[v.scope] + ' · ' + kind;
 }

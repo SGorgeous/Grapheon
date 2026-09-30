@@ -93,7 +93,7 @@ function renderNodeBox(){
     buildOpts(nbVarCtrlEl, CTRL_OPTS, v.control, (x) => {
       setVarControl(n, x);
       renderNodeBox();
-      say('* 控件改成「' + VAR_CONTROL_LABEL[x] + '」。' + (x === 'switch'
+      say('* 控件改成「' + VAR_CONTROL_LABEL[x] + '」。' + (x === 'cond'
         ? '它放在连接中间：关掉之后这条连接逻辑上就断了。'
         : x === 'check' ? '点方框勾选，右键「编辑选项…」加减选项。'
         : x === 'slider' ? '拖圆点实时改值。' : ''));
