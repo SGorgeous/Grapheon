@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · view/hit.js
    命中测试：节点 / 连接端口 / 连线 / 连线端点手柄 / 拐点手柄 / 缩放柄 / 折叠标记。
@@ -24,6 +24,24 @@ function hitNode(p){
     if (inBox(nodeBox(n), p)) return n;   // 用有效盒子：程序化节点可能挪过位置 / 改过形状
   }
   return null;
+}
+/* 变量节点分四块：描述 / 变量名框 / 变量值框 / 作用域行
+   运算节点分三块：描述 / 算符框 / 运算值框 */
+const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+function hitVarPart(n, p){
+  if (!n || n.kind !== 'var') return null;
+  const L = varBoxes(n);
+  if (inRect(L.nameBox, p)) return 'varName';
+  if (inRect(L.valBox, p)) return 'varValue';
+  if (inRect(L.scopeBox, p)) return 'varScope';
+  return 'text';
+}
+function hitOpPart(n, p){
+  if (!n || n.kind !== 'op') return null;
+  const L = opBoxes(n);
+  if (inRect(L.opBox, p)) return 'opOp';
+  if (inRect(L.valBox, p)) return 'opVal';
+  return 'text';
 }
 /* 图片节点分三块：右上角名称带 / 图片本体 / 下面的描述。
    双击哪块就编辑哪块 —— 名称和描述是两个独立的文本字段。 */

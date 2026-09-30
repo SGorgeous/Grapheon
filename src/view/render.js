@@ -300,6 +300,97 @@ function drawEmbedNode(g, n, b, selected, hov){
   g.strokeRect(b.x, b.y, b.w, b.h);
   g.restore();
 }
+/* ---------------- 变量 / 运算节点 ----------------
+   两个都是「框里有框」：描述在左上角，下面一排小框。
+   这里算出来的方框几何，绘制和命中测试共用，不会打架。 */
+function varBoxes(n){
+  const b = nodeBox(n);
+  const textH = Math.max(1, n.lines.length) * n.lh + 8;
+  const top = b.y + textH;
+  const nameBox = { x:b.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
+  const valBox  = { x:nameBox.x + nameBox.w + 10, y:top, w:VAR_VAL_W, h:VAR_BOX_H };
+  return {
+    nameBox, valBox,
+    scopeBox:{ x:b.x + VAR_PAD, y:top + VAR_BOX_H + 8, w:Math.max(60, b.w - VAR_PAD * 2), h:VAR_SCOPE_H }
+  };
+}
+function opBoxes(n){
+  const b = nodeBox(n);
+  const textH = Math.max(1, n.lines.length) * n.lh + 8;
+  const top = b.y + textH;
+  return {
+    opBox: { x:b.x + VAR_PAD, y:top, w:OP_OP_W, h:OP_BOX_H },
+    valBox:{ x:b.x + VAR_PAD + OP_OP_W + 10, y:top, w:OP_VAL_W, h:OP_BOX_H }
+  };
+}
+/* 一个小方框 + 居中的字 */
+function drawField(g, box, text, cur){
+  g.save();
+  g.fillStyle = C.bg;
+  g.strokeStyle = C.gray;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.rect(Math.round(box.x), Math.round(box.y), Math.round(box.w), Math.round(box.h));
+  g.fill(); g.stroke();
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = cur || C.white;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(fitText(g, text, box.w - 10), box.x + box.w / 2, box.y + box.h / 2 + 1);
+  g.restore();
+}
+function drawVarNode(g, n, b, selected, hov){
+  const v = normalizeVarDef(n.varDef);
+  const L = varBoxes(n);
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+  g.save();
+  g.fillStyle = C.bg;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  // 左上角描述
+  setFont(g, n.fs, n.fw, n.fam);
+  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  const startY = b.y + 8 + n.lh / 2;
+  for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
+  g.restore();
+  // 两个输入框
+  drawField(g, L.nameBox, v.name, C.yellow);
+  drawField(g, L.valBox, v.value, v.type === 'number' ? C.white : C.gray);
+  // 作用域
+  const scopeTxt = VAR_SCOPE_LABEL[v.scope] + ' · ' + VAR_TYPE_LABEL[v.type];
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = C.gray;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(scopeTxt, L.scopeBox.x, L.scopeBox.y + L.scopeBox.h / 2);
+  // 外框
+  g.save();
+  g.lineWidth = 3; g.strokeStyle = stroke;
+  g.strokeRect(b.x, b.y, b.w, b.h);
+  g.restore();
+}
+function drawOpNode(g, n, b, selected, hov){
+  const od = normalizeOpDef(n.opDef);
+  const L = opBoxes(n);
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+  g.save();
+  g.fillStyle = C.bg;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  setFont(g, n.fs, n.fw, n.fam);
+  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  const startY = b.y + 8 + n.lh / 2;
+  for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
+  g.restore();
+  drawField(g, L.opBox,  od.op,      C.yellow);
+  drawField(g, L.valBox, od.operand, C.white);
+  g.save();
+  g.lineWidth = 3; g.strokeStyle = stroke;
+  g.strokeRect(b.x, b.y, b.w, b.h);
+  g.restore();
+}
 /* 图片节点：右上角名称带 + 图片 + 下方描述 */
 function drawImageNode(g, n, b, selected, hov){
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
@@ -358,6 +449,8 @@ function drawNode(g, n){
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
   if (n.kind === 'image') drawImageNode(g, n, b, selected, hov);
   else if (n.kind === 'embed') drawEmbedNode(g, n, b, selected, hov);
+  else if (n.kind === 'var') drawVarNode(g, n, b, selected, hov);
+  else if (n.kind === 'op')  drawOpNode(g, n, b, selected, hov);
   else {
   g.save();
   g.lineJoin = 'round';
@@ -448,7 +541,8 @@ function drawGroup(g, grp){
   g.fillStyle = col;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(fitText(g, grp.title || '分组', tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
+  const ttl = (isFunctionGroup(grp) ? 'ƒ ' : '') + (grp.title || '分组');
+  g.fillText(fitText(g, ttl, tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
   // 折叠角标：折叠时画（显示藏了多少），鼠标悬在标题栏上也画（提示这里能点）
   if (grp.collapsed || hoverGrp === grp){
     const bb = groupBadgeRect(grp);

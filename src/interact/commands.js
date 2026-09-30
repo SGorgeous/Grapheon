@@ -731,3 +731,60 @@ function exitEmbed(){
   return true;
 }
 const clearDocStack = () => { docStack = []; };
+
+/* =========================================================================
+   变量定义节点 / 运算节点 / 函数分组
+   ========================================================================= */
+function addVarNode(name, x, y, opts){
+  const n = addNodeAt('', x, y, 'rect');
+  n.kind = 'var';
+  n.varDef = normalizeVarDef(Object.assign({ name:name || 'x', value:'0' }, opts || {}));
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+function addOpNode(desc, x, y, opts){
+  const n = addNodeAt(desc || '运算', x, y, 'rect');
+  n.kind = 'op';
+  n.opDef = normalizeOpDef(opts || {});
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+/* 改变量定义。改完要重算：值会影响所有引用它的节点文本 */
+function setVarDef(n, patch){
+  if (!isVarNode(n)) return;
+  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, patch));
+  reindex(); sizeAll(); mark();
+}
+function setOpDef(n, patch){
+  if (!isOpNode(n)) return;
+  n.opDef = normalizeOpDef(Object.assign({}, n.opDef, patch));
+  reindex(); sizeAll(); mark();
+}
+/* 双击算符框：在四个算符里轮换 */
+function cycleOpOperator(n){
+  if (!isOpNode(n)) return;
+  const cur = normalizeOpDef(n.opDef).op;
+  const next = OP_KINDS[(OP_KINDS.indexOf(cur) + 1) % OP_KINDS.length];
+  setOpDef(n, { op:next });
+  pushHist();
+  say('* 算符改成 ' + next + ' 了。');
+}
+/* 分组 → 函数分组 */
+function toggleFunctionGroup(grp){
+  if (!grp) return;
+  grp.isFunction = !grp.isFunction;
+  reindex(); sizeAll(); pushHist(); mark();
+  say(grp.isFunction
+    ? '* 「' + (grp.title || '分组') + '」现在是函数分组：变量节点指向它，值就变成组内算出来的值。'
+    : '* 「' + (grp.title || '分组') + '」不再是函数分组。');
+}
+/* 手动设优先级 */
+function setPriority(n, v){
+  if (!n) return;
+  const num = Math.round(+v);
+  n.priority = (isNaN(num) || num === 0) ? null : num;
+  reindex(); sizeAll(); pushHist(); mark();
+  say('* 「' + (n.text || n.id) + '」的优先级设成 ' + priorityOf(n) + '。');
+}

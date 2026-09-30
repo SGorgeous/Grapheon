@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/editing.js
    行内编辑（浮层 textarea）：节点文本 / 连线标签 / 分组标题。
@@ -15,14 +15,22 @@ function editTarget(kind, id){
   if (kind === 'group') return byGroup(id) || null;
   return byId(id) || null;   // 'node' 和 'nodeDesc' 都是节点，只是改的字段不同
 }
-const editValue = (kind, t) => (kind === 'edge') ? (t.label || '')
-  : (kind === 'group') ? (t.title || '')
-  : (kind === 'nodeDesc') ? (t.desc || '')
-  : t.text;
+const editValue = (kind, t) => {
+  if (kind === 'edge') return t.label || '';
+  if (kind === 'group') return t.title || '';
+  if (kind === 'nodeDesc') return t.desc || '';
+  if (kind === 'varName') return normalizeVarDef(t.varDef).name;
+  if (kind === 'varValue') return normalizeVarDef(t.varDef).value;
+  if (kind === 'opVal') return normalizeOpDef(t.opDef).operand;
+  return t.text;
+};
 function editSetValue(kind, t, v){
   if (kind === 'edge') t.label = String(v).replace(/\n/g, ' ').trim();
   else if (kind === 'group') t.title = String(v).replace(/\n/g, ' ');
   else if (kind === 'nodeDesc') t.desc = v;      // 描述允许换行
+  else if (kind === 'varName') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { name:v }));
+  else if (kind === 'varValue') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { value:v.trim() }));
+  else if (kind === 'opVal') t.opDef = normalizeOpDef(Object.assign({}, t.opDef, { operand:v.trim() }));
   else t.text = v;
 }
 
@@ -62,6 +70,21 @@ function positionEditor(){
     w = tb.w; h = tb.h; fs = FS; lh = 20; padX = 6; padY = 4;
     x = s.x; y = s.y;
     editor.style.textAlign = 'left';
+  } else if (editing.kind === 'varName' || editing.kind === 'varValue'
+             || editing.kind === 'opOp' || editing.kind === 'opVal'){
+    // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
+    const n = byId(editing.id);
+    if (!n){ hideEditor(); return; }
+    let box;
+    if (editing.kind === 'varName') box = varBoxes(n).nameBox;
+    else if (editing.kind === 'varValue') box = varBoxes(n).valBox;
+    else if (editing.kind === 'opOp') box = opBoxes(n).opBox;
+    else box = opBoxes(n).valBox;
+    const s = w2s({ x:box.x, y:box.y });
+    fs = FS; lh = Math.round(FS * 1.32);
+    w = box.w; h = box.h; padX = 4; padY = 4;
+    x = s.x; y = s.y;
+    editor.style.textAlign = 'center';
   } else if (editing.kind === 'nodeDesc'){
     // 图片描述：盖在图片下面那一块上
     const n = byId(editing.id);
@@ -98,7 +121,7 @@ editor.addEventListener('input', () => {
   const t = editTarget(editing.kind, editing.id);
   if (t){
     editSetValue(editing.kind, t, editor.value);
-    if (editing.kind === 'node') sizeAll();
+    if (editing.kind !== 'edge' && editing.kind !== 'group'){ reindex(); sizeAll(); }   // 变量值会影响插值后的文本
   }
   positionEditor();
   mark();

@@ -272,6 +272,12 @@ canvas.addEventListener('dblclick', (ev) => {
   if (n){
     selectOnly(n.id);
     if (isEmbed(n)){ enterEmbed(n); return; }        // 双击嵌入节点 = 进去编辑
+    // 变量 / 运算节点：双击哪个小框就编辑哪个字段
+    const vp = hitVarPart(n, p);
+    if (vp === 'varName' || vp === 'varValue'){ startEdit(vp, n.id); return; }
+    const op = hitOpPart(n, p);
+    if (op === 'opOp'){ cycleOpOperator(n); return; }
+    if (op === 'opVal'){ startEdit('opVal', n.id); return; }
     // 图片节点分三块：点描述改描述，点名称带/图片改名称
     const part = hitImagePart(n, p);
     startEdit(part === 'desc' ? 'nodeDesc' : 'node', n.id);

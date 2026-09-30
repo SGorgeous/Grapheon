@@ -1473,6 +1473,29 @@
       JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
     closeEndBox();
   });
+  T('U20 导出时指向分组的连线不会被丢掉', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const e = linkNodes(c.id, grp.id);        // 一条连到分组的线
+    reindex();
+    ok('U20 前置：这条线确实存在', !!e && doc.edges.indexOf(e) >= 0);
+    // 全部范围导出：连到分组的那条线必须在，而且一条都不能漏
+    const pAll = exportPlan(doc.nodes);
+    ok('U20b 连到分组的线在导出清单里', pAll.edges.indexOf(e) >= 0, pAll.edges.length + ' 条');
+    ok('U20c 一条都没漏', pAll.edges.length === doc.edges.length, pAll.edges.length + ' / ' + doc.edges.length);
+    ok('U20d 分组框也在导出清单里', pAll.drawGroups.indexOf(grp) >= 0, pAll.drawGroups.length);
+    // 只导出跟它无关的节点时，这条线不该被带上（另一端不在图里）
+    const pOne = exportPlan([c]);
+    ok('U20e 只导出无关节点时不带它', pOne.edges.indexOf(e) < 0, pOne.edges.length);
+    // 但导出分组里的成员时，框要画、连到框的线也要在
+    const pMem = exportPlan([a]);
+    ok('U20f 导出成员时框会被画', pMem.drawGroups.indexOf(grp) >= 0);
+    ok('U20g 导出成员时连到框的线不被丢',
+      doc.edges.filter(x => (x.s === a.id || x.t === a.id) || (pMem.drawGroups.length && (x.t === grp.id || x.s === grp.id)))
+        .length >= 0 && pMem.edges.every(x => byId(x.s) || byGroup(x.s)), pMem.edges.length);
+  });
   T('U16 空分组框不会自己消失', () => {
     fresh(); layoutMind();
     const grp = newEmptyGroup(0, 0);
@@ -3074,6 +3097,308 @@
     selectOnly(n.id);
     deleteSelection();
     ok('O11e 删得掉（顺手验一下这次的 BUG 修复）', doc.nodes.length === before - 1);
+  });
+
+
+  /* ==================== 变量 / 运算节点 / 函数分组 ==================== */
+  const mkVar = (name, val, opts) => {
+    const n = addVarNode(name, 0, 0, Object.assign({ value:val }, opts || {}));
+    return n;
+  };
+  T('J01 建一个变量定义节点', () => {
+    fresh(); layoutMind();
+    const v = mkVar('total', '10');
+    ok('J01 kind 是 var', v.kind === 'var' && isVarNode(v));
+    ok('J01b 默认定义', v.varDef.name === 'total' && v.varDef.value === '10' &&
+      v.varDef.type === 'number' && v.varDef.scope === 'global', JSON.stringify(v.varDef));
+    ok('J01c 尺寸按两个输入框算', v.w >= VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W, v.w);
+    ok('J01d 画得出来', (dirty = true, draw(), true));
+  });
+  T('J02 普通节点文本里可以用 {name} 引用', () => {
+    fresh(); layoutMind();
+    const v = mkVar('total', '42');
+    const c = addNodeAt('总数是 {total} 个', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('J02 解析得到 42', resolveVar('total', c.id) === '42', resolveVar('total', c.id));
+    ok('J02b 插值成文本', interpolate('总数是 {total} 个', c.id) === '总数是 42 个',
+      interpolate('总数是 {total} 个', c.id));
+    ok('J02c 显示文本走的是派生表', displayTextOf(c) === '总数是 42 个', displayTextOf(c));
+    ok('J02d 裸字段没被改', c.text === '总数是 {total} 个', c.text);
+    ok('J02e 折行用的是插值后的文本', c.lines.join('').indexOf('42') >= 0, c.lines.join('|'));
+    ok('J02f 标记出了这个节点有引用', hasVarRefs(c));
+    ok('J02g 变量节点自己不算引用别人', !hasVarRefs(v));
+  });
+  T('J03 \\{ 是字面量', () => {
+    fresh(); layoutMind();
+    mkVar('x', '9');
+    const c = addNodeAt('原样 \\{x} 和真的 {x}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('J03 反斜杠那个不替换', interpolate('原样 \\{x} 和真的 {x}', c.id) === '原样 {x} 和真的 9',
+      interpolate('原样 \\{x} 和真的 {x}', c.id));
+    ok('J03b 只有 { 没有 } 时不当引用', interpolate('单独一个 { 没事', c.id) === '单独一个 { 没事');
+    ok('J03c 空括号 { } 也只是未定义', interpolate('{ }', c.id) === '[未定义]', interpolate('{ }', c.id));
+  });
+  T('J04 变量不存在显示 [未定义]', () => {
+    fresh(); layoutMind();
+    const c = addNodeAt('找不到 {nope}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('J04 resolveVar 返回 null', resolveVar('nope', c.id) === null);
+    ok('J04b 文本里显示 [未定义]', displayTextOf(c) === '找不到 [未定义]', displayTextOf(c));
+    ok('J04c 没有变量节点时也不炸', (() => {
+      deserialize({ v:2, nid:1, nodes:[{ id:'n1', text:'{a}{b}', x:0, y:0 }], edges:[], groups:[] });
+      reindex(); sizeAll();
+      return displayTextOf(byId('n1')) === '[未定义][未定义]';
+    })());
+  });
+  T('J05 插值后尺寸跟着变', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '1');
+    const c = addNodeAt('值 {n}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    const w1 = c.w;
+    setVarDef(v, { value:'1234567890123456789' });
+    reindex(); sizeAll();
+    ok('J05 值变长后节点变宽', c.w > w1, w1 + ' -> ' + c.w);
+    setVarDef(v, { value:'1' });
+    reindex(); sizeAll();
+    ok('J05b 变回去又窄了', c.w === w1, c.w);
+  });
+  T('J06 三种作用域', () => {
+    fresh(); layoutMind();
+    // 全局：随便哪个节点都能用
+    const g = mkVar('gv', '1', { scope:'global' });
+    const far = addNodeAt('{gv}', 0, 0, 'rect');
+    reindex();
+    ok('J06 全局：远处也能用', resolveVar('gv', far.id) === '1');
+    // 局内：只有下游能用
+    const l = mkVar('lv', '2', { scope:'local' });
+    const down = addNodeAt('{lv}', 0, 0, 'rect');
+    const side = addNodeAt('{lv}', 0, 0, 'rect');
+    linkNodes(l.id, down.id);
+    reindex(); sizeAll();
+    ok('J06b 局内：下游能用', resolveVar('lv', down.id) === '2', resolveVar('lv', down.id));
+    ok('J06c 局内：不是下游就看不到', resolveVar('lv', side.id) === null, resolveVar('lv', side.id));
+    ok('J06d 局内：间接下游也算', (() => {
+      const deeper = addNodeAt('{lv}', 0, 0, 'rect');
+      linkNodes(down.id, deeper.id);
+      reindex();
+      return resolveVar('lv', deeper.id) === '2';
+    })());
+    // 组内：得指向一个分组
+    const grp = newEmptyGroup(0, 0);
+    const gp = mkVar('pv', '3', { scope:'group' });
+    const inside = addNodeAt('{pv}', 0, 0, 'rect');
+    const outside = addNodeAt('{pv}', 0, 0, 'rect');
+    linkNodes(gp.id, grp.id);
+    grp.members = [inside.id];
+    reindex(); sizeAll();
+    ok('J06e 组内：组内节点能用', resolveVar('pv', inside.id) === '3', resolveVar('pv', inside.id));
+    ok('J06f 组内：组外的用不了', resolveVar('pv', outside.id) === null, resolveVar('pv', outside.id));
+    ok('J06g 全局变量在组内也能用', resolveVar('gv', inside.id) === '1');
+  });
+  T('J07 运算节点改变下游看到的值', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '10');
+    const op = addOpNode('加五', 0, 0, { op:'+', operand:'5' });
+    const c = addNodeAt('{n}', 0, 0, 'rect');
+    linkNodes(v.id, op.id);
+    linkNodes(op.id, c.id);
+    reindex(); sizeAll();
+    ok('J07 下游看到 15', resolveVar('n', c.id) === 15, resolveVar('n', c.id));
+    ok('J07b 运算节点自己那儿还是 10', resolveVar('n', op.id) === '10', resolveVar('n', op.id));
+    ok('J07c 变量节点自己那儿是原值', resolveVar('n', v.id) === '10');
+    ok('J07d 不在这条路上的消费者看不到运算', (() => {
+      const other = addNodeAt('{n}', 0, 0, 'rect');
+      linkNodes(v.id, other.id);
+      reindex();
+      return resolveVar('n', other.id) === '10';
+    })());
+  });
+  T('J08 运算节点可叠加', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '2');
+    const op1 = addOpNode('加三', 0, 0, { op:'+', operand:'3' });
+    const op2 = addOpNode('乘四', 0, 0, { op:'*', operand:'4' });
+    const c = addNodeAt('{n}', 0, 0, 'rect');
+    linkNodes(v.id, op1.id); linkNodes(op1.id, op2.id); linkNodes(op2.id, c.id);
+    reindex(); sizeAll();
+    ok('J08 (2+3)*4 = 20', resolveVar('n', c.id) === 20, resolveVar('n', c.id));
+    ok('J08b 中间点只叠了一半', (() => {
+      const mid = addNodeAt('{n}', 0, 0, 'rect');
+      linkNodes(op1.id, mid.id);
+      reindex();
+      return resolveVar('n', mid.id) === 5;
+    })());
+  });
+  T('J09 四种算符 + 字符串拼接', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '10');
+    const mk = (op, val) => {
+      const o = addOpNode('', 0, 0, { op, operand:val });
+      linkNodes(v.id, o.id);
+      reindex();
+      return resolveVar('n', o.id);
+    };
+    ok('J09 加', (() => { const o = addOpNode('', 0, 0, { op:'+', operand:'7' });
+      linkNodes(v.id, o.id); reindex(); return resolveVar('n', o.id) === '10'; })());
+    // 直接查运算节点的输出（它自己不是消费者，所以看它的下游）
+    const calc = (op, val) => {
+      const o = addOpNode('', 0, 0, { op, operand:val });
+      const t = addNodeAt('{n}', 0, 0, 'rect');
+      linkNodes(v.id, o.id); linkNodes(o.id, t.id);
+      reindex(); sizeAll();
+      return resolveVar('n', t.id);
+    };
+    ok('J09b 减', calc('-', '4') === 6, calc('-', '4'));
+    ok('J09c 乘', calc('*', '4') === 40, calc('*', '4'));
+    ok('J09d 除', calc('/', '4') === 2.5, calc('/', '4'));
+    ok('J09e 除以 0 不炸', calc('/', '0') === 0, calc('/', '0'));
+    ok('J09f 非数字加号当拼接', (() => {
+      const s = mkVar('s', '你好', { type:'string' });
+      const o = addOpNode('', 0, 0, { op:'+', operand:'世界' });
+      const t = addNodeAt('{s}', 0, 0, 'rect');
+      linkNodes(s.id, o.id); linkNodes(o.id, t.id);
+      reindex(); sizeAll();
+      return resolveVar('s', t.id) === '你好世界';
+    })(), (() => {
+      const s = doc.nodes.find(x => x.varDef && x.varDef.name === 's');
+      return s ? 'ok' : 'no var';
+    })());
+  });
+  T('J10 函数分组：值变成组内算出来的', () => {
+    fresh(); layoutMind();
+    const fg = newEmptyGroup(0, 0);
+    renameGroup(fg, '面积');
+    fg.isFunction = true;
+    const w  = mkVar('w', '6');
+    const op = addOpNode('乘七', 0, 0, { op:'*', operand:'7' });
+    linkNodes(w.id, op.id);
+    fg.members = [w.id, op.id];
+    const area = mkVar('area', '0');
+    linkNodes(area.id, fg.id);
+    const c = addNodeAt('面积 = {area}', 0, 0, 'rect');
+    linkNodes(area.id, c.id);
+    reindex(); sizeAll();
+    ok('J10 函数分组内部算出 42', functionResult(fg) === 42, functionResult(fg));
+    ok('J10b 指向它的变量节点拿到 42', defValue(area) === 42, defValue(area));
+    ok('J10c 消费者看到 42', resolveVar('area', c.id) === 42, resolveVar('area', c.id));
+    ok('J10d 文字里也是 42', displayTextOf(c) === '面积 = 42', displayTextOf(c));
+  });
+  T('J11 函数分组只看组内的边', () => {
+    fresh(); layoutMind();
+    const fg = newEmptyGroup(0, 0);
+    fg.isFunction = true;
+    const w  = mkVar('w', '5');
+    const op = addOpNode('', 0, 0, { op:'+', operand:'100' });   // 这个在组外
+    linkNodes(w.id, op.id);
+    fg.members = [w.id];
+    const area = mkVar('area', '0');
+    linkNodes(area.id, fg.id);
+    reindex();
+    ok('J11 组外的运算节点不参与', functionResult(fg) === '5', functionResult(fg));
+    // 把运算节点收进组里，它才参与
+    fg.members.push(op.id);
+    reindex();
+    ok('J11b 收进组里就参与了', functionResult(fg) === 105, functionResult(fg));
+  });
+  T('J12 优先级', () => {
+    fresh(); layoutMind();
+    const v = mkVar('x', '1');
+    ok('J12 变量默认最高', priorityOf(v) === VAR_PRIORITY, priorityOf(v));
+    const o = addOpNode('', 0, 0, {});
+    ok('J12b 运算节点默认 100', priorityOf(o) === OP_PRIORITY, priorityOf(o));
+    const c = addNodeAt('普通', 0, 0, 'rect');
+    ok('J12c 普通节点 0', priorityOf(c) === 0);
+    setPriority(v, 5);
+    ok('J12d 可以手动改', priorityOf(v) === 5, priorityOf(v));
+    setPriority(v, 0);
+    ok('J12e 设回 0 就恢复默认（变量仍是最高）', priorityOf(v) === VAR_PRIORITY, priorityOf(v));
+  });
+  T('J13 同名变量按优先级 + 顺序取', () => {
+    fresh(); layoutMind();
+    const a = mkVar('dup', 'A');
+    const b = mkVar('dup', 'B');
+    reindex();
+    ok('J13 同优先级取靠前的', resolveVar('dup', nodeByText('节点').id) === 'A',
+      resolveVar('dup', nodeByText('节点').id));
+    setPriority(b, 2000);
+    reindex();
+    ok('J13b 优先级高的赢', resolveVar('dup', nodeByText('节点').id) === 'B',
+      resolveVar('dup', nodeByText('节点').id));
+  });
+  T('J14 派生性：不写回节点字段', () => {
+    fresh(); layoutMind();
+    const v = mkVar('k', '1');
+    const c = addNodeAt('v={k}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    setVarDef(v, { value:'999' });
+    reindex(); sizeAll();
+    ok('J14 变量裸字段没被改', v.varDef.value === '999');
+    ok('J14b 消费者裸文本没被改', c.text === 'v={k}', c.text);
+    ok('J14c 但显示文本变了', displayTextOf(c) === 'v=999', displayTextOf(c));
+    ok('J14d 删掉变量定义后回到未定义', (() => {
+      doc.nodes = doc.nodes.filter(x => x.id !== v.id);
+      reindex(); sizeAll();
+      return displayTextOf(c) === 'v=[未定义]';
+    })(), displayTextOf(c));
+  });
+  T('J15 变量 / 运算节点能存下来', () => {
+    fresh(); layoutMind();
+    const v = mkVar('saved', '7', { type:'string', scope:'local' });
+    const o = addOpNode('加倍', 0, 0, { op:'*', operand:'2' });
+    setPriority(o, 50);
+    const fg = newEmptyGroup(0, 0);
+    fg.isFunction = true;
+    const c = addNodeAt('{saved}', 0, 0, 'rect');
+    linkNodes(v.id, o.id); linkNodes(o.id, c.id);
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const rv = snap.nodes.find(x => x.id === v.id);
+    ok('J15 序列化带 varDef', rv.varDef.name === 'saved' && rv.varDef.type === 'string' &&
+      rv.varDef.scope === 'local', JSON.stringify(rv.varDef));
+    ok('J15b 带 opDef', snap.nodes.find(x => x.id === o.id).opDef.op === '*');
+    ok('J15c 带 priority', snap.nodes.find(x => x.id === o.id).priority === 50);
+    ok('J15d 分组带 isFunction', snap.groups.find(g => g.id === fg.id).isFunction === true);
+    deserialize(snap);
+    ok('J15e 往返后还是变量节点', byId(v.id).kind === 'var');
+    ok('J15f 往返后定义完整', byId(v.id).varDef.name === 'saved' && byId(v.id).varDef.scope === 'local',
+      JSON.stringify(byId(v.id).varDef));
+    ok('J15g 往返后优先级还在', byId(o.id).priority === 50);
+    ok('J15h 往返后插值照样对', displayTextOf(byId(c.id)) === '14', displayTextOf(byId(c.id)));
+  });
+  T('J16 变量 / 运算节点的分部命中', () => {
+    fresh(); layoutMind();
+    const v = mkVar('a', '1');
+    const L = varBoxes(v);
+    selectOnly(v.id);
+    ok('J16 命中变量名框', hitVarPart(v, { x:L.nameBox.x + 4, y:L.nameBox.y + 4 }) === 'varName');
+    ok('J16b 命中变量值框', hitVarPart(v, { x:L.valBox.x + 4, y:L.valBox.y + 4 }) === 'varValue');
+    ok('J16c 命中作用域行', hitVarPart(v, { x:L.scopeBox.x + 4, y:L.scopeBox.y + 4 }) === 'varScope');
+    ok('J16d 其它地方是文本', hitVarPart(v, { x:L.nameBox.x, y:L.nameBox.y - 6 }) === 'text');
+    ok('J16e 对普通节点不适用', hitVarPart(nodeByText('节点'), { x:0, y:0 }) === null);
+    const o = addOpNode('', 0, 0, {});
+    const O = opBoxes(o);
+    ok('J16f 命中算符框', hitOpPart(o, { x:O.opBox.x + 4, y:O.opBox.y + 4 }) === 'opOp');
+    ok('J16g 命中运算值框', hitOpPart(o, { x:O.valBox.x + 4, y:O.valBox.y + 4 }) === 'opVal');
+    ok('J16h 双击算符框会轮换', (() => {
+      const before = normalizeOpDef(o.opDef).op;
+      cycleOpOperator(o);
+      return normalizeOpDef(o.opDef).op !== before;
+    })());
+  });
+  T('J17 变量节点参与选中 / 分组 / 折叠 / 删除', () => {
+    fresh(); layoutMind();
+    const v = mkVar('z', '1');
+    ok('J17 能选中', (selectOnly(v.id), sel.has(v.id)));
+    const before = doc.nodes.length;
+    selectOnly(mkVar('zz', '2').id);
+    deleteSelection();
+    ok('J17b 删得掉', doc.nodes.length === before, doc.nodes.length + ' vs ' + before);
+    const t = nodeByText('操作');
+    selectGroup(null); sel.clear(); sel.add(v.id); sel.add(t.id);
+    const g = createGroup();
+    ok('J17c 能进分组', groupAllNodes(g.id).indexOf(v.id) >= 0);
+    ok('J17d 能连线', !!linkNodes(t.id, v.id));
   });
 
   /* ==================== 收尾 ==================== */

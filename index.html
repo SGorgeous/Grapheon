@@ -93,6 +93,32 @@
 <div id="nodebox" class="ud">
   <h2>* 节点样式</h2>
   <div class="sub" id="nbSub"></div>
+  <div id="nbVarSec" class="progsec">
+    <div class="row">
+      <span class="lab">作用域</span>
+      <div id="nbVarScope" class="opts"></div>
+    </div>
+    <div class="row">
+      <span class="lab">值类型</span>
+      <div id="nbVarType" class="opts"></div>
+    </div>
+    <div class="hr2"></div>
+  </div>
+  <div id="nbOprSec" class="progsec">
+    <div class="row">
+      <span class="lab">运算符</span>
+      <div id="nbOprKind" class="opts"></div>
+    </div>
+    <div class="row">
+      <span class="lab">值类型</span>
+      <div id="nbOprType" class="opts"></div>
+    </div>
+    <div class="hr2"></div>
+  </div>
+  <div class="row">
+    <span class="lab">优先级</span>
+    <div id="nbPrio" class="opts"></div>
+  </div>
   <div id="nbProg" class="progsec">
     <div class="row">
       <span class="lab">作用</span>
@@ -187,6 +213,15 @@
     <tr><td>Shift + 拖拽空白</td><td>框选</td></tr>
     <tr><td>双击空白</td><td>新建一个自由节点</td></tr>
     <tr><td>Esc</td><td>取消选择 / 关闭浮层</td></tr>
+    <tr><td class="sec" colspan="2">— 变量系统 —</td></tr>
+    <tr><td>右键「新建 ▶ 变量定义节点」</td><td>双击左框改变量名，右框改变量值；作用域 / 值类型在面板里选</td></tr>
+    <tr><td>别的节点文本里写 {name}</td><td>会显示变量值；变量不存在显示 [未定义]</td></tr>
+    <tr><td>想打出字面的 {name}</td><td>前面加反斜杠：\{name}</td></tr>
+    <tr><td>作用域：全局 / 局内 / 组内</td><td>局内只有下游能用；组内要先把这个变量连到一个分组</td></tr>
+    <tr><td>右键「新建 ▶ 运算节点」</td><td>双击算符框轮换 + - * /，双击右框改运算值；可叠加</td></tr>
+    <tr><td>把变量节点连到运算节点</td><td>下游看到的就是运算后的值</td></tr>
+    <tr><td>右键分组 →「设为函数分组」</td><td>指向它的变量节点，值变成组内算出来的值（只看组内的边）</td></tr>
+    <tr><td>右键节点 →「优先级」</td><td>变量定义默认最高 1000；程序节点可手动调</td></tr>
     <tr><td class="sec" colspan="2">— 程序化节点 —</td></tr>
     <tr><td>右键空白处 →「新建 ▶ 程序节点」</td><td>建一个程序节点（双线外框 + 左边 ▶）</td></tr>
     <tr><td>右键任意节点 →「转成程序节点」</td><td>把普通节点变成程序节点，或转回来</td></tr>
@@ -263,6 +298,7 @@
 <script src="src/core/theme.js"></script>
 <script src="src/view/stage.js"></script>
 <script src="src/core/text.js"></script>
+<script src="src/core/vars.js"></script>
 <script src="src/core/state.js"></script>
 <script src="src/core/history.js"></script>
 <script src="src/core/layout.js"></script>

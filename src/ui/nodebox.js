@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/nodebox.js
    节点面板：程序算符（程序节点才有）+ 外观（字号 / 字体 / 字色 / 外框色 / 尺寸）。
@@ -24,6 +24,17 @@ const nbColorEl  = document.getElementById('nbColor');
 const nbBorderEl = document.getElementById('nbBorder');
 const nbSizeEl   = document.getElementById('nbSize');
 const nbProgBtn  = document.getElementById('nbProgToggle');
+const nbVarSecEl = document.getElementById('nbVarSec');
+const nbVarScopeEl = document.getElementById('nbVarScope');
+const nbVarTypeEl  = document.getElementById('nbVarType');
+const nbOprSecEl   = document.getElementById('nbOprSec');
+const nbOprKindEl  = document.getElementById('nbOprKind');
+const nbOprTypeEl  = document.getElementById('nbOprType');
+const nbPrioEl     = document.getElementById('nbPrio');
+const SCOPE_OPTS = VAR_SCOPES.map(s => [s, VAR_SCOPE_LABEL[s]]);
+const VTYPE_OPTS = VAR_TYPES.map(x => [x, VAR_TYPE_LABEL[x]]);
+const OPR_OPTS   = OP_KINDS.map(x => [x, x]);
+const PRIO_OPTS  = [[1000, '最高 1000'], [100, '100'], [10, '10'], [0, '默认']];
 let nbNodeId = null;
 
 const FS_OPTS    = NODE_FS_CHOICES.map(v => [v, NODE_FS_LABEL(v)]);
@@ -60,6 +71,33 @@ function renderNodeBox(){
     n.w + ' × ' + n.h + (n.fixedW || n.fixedH ? '（手动尺寸）' : '（随文字自适应）');
   nbProgBtn.textContent = prog ? '转回普通节点' : '转成程序节点';
 
+  // ---- 变量定义 ----
+  const isVar = n.kind === 'var', isOpr = n.kind === 'op';
+  nbVarSecEl.style.display = isVar ? 'block' : 'none';
+  nbOprSecEl.style.display = isOpr ? 'block' : 'none';
+  if (isVar){
+    const v = normalizeVarDef(n.varDef);
+    nbSubEl.textContent = '变量定义「' + v.name + '」 · 别的节点文本里用 {' + v.name + '} 引用';
+    buildOpts(nbVarScopeEl, SCOPE_OPTS, v.scope, (x) => {
+      setVarDef(n, { scope:x }); afterNodeEdit();
+      say('* 作用域：' + VAR_SCOPE_LABEL[x] + '（' + (x === 'global' ? '哪儿都能用'
+        : x === 'local' ? '只有它的下游能用' : '把它连到一个分组，组内才能用') + '）');
+    });
+    buildOpts(nbVarTypeEl, VTYPE_OPTS, v.type, (x) => { setVarDef(n, { type:x }); afterNodeEdit(); });
+  }
+  if (isOpr){
+    const od = normalizeOpDef(n.opDef);
+    nbSubEl.textContent = '运算节点 · 作用在从它上游流下来的变量值上';
+    buildOpts(nbOprKindEl, OPR_OPTS, od.op, (x) => { setOpDef(n, { op:x }); afterNodeEdit(); });
+    buildOpts(nbOprTypeEl, VTYPE_OPTS, od.type, (x) => { setOpDef(n, { type:x }); afterNodeEdit(); });
+  }
+  // ---- 优先级（变量默认最高） ----
+  const prio = priorityOf(n);
+  nbPrioEl.parentElement.style.display = (isVar || isOpr || prog) ? 'flex' : 'none';
+  const shown = (isVar && !n.priority) ? '最高 1000' : (isOpr && !n.priority) ? '100' : String(prio);
+  buildOpts(nbPrioEl, PRIO_OPTS, (n.priority == null ? (isVar ? 1000 : isOpr ? 100 : 0) : n.priority),
+    (x) => { setPriority(n, x); afterNodeEdit(); });
+  nbPrioEl.title = '当前 ' + shown;
   // ---- 程序算符 ----
   nbProgEl.style.display = prog ? 'block' : 'none';
   if (prog) renderProgRows(n);

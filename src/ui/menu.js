@@ -135,6 +135,8 @@ function showCtx(x, y, n, e, info){
     }
     items.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
     items.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '', () => toggleProgramNode(n)]);
+    items.push(['优先级：' + priorityOf(n), '▶', null, [10, 100, 1000, 0].map(v =>
+      [(priorityOf(n) === v ? '● ' : '   ') + (v === 0 ? '默认' : v), '', () => setPriority(n, v)])]);
     items.push('hr');
     items.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
@@ -164,6 +166,7 @@ function showCtx(x, y, n, e, info){
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
       grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');
     })]);
+    items.push([grp.isFunction ? '取消函数分组' : '设为函数分组', '', () => toggleFunctionGroup(grp)]);
     items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Space', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
     items.push('hr');
@@ -202,6 +205,18 @@ function showCtx(x, y, n, e, info){
       ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
       ['图片…', '也可以直接拖进来', () => pickImageFile(s2w(x, y))],
       ['嵌入 Grapheon…', '整份文档当一个节点', () => pickEmbedFile(s2w(x, y))],
+      ['变量定义节点', '{name} 可引用', () => {
+        const p = s2w(x, y);
+        const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 建了一个变量定义节点。双击左边的框改名，右边的框改值；别的节点文本里用 {名字} 引用它。');
+      }],
+      ['运算节点', '给变量加运算', () => {
+        const p = s2w(x, y);
+        const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 建了一个运算节点。双击算符框切换 + - * /，双击右边的框改运算值。');
+      }]
       ['程序节点', '会改变目标', () => {
         const p = s2w(x, y);
         const nn = createProgramNode(p.x - 70, p.y - 24);

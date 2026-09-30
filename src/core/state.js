@@ -443,6 +443,7 @@ function refreshEffects(){
     bonus = next;
     if (same) break;
   }
+  refreshVarText();          // 文本里的 {变量} 也要算一遍（和算符一样是派生的）
   // 失效的缓存扔掉
   if (!idx.box) idx.box = new Map();
   for (const id of [...idx.box.keys()]) if (!idx.byId.has(id)) idx.box.delete(id);
@@ -535,6 +536,9 @@ function serialize(){
       image:(n.kind === 'image' && typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
+      varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
+      opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
+      priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null })),
     edges: doc.edges.map(e => ({
@@ -545,7 +549,7 @@ function serialize(){
     })),
     groups: (doc.groups || []).map(g => ({
       id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null,
-      collapsed:!!g.collapsed,
+      collapsed:!!g.collapsed, isFunction:!!g.isFunction,
       x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
     }))
   };
@@ -572,6 +576,9 @@ function deserialize(d){
       image:(typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
+      varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
+      opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
+      priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null });
   }
@@ -594,7 +601,7 @@ function deserialize(d){
     doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
       members:(g.members || []).slice(), color:g.color || null,
       x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
-      collapsed:!!g.collapsed });
+      collapsed:!!g.collapsed, isFunction:!!g.isFunction });
   }
   sel.clear(); selEdgeId = null; selGroups.clear(); editing = null; hideEditor();
   reindex(); sizeAll();

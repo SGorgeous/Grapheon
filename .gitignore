@@ -5,3 +5,6 @@
 _dl/
 _*/
 .*.html
+.structure-profile/
+.structure-diagram.html
+.shot-profile/

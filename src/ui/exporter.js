@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/exporter.js
    导出面板：范围选择、标题与文件名、PNG 输出。
@@ -56,11 +56,17 @@ function exportScopes(){
   };
 }
 const currentExportSet = () => exportScopes()[expScope].nodes;
-function exportGeometry(nodes){
+function exportGeometry(nodes, groups){
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of nodes){
     minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
     maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+  }
+  // 分组框一般比成员大一圈（内边距 + 标题带），不算进来会被裁掉
+  for (const grp of (groups || [])){
+    const r = groupBox(grp);
+    minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
   }
   return { minX, minY, w:Math.max(1, maxX - minX), h:Math.max(1, maxY - minY) };
 }
@@ -106,10 +112,12 @@ function updateExportInfo(){
     W + ' × ' + H + ' 像素' + (title ? ' · 左上角标题「' + title + '」' : '');
 }
 function buildExportCanvas(nodesIn, titleIn){
-  const nodes = (nodesIn && nodesIn.length) ? nodesIn : doc.nodes;
-  const ids = new Set(nodes.map(n => n.id));
-  const edges = doc.edges.filter(e => ids.has(e.s) && ids.has(e.t));
-  const bb = exportGeometry(nodes);
+  // 走 exportPlan：它会保留「至少一端是分组」的边。
+  // 以前这里自己算了一遍 ids.has(e.s) && ids.has(e.t)，把指向分组的线全滤掉了。
+  const plan = exportPlan(nodesIn);
+  const nodes = plan.nodes;
+  const edges = plan.edges;
+  const bb = exportGeometry(nodes, plan.drawGroups);
   const W = Math.ceil((bb.w + EXP_PAD * 2) * EXP_SCALE);
   const H = Math.ceil((bb.h + EXP_PAD * 2) * EXP_SCALE);
   const title = sanitizeTitle(titleIn != null ? titleIn : (expTitleEl ? expTitleEl.value : ''));
@@ -139,20 +147,27 @@ function buildExportCanvas(nodesIn, titleIn){
   g.fillText(new Date().toLocaleDateString(), W - 56, H - 54);
   return c;
 }
+/* 导出时到底画哪些分组框、哪些连线。
+   端点只要「会被画出来」这条边就留着 —— 以前只认节点集合，
+   结果**指向分组的连线被整条丢掉**：框画了，连到框上的线却没了。 */
+function exportPlan(nodes){
+  const list = nodes || doc.nodes;
+  const inSet = new Set(list.map(n => n.id));
+  const drawGroups = (idx.groupOrder || doc.groups || [])
+    .filter(grp => !isHidden(grp.id) && groupAllNodes(grp.id).some(id => inSet.has(id)));
+  const gset = new Set(drawGroups.map(grp => grp.id));
+  const drawable = (id) => inSet.has(id) || gset.has(id);
+  return { nodes:list, drawGroups, edges:doc.edges.filter(e => drawable(e.s) && drawable(e.t)) };
+}
 function drawGraphForExport(g, nodes, edges){
-  nodes = nodes || doc.nodes;
-  if (!edges){ const ids = new Set(nodes.map(n => n.id)); edges = doc.edges.filter(e => ids.has(e.s) && ids.has(e.t)); }
+  const plan = exportPlan(nodes);
+  nodes = plan.nodes;
+  if (!edges) edges = plan.edges;
   const savedHover = hover, savedEdge = hoverEdge, savedSel = sel, savedSelEdge = selEdgeId;
   const savedGrp = selGroups, savedHoverGrp = hoverGrp;
   hover = null; hoverEdge = null; sel = new Set(); selEdgeId = null;   // 导出图里不要选中态和手柄
   selGroups = new Set(); hoverGrp = null;
-  // 分组框也要画：范围里有它的成员就画出来（所见即所得）
-  const inSet = new Set(nodes.map(n => n.id));
-  for (const grp of (idx.groupOrder || doc.groups || [])){
-    if (isHidden(grp.id)) continue;
-    if (!groupAllNodes(grp.id).some(id => inSet.has(id))) continue;
-    drawGroup(g, grp);
-  }
+  for (const grp of plan.drawGroups) drawGroup(g, grp);
   for (const e of edges) drawEdge(g, e);
   for (const n of nodes) drawNode(g, n);
   hover = savedHover; hoverEdge = savedEdge; sel = savedSel; selEdgeId = savedSelEdge;

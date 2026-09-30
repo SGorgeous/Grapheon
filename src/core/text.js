@@ -70,14 +70,42 @@ function sizeEmbedNode(n){
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
 }
+/* 变量定义节点：左上角描述 + 中间两个输入框 + 作用域一行 */
+function sizeVarNode(n){
+  setFont(mctx, FS, 'normal', FONT);
+  const desc = displayTextOf(n);
+  const inner = VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W;
+  let w = Math.max(MINW, inner);
+  if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
+  n.w = Math.round(w);
+  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  n.h = Math.round(8 + n.lines.length * n.lh + VAR_BOX_H + 8 + VAR_SCOPE_H + 10);
+}
+/* 运算节点：左上角描述 + 中间「算符 运算值」 */
+function sizeOpNode(n){
+  setFont(mctx, FS, 'normal', FONT);
+  const desc = displayTextOf(n);
+  const inner = VAR_PAD * 2 + OP_OP_W + 10 + OP_VAL_W;
+  let w = Math.max(MINW, inner);
+  if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
+  n.w = Math.round(w);
+  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  n.h = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
+}
 function sizeNode(n){
   if (n.kind === 'image'){ sizeImageNode(n); return; }
   if (n.kind === 'embed'){ sizeEmbedNode(n); return; }
+  if (n.kind === 'var'){ sizeVarNode(n); return; }
+  if (n.kind === 'op'){ sizeOpNode(n); return; }
   const size = nodeFontSize(n);
   const family = nodeFontFamily(n);
   const weight = 'normal';   // Unifont 无粗体；统一不用合成粗体
   setFont(mctx, size, weight, family);
-  const raw = String(n.text == null ? '' : n.text);
+  const raw = displayTextOf(n);      // 用插值之后的文本量宽：{x} 会变成真值
   let natural = 0;
   for (const p of raw.split('\n')) natural = Math.max(natural, mctx.measureText(p).width);
 
