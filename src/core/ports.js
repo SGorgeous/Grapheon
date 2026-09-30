@@ -33,8 +33,10 @@ const PORT_LABEL_GAP = 10;
    普通节点 / 图片 / 表格 / 嵌入 都不画端点 ——
    它们靠边上的锚点连线就行，摆一堆小方块反而糊。
    （分组另有一套四向锚点，不走这里。） */
-const PORTED_KINDS = ['var', 'broadcast', 'op', 'out', 'program'];
-const hasPorts = (n) => !!n && PORTED_KINDS.indexOf(n.kind) >= 0;
+/* 「这个节点有没有端点」。以前是按节点种类白名单（非程序节点不画端点），
+   现在普通节点也有四个**连接端点**了 —— 所以改成按实际端点表判断，
+   连接端点自然也画得出来、拖得动。 */
+const hasPorts = (n) => !!n && nodePorts(n).length > 0;
 
 /* 默认端点：左右进出、上下备用，位置都在那条边的正中。
    普通变量 / 输出 / 控件节点只要一个出口；运算符以后要两个入口。 */
@@ -392,9 +394,6 @@ function editPort(n, dir, id){
 /* 端点小圆点。标签只在**悬停或选中**时画 —— 平时画会糊成一片。 */
 function drawPorts(g, n, showLabel){
   if (!n) return;
-  /* 只有「有明确输入输出」的程序节点才画端点。
-     普通 / 图片 / 表格节点不画 —— 但它们的端点模型还在，
-     所以照样能从边上拉线、线也照样接得上去。 */
   if (!hasPorts(n)) return;
   const L = portList(n);
   const hl = (typeof hoverPort !== 'undefined' && hoverPort && hoverPort.node === n) ? hoverPort : null;
@@ -403,24 +402,39 @@ function drawPorts(g, n, showLabel){
     for (const p of (L[dir] || [])){
       const pt = portPoint(n, p);
       const on = hl && hl.port && hl.port.id === p.id;
+      const isConn = (dir === 'conns');
       const r = on ? PORT_DOT_R * 1.5 : PORT_DOT_R;
       g.beginPath();
       g.arc(pt.x, pt.y, r, 0, Math.PI * 2);
-      g.fillStyle = on ? C.yellow : (dir === 'ins' ? C.gray : C.yellow);
-      g.fill();
-      g.lineWidth = 2;
-      g.strokeStyle = C.bg;
-      g.stroke();
+      if (isConn){
+        /* ★ 连接端点画成**空心环** —— 它没有输入输出语义（不参与求值），
+           实心圆是「数据从这儿进/出」，空心环是「这儿只是个接线头」。
+           一眼就能分开，不用去看标签。 */
+        g.fillStyle = C.bg;
+        g.fill();
+        g.lineWidth = 2.5;
+        g.strokeStyle = on ? C.yellow : (C.conn || C.gray);
+        g.stroke();
+      } else {
+        g.fillStyle = on ? C.yellow : (dir === 'ins' ? C.gray : C.yellow);
+        g.fill();
+        g.lineWidth = 2;
+        g.strokeStyle = C.bg;
+        g.stroke();
+      }
       if (showLabel){
         // 拖拽把手：端点旁边一个实心方块。用户看到的就是能拖的那个东西。
         const hb = portHandleBox(n, p);
-        g.fillStyle = on ? C.yellow : (dir === 'ins' ? C.gray : C.yellow);
+        g.fillStyle = on ? C.yellow : (isConn ? (C.conn || C.gray)
+                                              : (dir === 'ins' ? C.gray : C.yellow));
         g.globalAlpha = on ? 1 : 0.75;
         g.fillRect(hb.x, hb.y, hb.w, hb.h);
         g.globalAlpha = 1;
         g.lineWidth = 2;
         g.strokeStyle = C.bg;
         g.strokeRect(hb.x, hb.y, hb.w, hb.h);
+        // 连接端点不写 #id 也不写标签 —— 它「只有连接的功能，没有任何其他功能」
+        if (isConn){ continue; }
         // 标签再往外一点
         const lp = portLabelPoint(n, p);
         const txt = p.label || ('#' + p.id);

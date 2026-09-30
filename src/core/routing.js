@@ -7,24 +7,71 @@
 /* =========================================================================
    几何：连线
    ========================================================================= */
-function anchorsFor(n){
-  const A = {
-    r:{ x:n.x + n.w,     y:n.y + n.h / 2, d:[1, 0] },
-    l:{ x:n.x,           y:n.y + n.h / 2, d:[-1, 0] },
-    t:{ x:n.x + n.w / 2, y:n.y,           d:[0, -1] },
-    b:{ x:n.x + n.w / 2, y:n.y + n.h,     d:[0, 1] }
+/* 一个盒子的四向锚点。**只给分组用** —— 分组没有端点表。
+   节点不再走这条路：节点的锚点一律来自它的**真实端点**（见下）。 */
+function boxAnchors(b){
+  return {
+    r:{ x:b.x + b.w,     y:b.y + b.h / 2, d:[1, 0] },
+    l:{ x:b.x,           y:b.y + b.h / 2, d:[-1, 0] },
+    t:{ x:b.x + b.w / 2, y:b.y,           d:[0, -1] },
+    b:{ x:b.x + b.w / 2, y:b.y + b.h,     d:[0, 1] }
   };
+}
+/* 四条边的中点。**只作为「该边上没有端点时」的度量参照**，不会当成落点用。 */
+function sideMidOf(b, s){
+  if (s === 'r') return { x:b.x + b.w, y:b.y + b.h / 2 };
+  if (s === 'l') return { x:b.x,       y:b.y + b.h / 2 };
+  if (s === 't') return { x:b.x + b.w / 2, y:b.y };
+  return              { x:b.x + b.w / 2, y:b.y + b.h };
+}
+function anchorsFor(x){
+  if (!x) return boxAnchors({ x:0, y:0, w:0, h:0 });
   /* ★ 钉死在某个端点上：四个槽全换成那个点。
      这样不管后面是自动挑边、还是 aSide/bSide 指定了哪条边，
      出来的都是同一个端点的真实位置。
      光靠「哪条边」表达不了同一条边上的两个端点 —— 必须靠端点 id。 */
-  if (n && n.__forced){
-    const dd = n.__forced.d;
-    const f = { x:n.__forced.x, y:n.__forced.y,
+  if (x.__forced){
+    const dd = x.__forced.d;
+    const f = { x:x.__forced.x, y:x.__forced.y,
                 d:(Array.isArray(dd) && isFinite(dd[0]) && isFinite(dd[1])) ? dd : [1, 0] };
     return { r:f, l:f, t:f, b:f };
   }
-  return A;
+  /* 传进来的是**节点**（不是走线内部的盒子副本）→ 锚点从它的端点表推。
+     分组没有端点表，走下面的 boxAnchors。 */
+  const n = (typeof byId === 'function' && x.id != null) ? byId(x.id) : null;
+  const isNode = !!n && n === x;
+  if (isNode && typeof portList === 'function'){
+    const L = portList(n);
+    const A = {};
+    for (const dir of PORT_DIRS){
+      for (const p of (L[dir] || [])){
+        if (A[p.side]) continue;                       // 同边多个端点取第一个，具体靠 aPort 钉
+        const pt = portPoint(n, p);
+        const o = PORT_OUT[p.side] || PORT_OUT.r;
+        A[p.side] = { x:pt.x, y:pt.y, d:[o.x, o.y], id:p.id };
+      }
+    }
+    /* 那条边上没有端点的：退到**离它最近的真实端点** ——
+       仍然是真实端点，绝不虚构位置。程序节点只有左右两个端点时，
+       上下的锚点就落在左右那两个上，这正是「不许凭空造点」的意思。 */
+    const all = nodePorts(n);
+    if (all.length){
+      for (const s of PORT_SIDES){
+        if (A[s]) continue;
+        const mid = sideMidOf(n, s);
+        let best = null, bd = Infinity, bs = 'r';
+        for (const p of all){
+          const pt = portPoint(n, p);
+          const d = Math.hypot(pt.x - mid.x, pt.y - mid.y);
+          if (d < bd){ bd = d; best = pt; bs = p.side; }
+        }
+        const o = PORT_OUT[bs] || PORT_OUT.r;
+        A[s] = { x:best.x, y:best.y, d:[o.x, o.y] };
+      }
+    }
+    return A;
+  }
+  return boxAnchors(x);
 }
 /* ka / kb 是「钉死」的端点边（'r'|'l'|'t'|'b'），传 null 表示按相对位置自动挑 —— 默认就是自动。 */
 function bezierGeom(a, b, ka, kb){

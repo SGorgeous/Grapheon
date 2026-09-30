@@ -16,15 +16,36 @@ function addNodeAt(text, x, y, shape){
 }
 /* aPort / bPort 是端点 id：给了就把这条边钉死在那个端点上。
    不给就照旧按方向自动挑 —— 老调用点一行都不用改。 */
+/* 自动挑一个**真实端点**：优先数据端点（输出/输入），没有就用连接端点。
+   方向按「朝着对方」选。全部改为端点模型之后，不能再有「无端点的边」，
+   所以挑完必须钉下来 —— 不然 aPort/bPort 一直是 null，只能靠运行时再猜一次。 */
+function autoPickPort(n, end, otherBox){
+  const L = portList(n);
+  const dataFirst = (end === 'a') ? L.outs : L.ins;
+  const fallback  = (end === 'a') ? L.conns : L.conns;
+  const other     = (end === 'a') ? L.ins : L.outs;
+  const list = (dataFirst && dataFirst.length) ? dataFirst
+             : (fallback && fallback.length) ? fallback
+             : (other || []);
+  if (!list.length) return null;
+  const b = nodeBox(n);
+  const dx = (otherBox.x + otherBox.w / 2) - (b.x + b.w / 2);
+  const dy = (otherBox.y + otherBox.h / 2) - (b.y + b.h / 2);
+  const want = (Math.abs(dx) >= Math.abs(dy)) ? (dx >= 0 ? 'r' : 'l') : (dy >= 0 ? 'b' : 't');
+  return list.filter(p => p.side === want)[0] || list[0];
+}
 function linkNodes(s, t, aPort, bPort){
   // ⚠ 每一条拒绝都要有话说 —— 静默失败会让人以为是「拉不动」
   if (s === t){ say('* 不能连到自己身上。'); return null; }
   if (isEmbed(byId(s)) || isEmbed(byId(t))){ say('* 嵌入节点是封闭的，连不了线。'); return null; }
   if (doc.edges.some(e => e.s === s && e.t === t)){ say('* 这两个之间已经有连线了。'); return null; }
   const e = makeEdge(s, t);
-  if (aPort != null) e.aPort = Math.round(+aPort) || null;
-  if (bPort != null) e.bPort = Math.round(+bPort) || null;
   doc.edges.push(e);
+  const A = byId(s), B = byId(t);
+  if (aPort != null) e.aPort = Math.round(+aPort) || null;
+  else if (A && B){ const p = autoPickPort(A, 'a', nodeBox(B)); if (p) pinEdgePort(e, 'a', A, p); }
+  if (bPort != null) e.bPort = Math.round(+bPort) || null;
+  else if (B && A){ const p = autoPickPort(B, 'b', nodeBox(A)); if (p) pinEdgePort(e, 'b', B, p); }
   return e;
 }
 const soleSel = () => sel.size === 1 ? byId([...sel][0]) : null;
@@ -91,14 +112,21 @@ function addParentOf(n){
 /* 生成方向和连接方向的对应：往哪边生成，就从哪边出去、从对面进来 */
 const SPAWN_SIDES = { right:['r','l'], left:['l','r'], up:['t','b'], down:['b','t'] };
 /* 确保节点在某条边上有端点，没有就现加一个。返回那个端点。
+   want：'out' 优先输出端点 / 'in' 优先输入端点 / 其它只管有条边。
+   ★ 找不到就加一个**连接端点**（conns）—— 它不带数据语义，
+     是「这条边只是结构上的连接」的正确表达。
+     数据端点只在本来就有的时候才用，不会为了连一条结构边而凭空造输入/输出。
    ⚠ addPort 是自己挑边的（挑用得最少的），所以加完要把 side 改过来。 */
-function ensurePortOn(node, side){
+function ensurePortOn(node, side, want){
   if (!node || !side) return null;
   const L = portList(node);
-  const hit = L.ins.concat(L.outs, L.conns || []).filter(p => p.side === side)[0];
+  const bySide = (list) => (list || []).filter(p => p.side === side)[0];
+  let hit = null;
+  if (want === 'out')      hit = bySide(L.outs) || bySide(L.conns);
+  else if (want === 'in')  hit = bySide(L.ins)  || bySide(L.conns);
+  else                     hit = bySide(L.conns) || bySide(L.ins) || bySide(L.outs);
   if (hit) return hit;
-  const dir = (side === 'r' || side === 't') ? 'outs' : 'ins';
-  const p = addPort(node, dir);
+  const p = addPort(node, 'conns');
   if (!p) return null;
   p.side = side;
   p.at = 0.5;
@@ -115,8 +143,9 @@ function applySpawnDir(e, from, to, dir){
   e.aSide = pair[0]; e.bSide = pair[1];
   e.aPort = null; e.bPort = null;
   reindex(); sizeAll();
-  const pa = ensurePortOn(from, pair[0]);
-  const pb = ensurePortOn(to, pair[1]);
+  // 出发端优先用**输出**端点，落点优先用**输入**端点；都没有就用连接端点
+  const pa = ensurePortOn(from, pair[0], 'out');
+  const pb = ensurePortOn(to, pair[1], 'in');
   if (pa) pinEdgePort(e, 'a', from, pa);
   if (pb) pinEdgePort(e, 'b', to, pb);
   reindex(); sizeAll();

@@ -7967,6 +7967,180 @@
       ok('SP01' + dir + 'e 新节点确实在' + dir + '边', want, 'dx=' + Math.round(dx) + ' dy=' + Math.round(dy));
     }
   });
+
+  T('CP01 连接端点：普通节点四条边各一个，看得见也拖得动', () => {
+    fresh(); layoutMind();
+    const a = addNodeAt('普通', 0, 0, 'rect');
+    reindex(); sizeAll();
+    const L = portList(byId(a.id));
+    ok('CP01 普通节点没有输入输出端点', L.ins.length === 0 && L.outs.length === 0,
+      L.ins.length + '/' + L.outs.length);
+    ok('CP01b 四条边各一个连接端点', L.conns.length === 4, L.conns.length);
+    ok('CP01c 四条边不重样', new Set(L.conns.map(p => p.side)).size === 4,
+      L.conns.map(p => p.side).join('/'));
+    ok('CP01d 四个 id 是正整数且不重复', (() => {
+      const ids = L.conns.map(p => p.id);
+      return ids.every(i => Number.isInteger(i) && i > 0) && new Set(ids).size === 4;
+    })(), L.conns.map(p => p.id).join('/'));
+    ok('CP01e 都在正中', L.conns.every(p => p.at === 0.5));
+    ok('CP01f hasPorts 认它', hasPorts(byId(a.id)) === true);
+    // 端点位置就在四条边的中点上
+    ok('CP01g 位置就在四条边的中点', (() => {
+      const b = nodeBox(byId(a.id));
+      return L.conns.every(p => {
+        const pt = portPoint(byId(a.id), p);
+        if (p.side === 'l') return Math.abs(pt.x - b.x) < 0.01 && Math.abs(pt.y - (b.y + b.h/2)) < 0.01;
+        if (p.side === 'r') return Math.abs(pt.x - (b.x + b.w)) < 0.01 && Math.abs(pt.y - (b.y + b.h/2)) < 0.01;
+        if (p.side === 't') return Math.abs(pt.y - b.y) < 0.01 && Math.abs(pt.x - (b.x + b.w/2)) < 0.01;
+        return Math.abs(pt.y - (b.y + b.h)) < 0.01 && Math.abs(pt.x - (b.x + b.w/2)) < 0.01;
+      });
+    })());
+    // 三类端点合起来算 id 池
+    ok('CP01h nodePorts 三类一起算', nodePorts(byId(a.id)).length === 4);
+    // 命中：拖拽方块要认得出连接端点
+    selectOnly(a.id); reindex();
+    const p0 = portList(byId(a.id)).conns[0];
+    const hb = portHandleBox(byId(a.id), p0);
+    const h = portHandleAt({ x:hb.x + hb.w/2, y:hb.y + hb.h/2 }, null);
+    ok('CP01i 连接端点有可拖的方块（handleAt 认得出）', !!h && h.port.id === p0.id,
+      h ? ('dir=' + h.dir + ' id=' + h.port.id) : 'null');
+    ok('CP01j portIdAtPoint 也认（拖线能钉上去）', (() => {
+      const pt = portPoint(byId(a.id), p0);
+      const q = portIdAtPoint(pt, byId(a.id));
+      return q && q.id === p0.id;
+    })());
+    // 拖它换边
+    const b2 = nodeBox(byId(a.id));
+    ok('CP01k 能把连接端点拖到别的边', (() => {
+      movePort(byId(a.id), 'conns', p0.id, { x:b2.x + b2.w/2, y:b2.y - 2 });
+      reindex();
+      const after = portById(byId(a.id), p0.id);
+      return after && after.side === 't';
+    })(), (() => { const q = portById(byId(a.id), p0.id); return q ? q.side : '?'; })());
+  });
+  T('CP02 连接端点：只有连接功能', () => {
+    fresh(); layoutMind();
+    const a = addNodeAt('甲', 0, 0, 'rect'), b = addNodeAt('乙', 700, 0, 'rect');
+    reindex(); sizeAll();
+    const e = linkNodes(a.id, b.id);
+    reindex();
+    ok('CP02 线能连上', !!e);
+    ok('CP02b 两端都钉在连接端点上', (() => {
+      const pa = portById(byId(a.id), e.aPort), pb = portById(byId(b.id), e.bPort);
+      const inConns = (n, p) => p && portList(n).conns.some(q => q.id === p.id);
+      return inConns(byId(a.id), pa) && inConns(byId(b.id), pb);
+    })(), e.aPort + '/' + e.bPort);
+    // ★ 双击连接端点**不该**弹 ID/标签编辑器（它没有那套语义）
+    ok('CP02c 连接端点没有 ID/标签编辑器', (() => {
+      selectOnly(a.id); reindex();
+      const q = portList(byId(a.id)).conns[0];
+      const pt = portPoint(byId(a.id), q);
+      const ph = portHitAt(pt, byId(a.id));
+      return !!ph && ph.dir === 'conns';   // 命中是命中，但 pointer 那边会跳过它
+    })());
+    // 连接端点不参与求值：普通节点的边不该让值流过去
+    ok('CP02d 普通节点没有变量定义，所以不参与求值', !byId(a.id).varDef,
+      String(byId(a.id).varDef));
+    ok('CP02e 存读往返保住 conns', (() => {
+      const snap = JSON.parse(JSON.stringify(serialize()));
+      deserialize(snap);
+      const back = doc.nodes.find(x => x.text === '甲');
+      return !!back && portList(back).conns.length === 4;
+    })());
+  });
+  T('CP03 程序节点不受影响：还是实心的一进一出', () => {
+    fresh(); layoutMind();
+    const v = addVarNode('变量', 0, 0, { name:'x', value:'1' });
+    const o = addOpNode('运算', 600, 0, { op:'+', operand:'1' });
+    reindex(); sizeAll();
+    ok('CP03 变量节点一进一出、没有连接端点', (() => {
+      const L = portList(byId(v.id));
+      return L.ins.length === 1 && L.outs.length === 1 && L.conns.length === 0;
+    })());
+    ok('CP03b 运算节点按 arity 出输入端点、也没有连接端点', (() => {
+      const L = portList(byId(o.id));
+      return L.conns.length === 0 && L.ins.length >= 2 && L.outs.length === 1;
+    })());
+    ok('CP03c 变量节点的端点 id 没错位（1 进 3 出）', (() => {
+      const L = portList(byId(v.id));
+      return L.ins[0].id === 1 && L.outs[0].id === 3;
+    })());
+  });
+
+  T('CP04 一个连接端点能接多条线', () => {
+    fresh(); layoutMind();
+    const a = addNodeAt('中心', 0, 0, 'rect');
+    const b = addNodeAt('乙', 700, 0, 'rect');
+    const c = addNodeAt('丙', 700, 400, 'rect');
+    reindex(); sizeAll();
+    const p = portList(byId(a.id)).conns.filter(q => q.side === 'r')[0];
+    ok('CP04 前置：右边有个连接端点', !!p, JSON.stringify(p));
+    const e1 = linkNodes(a.id, b.id, p.id, null);
+    const e2 = linkNodes(a.id, c.id, p.id, null);
+    reindex(); sizeAll();
+    ok('CP04b 两条边都连上了', !!e1 && !!e2);
+    ok('CP04c 两条边钉在同一个连接端点上',
+      e1.aPort === p.id && e2.aPort === p.id, e1.aPort + ' / ' + e2.aPort);
+    ok('CP04d 同一个端点能挂多条（不是一对一）',
+      doc.edges.filter(e => e.s === a.id && e.aPort === p.id).length === 2,
+      doc.edges.filter(e => e.s === a.id).length + ' 条从它出发');
+    ok('CP04e 两条边的终点各自钉在自己的端点上',
+      e1.bPort != null && e2.bPort != null && e1.t !== e2.t);
+    ok('CP04f 两条线的起点锚点重合（同一个端点上）', (() => {
+      const g1 = edgeEndpoints(e1), g2 = edgeEndpoints(e2);
+      return Math.hypot(g1.a.x - g2.a.x, g1.a.y - g2.a.y) < 0.01;
+    })());
+    ok('CP04g 但终点不重合', (() => {
+      const g1 = edgeEndpoints(e1), g2 = edgeEndpoints(e2);
+      return Math.hypot(g1.b.x - g2.b.x, g1.b.y - g2.b.y) > 10;
+    })());
+    ok('CP04h 同一对节点之间还是不允许两条',
+      linkNodes(a.id, b.id, p.id, null) === null);
+    skipDlg();
+  });
+  T('CP05 方向键生成：普通节点走连接端点，程序节点走数据端点', () => {
+    for (const [dir, as, bs] of [['right','r','l'], ['left','l','r'], ['up','t','b'], ['down','b','t']]){
+      fresh(); layoutMind();
+      const n = addNodeAt('起点', 0, 0, 'rect');
+      selectOnly(n.id); reindex(); sizeAll();
+      spawnInDirection(dir); skipDlg();
+      reindex(); sizeAll();
+      const e = doc.edges[doc.edges.length - 1];
+      const pa = portById(byId(n.id), e.aPort);
+      ok('CP05 ' + dir + '：出发端是连接端点（普通节点没有输出端点）',
+        !!pa && portList(byId(n.id)).conns.some(q => q.id === pa.id),
+        pa ? ('id=' + pa.id + ' side=' + pa.side) : 'null');
+      ok('CP05' + dir + 'b 方向对', e.aSide === as && e.bSide === bs,
+        e.aSide + ' 到 ' + e.bSide);
+      ok('CP05' + dir + 'c 没有凭空多出端点',
+        portList(byId(n.id)).conns.length === 4,
+        portList(byId(n.id)).conns.length);
+    }
+    fresh(); layoutMind();
+    const v = addVarNode('变量', 0, 0, { name:'x', value:'1' });
+    selectOnly(v.id); reindex(); sizeAll();
+    spawnInDirection('right'); skipDlg();
+    reindex(); sizeAll();
+    const e = doc.edges[doc.edges.length - 1];
+    ok('CP05d 变量节点往右：用输出端点，不是连接端点', (() => {
+      const q = portById(byId(v.id), e.aPort);
+      return !!q && portList(byId(v.id)).outs.some(x => x.id === q.id);
+    })(), String(e.aPort));
+    ok('CP05e 没有凭空多出连接端点', portList(byId(v.id)).conns.length === 0,
+      portList(byId(v.id)).conns.length);
+    fresh(); layoutMind();
+    const v2 = addVarNode('变量', 0, 0, { name:'y', value:'1' });
+    selectOnly(v2.id); reindex(); sizeAll();
+    const outBefore = portList(byId(v2.id)).outs.length;
+    const inBefore  = portList(byId(v2.id)).ins.length;
+    spawnInDirection('down'); skipDlg();
+    reindex(); sizeAll();
+    const L2 = portList(byId(v2.id));
+    ok('CP05f 往下生成：加的是连接端点，输入输出数量不变',
+      L2.conns.length === 1 && L2.outs.length === outBefore && L2.ins.length === inBefore,
+      'conns=' + L2.conns.length + ' ins=' + L2.ins.length + ' outs=' + L2.outs.length);
+    ok('CP05g 那个连接端点在下边', L2.conns[0].side === 'b', L2.conns[0].side);
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
