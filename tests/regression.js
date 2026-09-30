@@ -5798,11 +5798,10 @@
     }));
     ok('DC03e 点框边三击也认', selGroups.has(g.id), [...selGroups].join(','));
   });
-  T('DC04 框里面的空白双击仍然是「新建节点」', () => {
+  T('DC04 框里面的空白双击也算在分组上（这是之前那个 bug）', () => {
     fresh(); layoutMind();
     const a = nodeByText('节点'), b = nodeByText('连线');
-    const g = mkG('空框', [a.id, b.id]);
-    const before = doc.nodes.length;
+    const g = mkG('有成员的框', [a.id, b.id]);
     const box = groupBox(g);
     // 找一个框内、但不在任何节点上的点
     let p = null;
@@ -5812,13 +5811,28 @@
       }
     }
     ok('DC04 前置：找得到框内空白点', !!p, JSON.stringify(p));
-    cv.dispatchEvent(new MouseEvent('dblclick', {
-      bubbles:true, cancelable:true, detail:2,
-      clientX: Math.round(p.x + view.x), clientY: Math.round(p.y + view.y)
-    }));
+    const before = doc.nodes.length;
+    const cx = Math.round(p.x + view.x), cy = Math.round(p.y + view.y);
+    // 真实序列：click(detail 2) 之后 dblclick 还会再发一次
+    cv.dispatchEvent(new MouseEvent('click', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
     skipDlg();
-    ok('DC04b 新建了节点（没被分组的双击吃掉）', doc.nodes.length === before + 1,
-      before + ' -> ' + doc.nodes.length);
+    ok('DC04b 没有新建节点（dblclick 在分组上要让开）',
+      doc.nodes.length === before, before + ' -> ' + doc.nodes.length);
+    ok('DC04c 组内节点被选中了', sel.has(a.id) && sel.has(b.id), [...sel].join(','));
+    ok('DC04d 外框没被选中', selGroups.size === 0);
+  });
+  T('DC04e 空框例外：里面没节点时，双击仍然是新建节点', () => {
+    fresh(); layoutMind();
+    const g = mkG('空框', []);
+    const box = groupBox(g);
+    const before = doc.nodes.length;
+    const cx = Math.round(box.x + box.w / 2 + view.x), cy = Math.round(box.y + box.h / 2 + view.y);
+    cv.dispatchEvent(new MouseEvent('click', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    skipDlg();
+    ok('DC04e 空框里双击建出了节点（全选一个空框等于什么都没选）',
+      doc.nodes.length === before + 1, before + ' -> ' + doc.nodes.length);
   });
   T('DC05 藏起来的成员不会被一起选中', () => {
     fresh(); layoutMind();

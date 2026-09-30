@@ -107,6 +107,33 @@ function hitGroupTitle(p){
   return null;
 }
 /* 只有边框那一条能抓 —— 框内部要留给成员节点，不然点不到它们 */
+/* 点落在哪个分组的**范围**里（从最内层往外找），返回分组对象。
+   和 hitGroupArea 的区别：那个返回的是「框」，而且调用方只关心几何；
+   这个返回分组本身，套娃时里面那个先接住。 */
+function groupAtPoint(p){
+  const list = (idx.groupOrder || doc.groups || []).slice().reverse();
+  for (const g of list){
+    if (isHidden(g.id)) continue;
+    const r = groupBox(g);
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return g;
+  }
+  return null;
+}
+/* 双击 / 三击时，这个点算在哪个分组上。
+   标题栏、外框边、**以及框内部**都算 ——
+   只认标题和边的话，用户点在框里就会掉进「新建节点」，那正是之前的 bug。
+   例外：**空框**（里面一个节点都没有）让给「新建节点」——
+   那种情况下「全选组内节点」等于什么都没选，还是建个节点实在。 */
+function groupGestureTarget(p, forNewNode){
+  const t = hitGroupTitle(p);
+  if (t) return t;
+  const b = hitGroupBorder(p);
+  if (b) return b;
+  const g = groupAtPoint(p);
+  if (!g) return null;
+  if (forNewNode && !groupAllNodes(g.id).length) return null;
+  return g;
+}
 function hitGroupBorder(p){
   const list = (idx.groupOrder || doc.groups || []).slice().reverse();
   const tol = Math.max(10, 10 / view.z);

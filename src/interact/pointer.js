@@ -291,8 +291,11 @@ window.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('dblclick', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
-  // 分组上的双击 / 三击走下面 click 那条线（要数连击次数），这里不处理。
+  // ⚠ 分组上的双击必须在这里**让开**：下面 click 那条线（detail === 2）
+  //   已经把组内节点选好了，这里再往下走就会**顺手新建一个节点** ——
+  //   那正是「双击分组之后冒出一个新节点」的原因。
   // 给分组改名挪到右键菜单和 F2 了。
+  if (groupGestureTarget(p, true)) return;
   // 双击拐点 = 删掉它
   const wp = hitWaypoint(p);
   if (wp){
@@ -361,12 +364,13 @@ window.addEventListener('blur', () => {
    为什么用 click + ev.detail 而不是 dblclick：dblclick 只管「第二下」，
    数不到第三下。click 的 detail 就是连击次数，2 和 3 都拿得到。
 
-   只认**标题栏**和**外框边**：那两个地方才明确「属于分组」。
-   框里面的空白处双击仍然是「新建节点」—— 那个手势更有用，不动它。
+   命中范围是**整个分组**（标题栏 / 外框边 / 框内部），具体判断在
+   hit.js 的 groupGestureTarget 里 —— 光认标题和边的话，
+   用户点在框里就会掉进「新建节点」，那正是之前的 bug。
    ========================================================================= */
 canvas.addEventListener('click', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
-  const gt = hitGroupTitle(p) || hitGroupBorder(p);
+  const gt = groupGestureTarget(p, true);
   if (!gt) return;
   if (ev.detail === 2){ selectGroupNodes(gt); return; }
   if (ev.detail >= 3){ selectGroup(gt.id); say('* 选中了分组外框「' + (gt.title || '未命名') + '」。'); return; }
