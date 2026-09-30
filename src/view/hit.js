@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · view/hit.js
    命中测试：节点 / 连接端口 / 连线 / 连线端点手柄 / 拐点手柄 / 缩放柄 / 折叠标记。
@@ -29,7 +29,7 @@ function hitNode(p){
    运算节点分三块：描述 / 算符框 / 运算值框 */
 const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 function hitVarPart(n, p){
-  if (!n || n.kind !== 'var') return null;
+  if (!n || n.kind !== 'var') return null;   // ★临时：排除广播节点看看
   const L = varBoxes(n);
   const v = normalizeVarDef(n.varDef);
   // 变量名格子（普通变量和三种控件都有）。
@@ -38,7 +38,8 @@ function hitVarPart(n, p){
   //     整个双击处理器当场死掉。
   const b = nodeBox(n);
   if (L.nameBox  && inRect(L.nameBox,  p)) return 'varName';
-  if (L.valBox   && inRect(L.valBox,   p)) return 'varValue';
+  // 广播节点的值来自输入，不能手填 —— 所以它的值框不给 varValue
+  if (L.valBox   && inRect(L.valBox,   p)) return isBroadcast(n) ? 'text' : 'varValue';
   if (L.scopeBox && inRect(L.scopeBox, p)) return 'varScope';
   return 'text';
 }

@@ -1004,6 +1004,16 @@ function selectGroupNodes(grp){
 /* =========================================================================
    表格节点
    ========================================================================= */
+/* 广播节点：把输入值变成全局变量，只能设名字（值由输入决定） */
+function addBroadcastNode(x, y, opts){
+  const n = addNodeAt('广播', x, y, 'rect');
+  n.kind = 'broadcast';
+  n.varDef = normalizeVarDef(Object.assign(
+    { name:'广播', value:'', type:'string', scope:'global' }, opts || {}));
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
 function addTableNode(x, y, opts){
   const n = addNodeAt('', x, y, 'rect');
   n.kind = 'table';

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/ports.js
    端点模型 —— 每个程序节点的输入 / 输出端点。
@@ -26,6 +26,27 @@ const PORT_LABEL_GAP = 10;
 /* 默认端点：左右进出、上下备用，位置都在那条边的正中。
    普通变量 / 输出 / 控件节点只要一个出口；运算符以后要两个入口。 */
 function defaultPorts(n){
+  /* 运算符节点：两个输入端点，各对一个操作数格子（按 ID 升序就是运算顺序）。
+     广播节点：只有一个输入 —— 它的值来自上游，没有输出端点。 */
+  if (n && n.kind === 'op'){
+    /* 输入端点个数 = arity + 1：第 1 个端点是流进来的那个值（第一个操作数），
+       后面每个端点各对一个运算值格子。
+       + - * / 的 arity 是 1 → 正好 2 个输入端点。 */
+    const arity = (typeof opArity === 'function') ? opArity(normalizeOpDef(n.opDef).op) : 1;
+    const ins = [{ id:1, side:'l', at:0.5, label:'操作数 1' }];
+    for (let i = 0; i < arity; i++){
+      ins.push({ id:2 + i, side:'l', at:0.5, label:'操作数 ' + (i + 2) });
+    }
+    spreadPorts({ ins, outs:[] }, 'l');
+    return { ins, outs:[{ id:2 + arity, side:'r', at:0.5, label:'' }] };
+  }
+  if (n && n.kind === 'broadcast'){
+    return { ins:[{ id:1, side:'l', at:0.5, label:'取值' }], outs:[] };
+  }
+  if (n && n.kind === 'cond'){
+    return { ins:[{ id:1, side:'l', at:0.5, label:'条件' }],
+             outs:[{ id:3, side:'r', at:0.5, label:'' }] };
+  }
   return {
     ins:  [{ id:1, side:'l', at:0.5, label:'' }],
     outs: [{ id:3, side:'r', at:0.5, label:'' }]

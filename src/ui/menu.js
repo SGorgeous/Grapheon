@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单，支持多级子菜单。右键菜单和顶栏「新建」菜单共用。
@@ -138,6 +138,10 @@ function showCtx(x, y, n, e, info){
         ['横向等距分布', '至少三个', () => distributeSelection('x')],
         ['竖向等距分布', '至少三个', () => distributeSelection('y')]
       ]]);
+    }
+    if (isBroadcast(n)){
+      items.push(['广播：值来自输入，只能设名字', '全局可见，不用连线', null]);
+      items.push('hr');
     }
     // 端点：加 / 删 / 改 id / 改标签 / 恢复默认
     if (!isEmbed(n)){
@@ -346,11 +350,11 @@ function showCtx(x, y, n, e, info){
         'hr',
         // 这两个也是程序节点，只是不是「变量」那一类。
         // 不放在这里的话就没有别的入口了 —— 见 README 的说明。
-        ['运算节点', '给流过来的变量值做 + - * /，可以叠加', () => {
+        ['运算符节点', '两个输入端点各对一个操作数，按端点顺序运算', () => {
           const p = s2w(x, y);
           const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个运算节点。双击算符框切换 + - * /，双击右边的框改运算值。');
+          say('* 建了一个运算符节点。左边两个输入端点各对一个操作数：接上了就用接进来的值，没接就用格子里的。');
         }],
         ['程序化节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
           const p = s2w(x, y);

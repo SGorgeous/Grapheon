@@ -6063,8 +6063,8 @@
       && !sub.some(t => t.indexOf('开关节点') === 0),
       sub.join(' / '));
     // 这两项原来是**出不来**的（少了个逗号），专门盯一下
-    ok('RB04c 运算节点也在（原来因为少逗号显示不出来）',
-      sub.some(t => t.indexOf('运算节点') === 0), sub.join(' / '));
+    ok('RB04c 运算符节点也在（原来因为少逗号显示不出来）',
+      sub.some(t => t.indexOf('运算符节点') === 0), sub.join(' / '));
     ok('RB04d 程序化节点也在（同上）',
       sub.some(t => t.indexOf('程序化节点') === 0), sub.join(' / '));
     hideCtx();
@@ -7684,6 +7684,56 @@
       }
       return n + ' / ' + doc.edges.length + ' 条还穿节点';
     })());
+  });
+
+
+  T('OP01 运算符节点：两个输入端点，按 ID 升序各对一个操作数', () => {
+    fresh(); layoutMind();
+    const o = addOpNode('加', 0, 0, { op:'+', operand:'5' });
+    reindex(); sizeAll();
+    ok('OP01 有两个输入端点', portList(byId(o.id)).ins.length === 2,
+      portList(byId(o.id)).ins.length);
+    ok('OP01b 端点 ID 是 1 和 2（决定运算顺序）', (() => {
+      const ids = portList(byId(o.id)).ins.map(p => p.id).sort((a, b) => a - b);
+      return ids.length === 2 && ids[0] === 1 && ids[1] === 2;
+    })(), portList(byId(o.id)).ins.map(p => p.id).join(','));
+    ok('OP01c 一个输出端点', portList(byId(o.id)).outs.length === 1);
+    // 只给第一路：走格子里的 5
+    const a = mkVar('a', '10');
+    const out = mkOut('r');
+    linkNodes(a.id, o.id); linkNodes(o.id, out.id);
+    reindex();
+    ok('OP01d 只接第一路 → 10 + 5 = 15', outputValueIn(liveCtx(), byId(out.id)) === 15,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    // 第二路接上，格子就被顶掉
+    const b = mkVar('b', '7');
+    const e2 = linkNodes(b.id, o.id);
+    reindex();
+    ok('OP01e 前置：第二路连上了', !!e2);
+    ok('OP01f 把落点钉到 2 号端点', (() => {
+      pinEdgePort(e2, 'b', byId(o.id), portList(byId(o.id)).ins.filter(q => q.id === 2)[0]);
+      reindex();
+      return e2.bPort === 2;
+    })(), String(e2.bPort));
+    ok('OP01g 两路都接上 → 10 + 7 = 17（格子里的 5 被顶掉）',
+      outputValueIn(liveCtx(), byId(out.id)) === 17,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    // 换运算符
+    setOpOperator(byId(o.id), '*');
+    reindex();
+    ok('OP01h 换成乘 → 10 × 7 = 70', outputValueIn(liveCtx(), byId(out.id)) === 70,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    ok('OP01i 老存档（没钉端点）照样能用', (() => {
+      const o2 = addOpNode('老式', 0, 0, { op:'-', operand:'3' });
+      const a2 = mkVar('c', '20');
+      const out2 = mkOut('r2');
+      linkNodes(a2.id, o2.id); linkNodes(o2.id, out2.id);
+      reindex();
+      return outputValueIn(liveCtx(), byId(out2.id)) === 17;
+    })(), String((() => {
+      const out2 = doc.nodes.find(x => x.outDef && x.outDef.name === 'r2');
+      return out2 ? outputValueIn(liveCtx(), out2) : '?';
+    })()));
   });
 
   /* ==================== 收尾 ==================== */

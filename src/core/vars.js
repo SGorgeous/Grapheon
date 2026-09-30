@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/vars.js
    变量系统：变量定义节点、文本里的 {name} 引用、运算节点、函数分组、输出节点、优先级。
@@ -38,7 +38,10 @@ const VAR_TYPE_LABEL = { number:'数字', string:'字符串' };
    够不着的话调用方会退回变量自己的值（组内变量就靠这个），
    被挡住的话是真的不通，必须显示 [未定义]。 */
 const VAR_BLOCKED = Symbol('varBlocked');
-const isVarNode = (n) => !!n && n.kind === 'var';
+const isVarNode = (n) => !!n && (n.kind === 'var' || n.kind === 'broadcast');
+/* 广播节点：把流进来的值变成**全局变量**。
+   和变量节点长得一样，但**只能设名字** —— 值由输入决定，另一边显示实际输出。 */
+const isBroadcast = (n) => !!n && n.kind === 'broadcast';
 const isOpNode  = (n) => !!n && n.kind === 'op';
 const isOutNode = (n) => !!n && n.kind === 'out';
 
@@ -226,9 +229,32 @@ function condOutputIn(ctx, node){
   if (inc == null || inc === VAR_BLOCKED) return COND_NONE;   // 没接 / 上游不通
   return Number(String(inc).trim()) === 1 ? v.value : COND_NONE;
 }
+/* 运算符节点的输出：**所有输入端点按 ID 升序依次运算**。
+   · 1 号端点（ID 最小的那个）= 沿当前这条路径流进来的值
+   · 其余端点 = 接在它上面的那一路上来的值；没接就用格子里填的
+   ★ 老存档零改动：老的运算节点只有一个 operand 格子、没有第二条入边，
+     于是其它端点都退回格子值 —— 行为和以前一模一样。 */
+function opOutputIn(ctx, node, incoming){
+  const od = normalizeOpDef(node.opDef);
+  const def = OP_BY_ID.get(od.op) || OPERATORS[0];
+  const ins = portList(node).ins.slice().sort((a, b) => a.id - b.id);
+  /* ⚠ 下标：od.operands[0] 是**第二个**操作数（第一个是流进来的 incoming）。
+     所以第 i 个端点（i>=1）对应的是 od.operands[i-1]，不是 [i]。 */
+  const args = [];
+  for (let i = 1; i < Math.max(1, ins.length); i++){
+    let v = ins[i] ? inputPortValueIn(ctx, node, ins[i], 0) : null;
+    if (v == null || v === '') v = od.operands[i - 1];          // 没接就用格子里的
+    args.push(v == null ? '' : v);
+  }
+  /* ★ 一次调用把**全部**操作数传进去 —— 不是逐次折叠。
+     OPERATORS 的 apply(v, args) 本来就是收一个数组的，
+     逐次折叠对 arity>1 的算符是错的（老行为就是一次调用）。
+     没接任何端点时 args 全来自格子值，和以前逐字一致。 */
+  return def.apply(incoming, args);
+}
 function applyNodeOut(ctx, node, incoming){
   if (!node) return incoming;
-  if (isOpNode(node)) return applyOperator(incoming, node.opDef);
+  if (isOpNode(node)) return opOutputIn(ctx, node, incoming);
   // 条件节点：输出自己的值（或「无」），不把上游的值放过去
   if (isVarNode(node) && normalizeVarDef(node.varDef).control === 'cond'){
     return condOutputIn(ctx, node);
@@ -332,6 +358,8 @@ function varVisibleIn(ctx, def, fromId){
   const v = normalizeVarDef(def.varDef);
   if (def.id === fromId) return true;
   const scopeId = scopeKeyOfIn(ctx, def.id);
+  // 广播节点 = 全局变量，本作用域内到处可用，不用连线
+  if (isBroadcast(def)) return true;
   if (v.scope === 'global') return true;                  // 「全局」= 本作用域内全局
   // 局内 = 「下游」或者「指到的那个分组内部」，两条路任一条走通就算可见
   if (downstreamOfIn(ctx, def.id, scopeNodesIn(ctx, scopeId)).has(fromId)) return true;
@@ -464,6 +492,37 @@ function evalFromIn(ctx, def, start, inside, targetId){
   }
   return targetId ? (blocked ? VAR_BLOCKED : null) : last;
 }
+/* 一条边在它 t 端收到的值：源头是变量定义就用它的值，
+   否则递归往回、再把一路经过的变换套上。
+   多输入节点的**每一路输入**靠它单独求值。 */
+function valueOnEdgeIn(ctx, e, depth){
+  depth = depth || 0;
+  if (depth > UPSTREAM_MAX_DEPTH) return null;
+  const src = ctx.byId.get(e.s);
+  if (!src) return null;
+  if (isVarNode(src) && !ctx.edges.some(x => x.t === src.id)){
+    return defValueIn(ctx, src);                 // 源头：变量定义 / 广播节点自己的值
+  }
+  const up = valueFromUpstream(ctx, src.id, depth + 1);
+  if (up == null || up === VAR_BLOCKED) return up;
+  return applyNodeOut(ctx, src, up);
+}
+/* 落在某个输入端点上的值（那一路没接东西返回 null）。
+   接在这个端点上的边 = e.bPort === port.id；
+   老边没有 bPort，算在**第一个**输入端点（按 ID 升序）上。 */
+function inputPortValueIn(ctx, node, port, depth){
+  const sorted = portList(node).ins.slice().sort((a, b) => a.id - b.id);
+  const firstId = sorted.length ? sorted[0].id : null;
+  for (const e of ctx.edges){
+    if (e.t !== node.id) continue;
+    const hit = (e.bPort != null) ? (e.bPort === port.id) : (firstId === port.id);
+    if (!hit) continue;
+    const v = valueOnEdgeIn(ctx, e, depth);
+    if (v != null) return v;
+  }
+  return null;
+}
+
 /* =========================================================================
    往回求「流向 nodeId 的那个值」
    -------------------------------------------------------------------------
@@ -513,6 +572,12 @@ function valueFromUpstream(ctx, nodeId, depth){
    指向函数分组的话，值就是那个分组声明出来的输出。 */
 function defValueIn(ctx, def){
   if (!def) return null;
+  /* ★ 广播节点：它的值**就是流进来的那个**（不能自己填）。
+     所以只能靠往回求上游 —— 这也是它和变量节点唯一的区别。 */
+  if (isBroadcast(def)){
+    const v = valueFromUpstream(ctx, def.id);
+    return (v === VAR_BLOCKED) ? null : v;
+  }
   /* ★ 条件节点：按名字引用它，拿到的就是 condOutputIn（所填的值，或「无」）。
      它不是「不通就没值」—— 不通的时候输出的是「无」这个值。 */
   if (isVarNode(def) && normalizeVarDef(def.varDef).control === 'cond'){
