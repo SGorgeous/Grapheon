@@ -201,7 +201,7 @@ body.dsh-ready{cursor:none}
    右侧浮层面板：一律贴在下方提示框的正上方，右下角对齐。
    提示框高度会随文字换行变化，所以由 dialogue.js 量出来写进 --dlg-h。
    ========================================================================== */
-#help,#exp,#edgebox,#endbox,#nodebox{
+#help,#exp,#edgebox,#endbox,#nodebox,#set{
   left:auto;right:24px;top:auto;transform:none;
   bottom:calc(var(--dlg-h,132px) + 12px);
   max-height:calc(100vh - var(--dlg-h,132px) - 116px);
@@ -212,3 +212,35 @@ body.dsh-ready{cursor:none}
 #nodebox .progsec{border-left:3px solid var(--y);padding-left:14px;margin-bottom:6px}
 #nodebox .hr2{height:3px;background:#333;margin:12px 0}
 #nodebox .nbnum{flex:none;width:96px;text-align:center}
+
+/* ---------------- 设置面板 / 顶栏分隔 / 星号 ---------------- */
+#set{
+  position:fixed;
+  z-index:70;
+  pointer-events:auto;
+  display:none;
+  left:auto; right:24px; top:auto; transform:none;
+  bottom:calc(var(--dlg-h,132px) + 12px);
+  max-height:calc(100vh - var(--dlg-h,132px) - 116px);
+  overflow:auto;
+  min-width:420px;
+}
+#set .sec{
+  margin:14px 0 6px;
+  color:var(--y);
+  border-bottom:2px solid var(--d);
+  padding-bottom:3px;
+}
+#set .keylist{ display:flex; flex-direction:column; gap:4px; }
+#set .keyrow{ display:flex; gap:10px; align-items:baseline; }
+#set .keyrow b{ color:var(--y); min-width:110px; font-weight:normal; }
+#set .keyrow span{ color:var(--g); }
+.tbsep{ width:2px; align-self:stretch; background:var(--d); margin:0 4px; }
+/* 主题说不要星号就把它们藏掉 */
+body.no-star .star{ display:none; }
+
+/* 设置面板里的选项排成一行行，别竖着摞成一条 */
+#set .opts{ display:flex; flex-wrap:wrap; gap:6px; }
+#set .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+#set .lab{ color:var(--g); flex:none; }
+#set h2 .star{ color:var(--y); }

@@ -13,8 +13,10 @@ const dlgMeta  = document.getElementById('dlgMeta');
 const dlgHint  = document.getElementById('dlgHint');
 let dlg = { full:'', shown:0, timer:null };
 const HINT = '方向键/WASD 生成节点 · Tab 子节点 · Enter 兄弟 · E 样式面板 · Ctrl+G 分组 · Del 删除 · H 帮助';
+/* 主题不要星号的话，就把开头那个 '* ' 摘掉（文字里原本都带着它） */
+function stripStar(s){ return themeStar() ? s : String(s).replace(/^\*\s?/, ''); }
 function say(msg){
-  dlg.full = msg; dlg.shown = 0;
+  dlg.full = stripStar(msg); dlg.shown = 0;
   clearInterval(dlg.timer);
   dlgText.textContent = '';
   dlgArrow.style.visibility = 'hidden';

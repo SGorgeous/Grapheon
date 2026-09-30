@@ -12,24 +12,25 @@
 <canvas id="stage"></canvas>
 
 <div id="ui">
-  <div id="brand" class="ud">* GRAPHEON<small>NODES / CONNECTIONS</small></div>
+  <div id="brand" class="ud"><span class="star">* </span>GRAPHEON<small>NODES / CONNECTIONS</small></div>
 
   <div id="topbar">
     <button class="ud-btn" id="b-back" style="display:none">返回</button>
-    <button class="ud-btn" id="b-tidy">排版</button>
-    <span id="sep"></span>
     <button class="ud-btn" id="b-undo">撤销</button>
     <button class="ud-btn" id="b-redo">重做</button>
-    <span id="sep"></span>
+    <span class="tbsep"></span>
     <button class="ud-btn" id="b-new">新建</button>
     <button class="ud-btn" id="b-open">打开</button>
-      <button class="ud-btn" id="b-img">图片</button>
     <button class="ud-btn" id="b-save">保存</button>
     <button class="ud-btn" id="b-png">导出</button>
-    <button class="ud-btn" id="b-fit">居中</button>
+    <span class="tbsep"></span>
+    <button class="ud-btn" id="b-insert">插入</button>
+    <button class="ud-btn" id="b-view">视图</button>
+    <span class="tbsep"></span>
+    <button class="ud-btn" id="b-set">设置</button>
     <button class="ud-btn" id="b-help">?</button>
+    <button class="ud-btn" id="b-reload">刷新</button>
   </div>
-
   <div id="dialogue" class="ud">
     <div style="flex:1">
       <div id="dlgText"></div>
@@ -43,6 +44,29 @@
 <textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
 <div id="ctx" class="ud"></div>
 
+<div id="set" class="ud">
+  <h2><span class="star">* </span>设置</h2>
+  <div class="sub">改完立刻生效，存在浏览器里</div>
+
+  <div class="sec">主题</div>
+  <div class="row"><div id="setTheme" class="opts"></div></div>
+
+  <div class="sec">背景</div>
+  <div class="row"><div id="setGrid" class="opts"></div></div>
+
+  <div class="sec">默认节点外观</div>
+  <div class="row"><span class="lab">字体</span><div id="setFont" class="opts"></div></div>
+  <div class="row"><span class="lab">字号</span><div id="setFs" class="opts"></div></div>
+  <div class="row"><span class="lab">新连线</span><div id="setEdge" class="opts"></div></div>
+
+  <div class="sec">快捷键</div>
+  <div class="row"><div id="setKeys" class="keylist"></div></div>
+  <div class="row"><button class="ud-btn" id="setKeysReset">恢复默认快捷键</button></div>
+
+  <div class="row">
+    <button class="ud-btn" id="setClose">关闭</button>
+  </div>
+</div>
 <div id="exp" class="ud">
   <h2>* 导出为图片</h2>
   <div class="row">
@@ -344,6 +368,7 @@
 <script src="src/ui/cursor.js"></script>
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>
+<script src="src/ui/settings.js"></script>
 <script src="src/ui/toolbar.js"></script>
 <script src="src/app/main.js"></script>
 </body>

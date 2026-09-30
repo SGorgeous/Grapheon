@@ -324,3 +324,66 @@ window.addEventListener('click', (ev) => {
   if (ev.target.closest && ev.target.closest('#topbar')) return;
   if (!inAnyMenu(ev.target)) hideCtx();
 });
+
+/* =========================================================================
+   插入菜单（顶栏「插入」）
+   把散在各处的「加一个 X」收拢到一处。
+   ========================================================================= */
+function showInsertMenu(anchor){
+  const items = [
+    ['节点', '空白节点，放在视口正中', () => {
+      const c = viewCenter();
+      const n = addNodeAt('新节点', Math.round(c.x - 60), Math.round(c.y - 24), 'rect');
+      selectOnly(n.id); pushHist(); mark();
+      say('* 加了一个节点。选中它按方向键 / WASD 可以往那个方向接着生成。');
+    }],
+    ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
+    ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
+    'hr',
+    ['变量定义节点', '别的文字里写 {名字} 引用', () => {
+      const c = viewCenter();
+      const n = addVarNode('x', Math.round(c.x - 137), Math.round(c.y - 50));
+      selectOnly(n.id); pushHist(); mark();
+    }],
+    ['运算节点', '+ - * / 可以叠加', () => {
+      const c = viewCenter();
+      const n = addOpNode('运算', Math.round(c.x - 110), Math.round(c.y - 40));
+      selectOnly(n.id); pushHist(); mark();
+    }],
+    ['输出节点', '声明本作用域的输出值', () => {
+      const c = viewCenter();
+      const n = addOutNode('output', Math.round(c.x - 110), Math.round(c.y - 40));
+      selectOnly(n.id); pushHist(); mark();
+    }],
+    'hr',
+    ['勾选节点', '选项随便加，输出一串列表', () => {
+      const c = viewCenter();
+      const n = addControlNode('check', Math.round(c.x - 140), Math.round(c.y - 70));
+      selectOnly(n.id); pushHist(); mark();
+    }],
+    ['滑条节点', '上下限 + 步长，实时生效', () => {
+      const c = viewCenter();
+      const n = addControlNode('slider', Math.round(c.x - 140), Math.round(c.y - 60));
+      selectOnly(n.id); pushHist(); mark();
+    }],
+    ['开关节点', '关掉后连接逻辑上断开', () => {
+      const c = viewCenter();
+      const n = addControlNode('switch', Math.round(c.x - 140), Math.round(c.y - 60));
+      selectOnly(n.id); pushHist(); mark();
+    }]
+  ];
+  showMenu(anchor.getBoundingClientRect().left, anchor.getBoundingClientRect().bottom + 6, items);
+}
+
+/* 视图菜单（顶栏「视图」）：居中 + 排版放一起 */
+function showViewMenu(anchor){
+  const r = anchor.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 6, [
+    ['居中', '把全部内容放进视野', () => { fitView(); say('* 已居中。'); }],
+    ['排版', '按树形重排一次', () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }],
+    'hr',
+    ['居中并排版', '两步一起做', () => {
+      tidyLayout(); fitView(); pushHist(); say('* 已排版并居中。');
+    }]
+  ]);
+}

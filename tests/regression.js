@@ -108,49 +108,52 @@
       (window.__loadErrors || []).join(' | ') || '无');
   });
   T('A02 顶栏每个按钮都绑上了处理函数', () => {
-    const ids = ['b-tidy','b-undo','b-redo','b-new','b-open','b-img','b-save','b-png','b-fit','b-help'];
+    const ids = ['b-undo','b-redo','b-new','b-open','b-save','b-png','b-insert','b-view','b-set','b-help','b-reload'];
     const missing = ids.filter(id => {
       const b = document.getElementById(id);
       return !b || typeof b.onclick !== 'function';
     });
     ok('A02 全部已绑定', missing.length === 0, missing.length ? '未绑定：' + missing.join(',') : ids.length + '/' + ids.length);
     ok('A02b 模式按钮已移除', !document.getElementById('b-mind') && !document.getElementById('b-flow'));
+    ok('A02c 旧的排版 / 居中 / 图片按钮已并入视图和插入菜单',
+      !document.getElementById('b-tidy') && !document.getElementById('b-fit') && !document.getElementById('b-img'));
   });
   T('A03 每个按钮点下去都有效果（不是空绑定）', () => {
     const origDL = downloadBlob;
     let dl = null;
     downloadBlob = (blob, filename) => { dl = { size: blob && blob.size, type: blob && blob.type, filename }; };
     const cases = [
-      ['b-tidy', () => true],
-      ['b-new',  () => ctxEl.style.display === 'block'],
-      ['b-open', () => true],                       // 拉起文件选择框，headless 里无副作用
-      ['b-img',  () => imgPicked > 0],               // 图片按钮要真的去点文件选择框
-      ['b-save', () => dl && /^grapheon-\d{4}-\d{2}-\d{2}\.json$/.test(dl.filename) && dl.size > 100],
-      ['b-png',  () => expEl.style.display === 'block'],
-      ['b-fit',  () => true],
-      ['b-help', () => helpEl.style.display === 'block'],
-      ['b-undo', () => true],
-      ['b-redo', () => true]
+      ['b-new',   () => ctxEl.style.display === 'block'],
+      ['b-open',  () => true],
+      ['b-save',  () => dl && /^grapheon-\d{4}-\d{2}-\d{2}\.json$/.test(dl.filename) && dl.size > 100],
+      ['b-png',   () => expEl.style.display === 'block'],
+      ['b-insert',() => ctxEl.style.display === 'block'],
+      ['b-view',  () => ctxEl.style.display === 'block'],
+      ['b-set',   () => setEl.style.display === 'block'],
+      ['b-help',  () => helpEl.style.display === 'block'],
+      ['b-undo',  () => true],
+      ['b-redo',  () => true],
+      // 刷新会真的重新加载页面，所以把 confirm 拦成「取消」，只验它确实问了
+      ['b-reload',() => asked > 0]
     ];
-    // b-img 得验证「确实拉起了图片选择框」，所以把它拦下来数一次
-    let imgPicked = 0;
-    const origImgClick = imgFileEl.click.bind(imgFileEl);
-    imgFileEl.click = () => { imgPicked++; };
+    let asked = 0;
+    const origConfirm = window.confirm;
+    window.confirm = () => { asked++; return false; };     // 永远点「取消」，别真刷新
     const bad = [];
     for (const [id, check] of cases){
       fresh();
       expEl.style.display = 'none'; helpEl.style.display = 'none';
-      edgeBoxEl.style.display = 'none'; hideCtx();
-      dl = null; imgPicked = 0;
+      edgeBoxEl.style.display = 'none'; setEl.style.display = 'none'; hideCtx();
+      dl = null; asked = 0;
       try { document.getElementById(id).click(); }
       catch (e){ bad.push(id + ':抛异常(' + e.message + ')'); continue; }
       if (!check()) bad.push(id + ':无效果');
     }
     expEl.style.display = 'none'; helpEl.style.display = 'none';
-    edgeBoxEl.style.display = 'none'; hideCtx();
+    edgeBoxEl.style.display = 'none'; setEl.style.display = 'none'; hideCtx();
     downloadBlob = origDL;
-    imgFileEl.click = origImgClick;
-    ok('A03 10 个按钮全部生效', bad.length === 0, bad.join(' '));
+    window.confirm = origConfirm;
+    ok('A03 11 个按钮全部生效', bad.length === 0, bad.join(' '));
   });
   T('A04 保存走的是统一下载通道，内容是真 JSON', () => {
     fresh();
@@ -3955,6 +3958,149 @@
     ok('K29e 开关命中按钮', (hitVarControl(sw, { x:L.knobBox.x + 4, y:L.knobBox.y + 4 }) || {}).kind === 'switch');
     ok('K29f 普通变量节点没有控件命中',
       hitVarControl(mkVar('x', '1'), { x:0, y:0 }) === null);
+  });
+
+
+  /* ==================== 主题 / 背景 / 设置面板 ==================== */
+  T('T01 默认主题是「棋盘」，没有红心也没有星号', () => {
+    fresh();
+    // 测试基座固定用 undertale（见文件开头 applyTheme('undertale')），
+    // 这里模拟「全新打开的浏览器」：本地没存过主题
+    localStorage.removeItem('grapheon.theme.v1');
+    localStorage.removeItem('grapheon.grid.v1');
+    loadTheme();
+    ok('T01 默认主题是 board', themeId === 'board', themeId);
+    ok('T01b 背景是棋盘', gridStyle() === 'checker', gridStyle());
+    ok('T01c 不画红心', themeHeart() === false);
+    ok('T01d 不要星号', themeStar() === false);
+    ok('T01e 主题表里两套都有', themeIds().indexOf('board') >= 0 && themeIds().indexOf('undertale') >= 0,
+      themeIds().join(','));
+  });
+  T('T02 棋盘背景真的画出来了', () => {
+    fresh(); fitView();
+    applyTheme('board'); setGridPref('theme');
+    resize(); draw();
+    const g = cv.getContext('2d');
+    // 棋盘用的是 C.grid（#1b1b1b），在黑底上找得到这样亮度的像素
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let gridPix = 0;
+    for (let i = 0; i < d.length; i += 4){
+      if (d[i] > 10 && d[i] < 80 && Math.abs(d[i] - d[i + 1]) < 6 && Math.abs(d[i] - d[i + 2]) < 6) gridPix++;
+    }
+    ok('T02 画布上有棋盘格像素', gridPix > 500, gridPix);
+  });
+  T('T03 四种背景都能切，关掉就什么都不画', () => {
+    fresh(); resize();
+    for (const st of ['lines', 'checker', 'dots']){
+      setGridPref(st);
+      ok('T03 ' + st + ' 生效', gridStyle() === st, gridStyle());
+      draw();
+    }
+    setGridPref('none');
+    ok('T03b none 就是不画', gridStyle() === 'none');
+    doc.nodes = []; doc.edges = []; doc.groups = []; reindex(); draw();   // 清空再量，免得把节点算进去
+    const g = cv.getContext('2d');
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let lit = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 8) lit++;
+    ok('T03c 关掉之后底上几乎没有亮点', lit < 400, lit);
+    setGridPref('theme');
+    ok('T03d 「跟随主题」跟着主题走', gridStyle() === themeGrid());
+  });
+  T('T04 切到 Undertale 主题：红心和星号回来', () => {
+    fresh();
+    applyTheme('undertale');
+    ok('T04 主题切过去了', themeId === 'undertale');
+    ok('T04b 要红心', themeHeart() === true);
+    ok('T04c 要星号', themeStar() === true);
+    ok('T04d body 上没有 no-star', document.body.classList.contains('no-star') === false);
+    ok('T04e 背景跟随主题变成横纵网格', gridStyle() === 'lines', gridStyle());
+    // 红心真的画出来（选中一个节点）
+    selectOnly(nodeByText('节点').id);
+    resize(); draw();
+    ok('T04f 选中时画布上有红心（红色像素）', (() => {
+      const g = cv.getContext('2d');
+      const d = g.getImageData(0, 0, cv.width, cv.height).data;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 60 && d[i + 2] < 60) return true;
+      return false;
+    })());
+    applyTheme('board');
+    ok('T04g 切回棋盘', themeId === 'board' && document.body.classList.contains('no-star'));
+    // 棋盘主题下不该有红心
+    selectOnly(nodeByText('节点').id);
+    resize(); draw();
+    ok('T04h 棋盘主题下没有红心', (() => {
+      const g = cv.getContext('2d');
+      const d = g.getImageData(0, 0, cv.width, cv.height).data;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 60 && d[i + 2] < 60) return false;
+      return true;
+    })());
+  });
+  T('T05 无星号主题会把对话开头的星号摘掉', () => {
+    applyTheme('board');
+    say('* 这是一句话。');
+    skipDlg();
+    ok('T05 星号被摘掉', dlgText.textContent === '这是一句话。', JSON.stringify(dlgText.textContent));
+    applyTheme('undertale');
+    say('* 这是一句话。');
+    skipDlg();
+    ok('T05b Undertale 下星号留着', dlgText.textContent === '* 这是一句话。',
+      JSON.stringify(dlgText.textContent));
+    applyTheme('board');
+    say('没有星号的提示');
+    skipDlg();
+    ok('T05c 本来就没星号的不会被吃掉', dlgText.textContent === '没有星号的提示',
+      dlgText.textContent);
+  });
+  T('T06 主题选择会落盘，重开还记得', () => {
+    applyTheme('undertale');
+    ok('T06 写进了 localStorage', localStorage.getItem('grapheon.theme.v1') === 'undertale',
+      localStorage.getItem('grapheon.theme.v1'));
+    setGridPref('dots');
+    ok('T06b 背景也落盘了', localStorage.getItem('grapheon.grid.v1') === 'dots');
+    // 模拟重开
+    themeId = 'board'; gridPref = 'theme';
+    loadTheme();
+    ok('T06c 重开后还是 undertale', themeId === 'undertale', themeId);
+    ok('T06d 背景也回来了', gridStyle() === 'dots', gridStyle());
+    // 恢复现场，别影响后面的用例
+    applyTheme('board'); setGridPref('theme');
+    localStorage.removeItem('grapheon.theme.v1');
+    localStorage.removeItem('grapheon.grid.v1');
+  });
+  T('T07 设置面板：开合 / 内容', () => {
+    fresh();
+    ok('T07 一开始是关的', setEl.style.display !== 'block');
+    toggleSettings();
+    ok('T07b 打开了', settingsOpen());
+    ok('T07c 主题选项齐了', setThemeEl.querySelectorAll('.opt').length === themeIds().length,
+      setThemeEl.querySelectorAll('.opt').length);
+    ok('T07d 背景选项齐了', setGridEl.querySelectorAll('.opt').length === GRID_STYLES.length,
+      setGridEl.querySelectorAll('.opt').length);
+    ok('T07e 快捷键列表非空', setKeysEl.querySelectorAll('.keyrow').length > 5,
+      setKeysEl.querySelectorAll('.keyrow').length);
+    ok('T07f 当前主题被标出来了', [...setThemeEl.querySelectorAll('.opt')].some(d => d.classList.contains('on')),
+      [...setThemeEl.querySelectorAll('.opt')].map(d => d.className).join('|'));
+    // 点一下背景选项
+    const dotBtn = [...setGridEl.querySelectorAll('.opt')].find(d => d.textContent.indexOf('点阵') >= 0);
+    dotBtn.click();
+    ok('T07g 点一下就换了背景', gridStyle() === 'dots', gridStyle());
+    // Esc 关掉
+    keyRaw('Escape');
+    ok('T07h Esc 能关掉', !settingsOpen());
+    setGridPref('theme');
+  });
+  T('T08 设置面板不会串到别的面板上', () => {
+    fresh();
+    openNodeBox(nodeByText('节点'));
+    toggleSettings();
+    ok('T08 开设置会先关掉节点面板', !settingsOpen() || nodeBoxEl.style.display === 'none',
+      setEl.style.display + '/' + nodeBoxEl.style.display);
+    ok('T08b 设置是真的开着', settingsOpen());
+    openHelp();
+    ok('T08c 开帮助会先关掉设置', !settingsOpen(), setEl.style.display);
+    closeHelp();
+    setEl.style.display = 'none';
   });
 
   /* ==================== 收尾 ==================== */

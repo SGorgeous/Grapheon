@@ -29,19 +29,65 @@ function draw(){
   drawMarquee();
   positionEditor();
 }
-let gridPat = null, gridPatStep = 0;
+let gridPat = null, gridPatStep = 0, gridPatKind = '';
 function drawGrid(){
+  const st = gridStyle();
+  if (st === 'none') return;
   const step = 34 * view.z;
   if (step < 11) return;
   const s = Math.max(8, Math.round(step));
-  if (!gridPat || s !== gridPatStep){
+  // 横纵网格：一格只画左上两条线，用 pattern 铺
+  if (st === 'lines'){
+    if (!gridPat || gridPatStep !== s || gridPatKind !== 'lines'){
+      const c = document.createElement('canvas');
+      c.width = s; c.height = s;
+      const g2 = c.getContext('2d');
+      g2.fillStyle = C.grid;
+      g2.fillRect(0, 0, 1, s);
+      g2.fillRect(0, 0, s, 1);
+      gridPat = ctx.createPattern(c, 'repeat');
+      gridPatStep = s; gridPatKind = 'lines';
+    }
+    const ox = ((view.x % s) + s) % s;
+    const oy = ((view.y % s) + s) % s;
+    ctx.save();
+    ctx.fillStyle = gridPat;
+    ctx.translate(ox - s, oy - s);
+    ctx.fillRect(0, 0, VW + s * 2, VH + s * 2);
+    ctx.restore();
+    return;
+  }
+  // 棋盘：2×2 的格子，只填左上和右下 —— 平铺出来就是棋盘
+  if (st === 'checker'){
+    const c2 = s * 2;
+    if (!gridPat || gridPatStep !== s || gridPatKind !== 'checker'){
+      const c = document.createElement('canvas');
+      c.width = c2; c.height = c2;
+      const g2 = c.getContext('2d');
+      g2.fillStyle = C.grid;
+      g2.fillRect(0, 0, s, s);
+      g2.fillRect(s, s, s, s);
+      gridPat = ctx.createPattern(c, 'repeat');
+      gridPatStep = s; gridPatKind = 'checker';
+    }
+    const ox = ((view.x % c2) + c2) % c2;
+    const oy = ((view.y % c2) + c2) % c2;
+    ctx.save();
+    ctx.fillStyle = gridPat;
+    ctx.translate(ox - c2, oy - c2);
+    ctx.fillRect(0, 0, VW + c2 * 2, VH + c2 * 2);
+    ctx.restore();
+    return;
+  }
+  // 点阵：一格右上角一个小方块
+  if (!gridPat || gridPatStep !== s || gridPatKind !== 'dots'){
     const c = document.createElement('canvas');
     c.width = s; c.height = s;
     const g2 = c.getContext('2d');
     g2.fillStyle = C.grid;
     g2.fillRect(0, 0, 2, 2);
     gridPat = ctx.createPattern(c, 'repeat');
-    gridPatStep = s;
+    gridPatStep = s; gridPatKind = 'dots';
   }
   const ox = ((view.x % s) + s) % s;
   const oy = ((view.y % s) + s) % s;
@@ -616,7 +662,7 @@ function drawNode(g, n){
     g.fillText(r.label, r.x + r.w / 2, r.y + r.h / 2 + 1);
   }
   if (selected){
-    drawHeart(g, b.x - 26, b.y + b.h / 2 - 6.5, 2);
+    if (themeHeart()) drawHeart(g, b.x - 26, b.y + b.h / 2 - 6.5, 2);   // 主题说不画就不画
     // 右下角缩放手柄
     const r = resizeHandleRect(b);
     g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;

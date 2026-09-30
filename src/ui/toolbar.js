@@ -10,17 +10,18 @@
    ========================================================================== */
 
 const TOPBAR = [
-  ['b-tidy',  () => { tidyLayout(); pushHist(); say('* 已按树形排版。'); }],
   ['b-undo',  () => undo()],
   ['b-redo',  () => redo()],
   ['b-new',   (ev) => { hideCtx(); showNewMenu(ev.currentTarget); }],
   ['b-open',  () => fileEl.click()],
-  ['b-img',   () => pickImageFile()],
-  ['b-back',  () => exitEmbed()],
   ['b-save',  () => saveFile()],
   ['b-png',   () => openExport()],
-  ['b-fit',   () => { fitView(); say('* 已居中。'); }],
-  ['b-help',  () => openHelp()]
+  ['b-insert',(ev) => { hideCtx(); showInsertMenu(ev.currentTarget); }],
+  ['b-view',  (ev) => { hideCtx(); showViewMenu(ev.currentTarget); }],
+  ['b-set',   () => toggleSettings()],
+  ['b-back',  () => exitEmbed()],
+  ['b-help',  () => openHelp()],
+  ['b-reload',() => { if (confirm('刷新页面？没保存的改动会丢。')) location.reload(); }]
 ];
 
 for (const [id, fn] of TOPBAR){
