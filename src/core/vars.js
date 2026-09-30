@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/vars.js
    变量系统：变量定义节点、文本里的 {name} 引用、运算节点、函数分组、输出节点、优先级。
@@ -495,6 +495,8 @@ const scopeOutputNodeOf = (scopeId) => scopeOutputNode(liveCtx(), scopeId);
 /* 渲染和量尺寸都读这个：没被替换过就还是原文 */
 function displayTextOf(n){
   if (!n) return '';
+  // 顶部标题行永远是节点名（n.text）—— 控件节点也一样。
+  // 变量名在左边那个专门的格子里，走 varDef.name。
   const t = idx.text && idx.text.get(n.id);
   return t == null ? String(n.text == null ? '' : n.text) : t;
 }
@@ -582,19 +584,27 @@ function varLayout(box, varDef, lineH){
   const innerW = Math.max(60, box.w - VAR_PAD * 2);
   const top = box.y + 8 + lineH;
   const R = { top, innerW };
+  // 控件节点（勾选 / 滑条 / 通路）：**左边也有一个变量名格子**，右边才是控件本体。
+  //   节点名（顶部标题行）和变量名是两回事：
+  //     标题行  = 给你看的，随便写
+  //     变量名  = {name} 引用要找的那个
+  //   以前控件节点没有变量名格子，名字只能挤在标题行上，
+  //   结果「在标题上改名」和「{name} 引用」对不上。
+  R.nameBox = { x:box.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
+  const bodyX = R.nameBox.x + VAR_NAME_W + 10;
+  const bodyW = Math.max(80, box.x + box.w - VAR_PAD - bodyX);
   if (v.control === 'check'){
     const rows = Math.max(1, v.options.length);
-    R.listBox = { x:box.x + VAR_PAD, y:top, w:innerW, h:rows * CHECK_ROW_H };
-    R.bodyH = R.listBox.h;
+    R.listBox = { x:bodyX, y:top, w:bodyW, h:rows * CHECK_ROW_H };
+    R.bodyH = Math.max(VAR_BOX_H, R.listBox.h);
   } else if (v.control === 'slider'){
-    R.trackBox = { x:box.x + VAR_PAD, y:top, w:innerW, h:SLIDER_TRACK_H };
-    R.bodyH = R.trackBox.h;
+    R.trackBox = { x:bodyX, y:top + (VAR_BOX_H - SLIDER_TRACK_H) / 2, w:bodyW, h:SLIDER_TRACK_H };
+    R.bodyH = VAR_BOX_H;
   } else if (v.control === 'switch'){
-    R.knobBox = { x:box.x + VAR_PAD, y:top, w:Math.min(190, innerW), h:SWITCH_H };
-    R.bodyH = R.knobBox.h;
+    R.knobBox = { x:bodyX, y:top + (VAR_BOX_H - SWITCH_H) / 2, w:Math.min(190, bodyW), h:SWITCH_H };
+    R.bodyH = VAR_BOX_H;
   } else {
-    R.nameBox = { x:box.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
-    R.valBox  = { x:R.nameBox.x + VAR_NAME_W + 10, y:top, w:VAR_VAL_W, h:VAR_BOX_H };
+    R.valBox = { x:bodyX, y:top, w:VAR_VAL_W, h:VAR_BOX_H };
     R.bodyH = VAR_BOX_H;
   }
   R.scopeBox = { x:box.x + VAR_PAD, y:top + R.bodyH + 8, w:innerW, h:VAR_SCOPE_H };

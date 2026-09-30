@@ -6208,16 +6208,18 @@
       return editing ? editing.kind : null;
     };
     const rows = [];
-    const chk = (name, n, dy) => {
+    // 控件节点的名字就是 varDef.name，走的是 varName；其余走 node
+    const chk = (name, n, dy, want) => {
       const k = dblAt(n, dy);
       rows.push(name + '=' + k);
-      ok('RN01 ' + name + ' 双击名字进的是改名（node）', k === 'node', name + ' -> ' + k);
-      if (k === 'node'){
-        editor.value = '改过的' + name;
+      const expect = want || 'node';
+      ok('RN01 ' + name + ' 双击名字进的是改名（' + expect + '）', k === expect, name + ' -> ' + k);
+      if (k === expect){
+        editor.value = 'gai' + name;
         editor.dispatchEvent(new Event('input', { bubbles:true }));
         commitEdit();
-        ok('RN01b ' + name + ' 改完真的写进去了', byId(n.id).text === '改过的' + name,
-          byId(n.id).text);
+        const got = (k === 'varName') ? normalizeVarDef(byId(n.id).varDef).name : byId(n.id).text;
+        ok('RN01b ' + name + ' 改完真的写进去了', got === 'gai' + name, got);
       }
       cancelEdit();
     };
@@ -6242,7 +6244,28 @@
     for (const c of ['check', 'slider', 'switch']){
       const n = addControlNode(c, 0, 0);
       reindex(); sizeAll();
-      chk(c === 'check' ? '勾选节点' : c === 'slider' ? '滑条节点' : '通路节点', n, 8);
+      const cn = c === 'check' ? '勾选节点' : c === 'slider' ? '滑条节点' : '通路节点';
+      // 标题行 = 节点名，走通用改名
+      chk(cn + '（标题）', n, 8);
+      // 左边那个变量名格子 = varDef.name，走 varName
+      {
+        cancelEdit();
+        selectOnly(n.id);
+        const nb = varBoxes(byId(n.id)).nameBox;
+        cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true,
+          clientX:Math.round(nb.x + nb.w / 2 + view.x), clientY:Math.round(nb.y + nb.h / 2 + view.y) }));
+        ok('RN01 ' + cn + ' 双击左边变量名格子进的是 varName',
+          !!editing && editing.kind === 'varName', editing ? editing.kind : '没开');
+        if (editing && editing.kind === 'varName'){
+          editor.value = 'v' + c;
+          editor.dispatchEvent(new Event('input', { bubbles:true }));
+          commitEdit();
+          ok('RN01b ' + cn + ' 变量名真的改成了 v' + c,
+            normalizeVarDef(byId(n.id).varDef).name === 'v' + c,
+            normalizeVarDef(byId(n.id).varDef).name);
+        }
+        cancelEdit();
+      }
     }
 
     // 程序化节点
@@ -6291,6 +6314,51 @@
       return okv;
     })());
   });
+
+  T('CT01 滑条命名为 x 之后，文本节点 {x} 引用得到（就是用户报的那个）', () => {
+    fresh(); layoutMind();
+    const sl = addControlNode('slider', 0, 0);
+    reindex(); sizeAll();
+    ok('CT01 新建的滑条有变量名格子了', !!varBoxes(byId(sl.id)).nameBox,
+      JSON.stringify(varBoxes(byId(sl.id)).nameBox));
+    ok('CT01b 节点名和变量名一开始是分开的', (() => {
+      const n = byId(sl.id);
+      return n.text === '滑条' && normalizeVarDef(n.varDef).name === '数值';
+    })(), byId(sl.id).text + ' / ' + normalizeVarDef(byId(sl.id).varDef).name);
+    ok('CT01c 控件本体在名字格子右边', (() => {
+      const L = varBoxes(byId(sl.id));
+      return L.trackBox.x >= L.nameBox.x + L.nameBox.w;
+    })());
+    // 把变量名改成 x
+    setVarDef(byId(sl.id), { name:'x' });
+    const tx = addNodeAt('值是 {x}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('CT01d 文本节点引用得到 x 了', displayTextOf(byId(tx.id)) === '值是 50',
+      displayTextOf(byId(tx.id)));
+    // 改滑条的值
+    setVarDef(byId(sl.id), { value:'80' });
+    reindex(); sizeAll();
+    ok('CT01e 拖动滑条，引用处跟着变', displayTextOf(byId(tx.id)) === '值是 80',
+      displayTextOf(byId(tx.id)));
+    // 节点名（标题行）改名不影响变量名
+    byId(sl.id).text = '音量';
+    reindex(); sizeAll();
+    ok('CT01f 改节点名不影响引用', displayTextOf(byId(tx.id)) === '值是 80',
+      displayTextOf(byId(tx.id)));
+    ok('CT01g 标题行显示的是节点名', (() => {
+      sizeNode(byId(sl.id));
+      return byId(sl.id).lines.join('') === '音量';
+    })(), byId(sl.id).lines.join(''));
+    // 三种控件都一样
+    for (const c of ['check', 'switch']){
+      const n = addControlNode(c, 0, 0, { name:'k' + c });
+      reindex(); sizeAll();
+      ok('CT01h ' + c + ' 也有变量名格子并且能引用',
+        !!varBoxes(byId(n.id)).nameBox && !!findVarDefIn(liveCtx(), 'k' + c, n.id),
+        c);
+    }
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

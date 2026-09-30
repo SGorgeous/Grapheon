@@ -817,7 +817,9 @@ function setOpOperator(n, id){
 function addControlNode(control, x, y, opts){
   const n = addNodeAt('', x, y, 'rect');
   n.kind = 'var';
-  const base = { name: control === 'check' ? '选项' : control === 'slider' ? '数值' : '开关' };
+  // 节点名（标题行）和变量名分开：标题给人看，变量名给 {name} 引用
+  n.text = control === 'check' ? '勾选' : control === 'slider' ? '滑条' : '通路';
+  const base = { name: control === 'check' ? '选项' : control === 'slider' ? '数值' : '通路' };
   if (control === 'check')  Object.assign(base, { control:'check', options:['选项一', '选项二'], picked:[0], type:'string' });
   if (control === 'slider') Object.assign(base, { control:'slider', value:'50', min:0, max:100, step:1, type:'number' });
   if (control === 'switch') Object.assign(base, { control:'switch', on:false, type:'string' });

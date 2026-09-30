@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -500,13 +500,12 @@ function drawVarNode(g, n, b, selected, hov){
   const startY = b.y + 8 + n.lh / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
   g.restore();
+  // 变量名格子：普通变量和三种控件**都有**（控件节点的在左边，控件本体在它右边）
+  drawField(g, L.nameBox, v.name, C.yellow);
   if (v.control === 'check')       drawCheckControl(g, L, v);
   else if (v.control === 'slider') drawSliderControl(g, L, v, n);
   else if (v.control === 'switch') drawSwitchControl(g, L, v);
-  else {
-    drawField(g, L.nameBox, v.name, C.yellow);
-    drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
-  }
+  else drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
   // 作用域 + 控件类型
   setFont(g, FS, 'normal', FONT);
   g.fillStyle = C.gray;

@@ -75,9 +75,10 @@ function sizeVarNode(n){
   setFont(mctx, FS, 'normal', FONT);
   const desc = displayTextOf(n);
   const v = normalizeVarDef(n.varDef);
+  // 控件节点也是「名字格 + 本体」两段，宽度按同一套算
   const inner = (v.control === 'plain')
     ? VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W
-    : VAR_PAD * 2 + CONTROL_MIN_W;
+    : VAR_PAD * 2 + VAR_NAME_W + 10 + CONTROL_MIN_W;
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
