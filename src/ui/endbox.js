@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/endbox.js
    连线端点面板 —— 从**节点或分组**的右键菜单进入，
@@ -36,7 +36,7 @@ function openEndBox(target){
   // 注意：传进来的可能是裸的分组对象（右键菜单里那个），它没有 isGroup 标记，
   // 所以一律用 byGroup 查一次来判断，别信 target.isGroup。
   if (byGroup(target.id)) selectGroup(target.id);
-  else { sel.clear(); sel.add(target.id); selEdgeId = null; selGroupId = null; }
+  else { sel.clear(); selGroups.clear(); sel.add(target.id); selEdgeId = null; }
   renderEndBox();
   endBoxEl.style.display = 'block';
   mark();

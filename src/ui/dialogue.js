@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -43,9 +43,11 @@ function updateMeta(){
     const wp = (e && e.waypoints && e.waypoints.length) ? ' · ' + e.waypoints.length + ' 拐点' : '';
     selTxt = ' · 选中连线（' + (e ? edgeStyleLabel(e) + wp : '') + '）';
   }
-  if (selGroupId){
-    const grp = selectedGroup();
-    if (grp) selTxt = ' · 选中分组「' + (grp.title || '分组') + '」（' + grp.members.length + ' 个成员）';
+  const gs = selectedGroups();
+  if (gs.length === 1 && sel.size === 0){
+    selTxt = ' · 选中分组「' + (gs[0].title || '分组') + '」（' + gs[0].members.length + ' 个成员）';
+  } else if (gs.length){
+    selTxt = (sel.size ? ' · 选中 ' + sel.size + ' 节点' : '') + ' + ' + gs.length + ' 分组';
   }
   // idx.hidden 里既有节点也有分组，分开数才好读
   let hidN = 0, hidG = 0;

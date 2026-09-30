@@ -1423,7 +1423,7 @@
     if (it) it.click();
     ok('U15d 面板打开', endBoxEl.style.display === 'block');
     ok('U15d2 选中的是分组，不是把分组 id 混进节点选择集',
-      selGroupId === grp.id && sel.size === 0 && !byId(grp.id), selGroupId + '/' + sel.size);
+      selGroups.has(grp.id) && sel.size === 0 && !byId(grp.id), [...selGroups].join(',') + '/' + sel.size);
     ok('U15e 面板标题写的是分组', endSubEl.textContent.indexOf('分组') === 0, endSubEl.textContent);
     ok('U15f 列出了那条线', endListEl.querySelectorAll('.endrow').length === 1,
       endListEl.querySelectorAll('.endrow').length);
@@ -1558,7 +1558,7 @@
     ok('U10 分组没了', (doc.groups || []).indexOf(grp) < 0);
     ok('U10b 节点一个没少', doc.nodes.length === n0, doc.nodes.length);
     ok('U10c 连线也一条没少', doc.edges.length === e0, doc.edges.length);
-    ok('U10d 选中态已清', selGroupId === null);
+    ok('U10d 选中态已清', selGroups.size === 0);
   });
   T('U11 分组能存下来', () => {
     fresh(); layoutMind();
@@ -2129,7 +2129,7 @@
     })());
     const q = S(qw);
     pe('pointerdown', q.x, q.y);
-    ok('R06d 点下去命中的是最内层', selGroupId === inner.id, selGroupId + ' vs inner=' + inner.id);
+    ok('R06d 点下去命中的是最内层', selGroups.has(inner.id), [...selGroups].join(',') + ' vs inner=' + inner.id);
     pe('pointerup', q.x, q.y);
     // n1 还在内层里，说明断环和层深计算都没把结构搞坏
     ok('R06e 结构没坏', groupAllNodes(inner.id).indexOf(n1.id) >= 0, groupAllNodes(inner.id).join(','));
@@ -2399,6 +2399,7 @@
     const b = nodeByText('操作');
     const kids = descendants(b.id);
     ok('S8c 前置：操作有子节点', kids.length >= 1, kids.length);
+    selectGroup(null);      // 先清掉分组选择：createGroup 现在也会把「选中的分组」收进去
     sel.clear(); kids.forEach(id => sel.add(id));
     const g2 = createGroup();
     selectOnly(b.id); toggleCollapseOf(b); reindex();
@@ -2407,7 +2408,7 @@
     const tb2 = groupTitleBox(g2);
     const h = S({ x:tb2.x + 4, y:tb2.y + 8 });
     pe('pointerdown', h.x, h.y);
-    ok('S8e 点不到它', selGroupId !== g2.id, selGroupId);
+    ok('S8e 点不到它', !selGroups.has(g2.id), [...selGroups].join(','));
     ok('S8f 也没进入拖拽', !drag || drag.grpId !== g2.id, drag && drag.mode);
     pe('pointerup', h.x, h.y);
   });
@@ -2442,6 +2443,162 @@
     const set = currentExportSet();
     ok('S10d 导出范围跳过被藏的', set.every(n => !isHidden(n.id)), set.length + ' / ' + doc.nodes.length);
     ok('S10e 没选中时导出信息不会算错', typeof expInfoEl.textContent === 'string');
+  });
+
+  /* ==================== 分组多选 ==================== */
+  const mkPair = (t1, t2, name) => {
+    const a = nodeByText(t1), b = nodeByText(t2);
+    selectGroup(null); sel.clear(); sel.add(a.id); sel.add(b.id);
+    const g = createGroup();
+    if (name) renameGroup(g, name);
+    return g;
+  };
+  const shiftClickTitle = (grp) => {
+    const tb = groupTitleBox(grp);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    pe('pointerdown', h.x, h.y, { shiftKey:true });
+    pe('pointerup', h.x, h.y, { shiftKey:true });
+    return h;
+  };
+  T('Y01 Shift 点分组标题可以多选', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    selectGroup(gA.id);
+    ok('Y01 前置：只选中 A', selGroups.size === 1 && selGroups.has(gA.id));
+    shiftClickTitle(gB);
+    ok('Y01b 两个都选中了', selGroups.size === 2 && selGroups.has(gA.id) && selGroups.has(gB.id),
+      [...selGroups].join(','));
+    shiftClickTitle(gB);
+    ok('Y01c 再 Shift 点一次就取消', selGroups.size === 1 && !selGroups.has(gB.id),
+      [...selGroups].join(','));
+    shiftClickTitle(gA);
+    ok('Y01d 取消到空', selGroups.size === 0, [...selGroups].join(','));
+  });
+  T('Y02 多选时不给端点和缩放柄', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    selectGroup(gA.id);
+    const r = groupBox(gA);
+    ok('Y02 单选时缩放柄可用', !!hitResizeHandle({ x:r.x + r.w - 2, y:r.y + r.h - 2 }));
+    ok('Y02b 单选时给端点', !!hitPort(anchorsFor(r).r));
+    toggleGroupSel(gB.id);
+    ok('Y02c 多选时不给缩放柄', hitResizeHandle({ x:r.x + r.w - 2, y:r.y + r.h - 2 }) === null);
+    ok('Y02d 多选时不给端点', hitPort(anchorsFor(r).r) === null);
+    ok('Y02e soleGroup 为空（单目标操作拿不到目标）', soleGroup() === null);
+  });
+  T('Y03 拖一个选中的分组，其它选中的分组一起走', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    selectGroup(gA.id); toggleGroupSel(gB.id);
+    const p0 = { ax:gA.x, ay:gA.y, bx:gB.x, by:gB.y };
+    const tb = groupTitleBox(gA);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    ok('Y03 按住已选中的分组不会重置选择', selGroups.size === 2, [...selGroups].join(','));
+    pe('pointermove', h.x + 120, h.y + 70);
+    pe('pointerup', h.x + 120, h.y + 70);
+    const dx = 120 / view.z, dy = 70 / view.z;
+    ok('Y03b 抓的那个跟着走', Math.abs(gA.x - p0.ax - dx) < 2 && Math.abs(gA.y - p0.ay - dy) < 2,
+      Math.round(gA.x - p0.ax) + ',' + Math.round(gA.y - p0.ay));
+    ok('Y03c 另一个也一起走', Math.abs(gB.x - p0.bx - dx) < 2 && Math.abs(gB.y - p0.by - dy) < 2,
+      Math.round(gB.x - p0.bx) + ',' + Math.round(gB.y - p0.by));
+  });
+  T('Y04 分组和节点可以混选，拖的时候一起走', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const out = nodeByText('操作');          // 组外的节点
+    selectGroup(gA.id);
+    const oc = center(out);
+    pe('pointerdown', oc.x, oc.y, { shiftKey:true });
+    pe('pointerup', oc.x, oc.y, { shiftKey:true });
+    ok('Y04 分组和节点同时选中', selGroups.size === 1 && sel.size === 1 && sel.has(out.id),
+      [...selGroups].join(',') + ' / ' + [...sel].join(','));
+    const p0 = { gx:gA.x, gy:gA.y, nx:out.x, ny:out.y };
+    const tb = groupTitleBox(gA);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    pe('pointermove', h.x + 90, h.y - 40);
+    pe('pointerup', h.x + 90, h.y - 40);
+    const dx = 90 / view.z, dy = -40 / view.z;
+    ok('Y04b 分组走了', Math.abs(gA.x - p0.gx - dx) < 2, Math.round(gA.x - p0.gx));
+    ok('Y04c 组外的节点也一起走了', Math.abs(out.x - p0.nx - dx) < 2 && Math.abs(out.y - p0.ny - dy) < 2,
+      Math.round(out.x - p0.nx) + ',' + Math.round(out.y - p0.ny));
+  });
+  T('Y05 Del 解散所有选中的分组', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    const n0 = doc.nodes.length, e0 = doc.edges.length;
+    selectGroup(gA.id); toggleGroupSel(gB.id);
+    deleteSelection();
+    ok('Y05 两个分组都没了', !byGroup(gA.id) && !byGroup(gB.id), (doc.groups || []).length);
+    ok('Y05b 节点一个没少', doc.nodes.length === n0, doc.nodes.length);
+    ok('Y05c 连线也一条没少', doc.edges.length === e0, doc.edges.length);
+    ok('Y05d 选中态清干净', selGroups.size === 0);
+  });
+  T('Y06 Ctrl+G 可以把选中的分组和节点一起组成新组', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const out = nodeByText('操作');
+    selectGroup(gA.id);
+    sel.add(out.id);
+    createGroup();
+    ok('Y06 建出了外层分组', (doc.groups || []).length === 2, (doc.groups || []).length);
+    const outer = doc.groups.find(g => g.members.indexOf(gA.id) >= 0);
+    ok('Y06b 旧分组成了子分组', !!outer && outer.members.indexOf(gA.id) >= 0, JSON.stringify(outer && outer.members));
+    ok('Y06c 组外的节点也在外层里', !!outer && outer.members.indexOf(out.id) >= 0);
+    ok('Y06d 已经被子分组包住的节点不会重复收进来',
+      !!outer && !outer.members.some(id => byId(id) && groupAllNodes(gA.id).indexOf(id) >= 0 && id !== out.id),
+      JSON.stringify(outer && outer.members));
+  });
+  T('Y07 框选能把整个被框住的分组也选上', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const r = groupBox(gA);
+    const p1 = S({ x:r.x - 60, y:r.y - 60 });
+    const p2 = S({ x:r.x + r.w + 60, y:r.y + r.h + 60 });
+    pe('pointerdown', p1.x, p1.y, { shiftKey:true });
+    pe('pointermove', p2.x, p2.y, { shiftKey:true });
+    pe('pointerup', p2.x, p2.y, { shiftKey:true });
+    ok('Y07 整个框都在范围里 → 分组被选中', selGroups.has(gA.id), [...selGroups].join(','));
+    ok('Y07b 里面的节点也被选中了', [...sel].length >= 1, sel.size);
+  });
+  T('Y08 元信息会报出多选', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    selectGroup(gA.id); toggleGroupSel(gB.id);
+    skipDlg(); updateMeta();
+    ok('Y08 底栏写着「2 分组」', dlgMeta.textContent.indexOf('2 分组') >= 0, dlgMeta.textContent);
+    selectGroup(gA.id); sel.add(nodeByText('操作').id);
+    skipDlg(); updateMeta();
+    ok('Y08b 混选时节点数和分组数都报', dlgMeta.textContent.indexOf('1 节点') >= 0 &&
+      dlgMeta.textContent.indexOf('1 分组') >= 0, dlgMeta.textContent);
+  });
+  T('Y09 全选也包含分组', () => {
+    fresh(); layoutMind();
+    mkPair('节点', '连线', 'A');
+    selectAll();
+    ok('Y09 Ctrl+A 把分组也选上', selGroups.size === (doc.groups || []).length,
+      selGroups.size + ' / ' + (doc.groups || []).length);
+  });
+  T('Y10 单选 / 清空的状态转换是对的', () => {
+    fresh(); layoutMind();
+    const gA = mkPair('节点', '连线', 'A');
+    const gB = mkPair('操作', '点选连线改样式', 'B');
+    selectGroup(gA.id); toggleGroupSel(gB.id);
+    selectOnly(nodeByText('操作').id);
+    ok('Y10 点节点会清掉分组选择', selGroups.size === 0 && sel.size === 1, [...selGroups].join(','));
+    toggleGroupSel(gA.id);
+    selectEdge(doc.edges[0].id);
+    ok('Y10b 选连线会清掉分组选择', selGroups.size === 0 && !!selEdgeId);
+    selectGroup(gB.id);
+    ok('Y10c selectGroup 是单选（会清掉别的）', selGroups.size === 1 && selGroups.has(gB.id));
+    toggleGroupSel(gB.id);
+    ok('Y10d 取消后为空', selGroups.size === 0);
   });
 
   });

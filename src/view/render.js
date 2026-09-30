@@ -277,7 +277,7 @@ function drawNode(g, n){
 /* 分组：虚线外框 + 左上角标题。外框几何完全由成员算出，永远包住成员。 */
 function drawGroup(g, grp){
   const r = groupBox(grp);
-  const sel = (grp.id === selGroupId);
+  const sel = selGroups.has(grp.id);
   const col = sel ? C.yellow : (grp.color || C.gray);
   g.save();
   g.strokeStyle = col;

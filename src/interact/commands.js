@@ -117,10 +117,18 @@ function spawnPos(n, dir, w, h, skip){
   return { x: n.x + n.w / 2 - w / 2, y: sign > 0 ? edge + GAP : edge - GAP - h };
 }
 function deleteSelection(){
-  const grp = selectedGroup();
-  if (grp){ dissolveGroup(grp); return; }   // 删分组 = 解散，不动成员
   const ed = selectedEdge();
   if (ed){ deleteEdgeOnly(ed); return; }
+  // 选中的分组一律「解散」：只拆容器，成员节点和连线都留着
+  const grps = selectedGroups();
+  if (grps.length){
+    for (const grp of grps) dissolveGroup(grp, true);
+    if (!sel.size){
+      pushHist(); mark();
+      say('* 解散了 ' + grps.length + ' 个分组，成员和连线都保留。');
+      return;
+    }
+  }
   if (!sel.size){ say('* 没有选中的东西。'); return; }
   const roots = [...sel].filter(id => byId(id));
   if (roots.some(id => isRoot(byId(id)))){
@@ -133,7 +141,8 @@ function deleteSelection(){
   doc.edges  = doc.edges.filter(e => !kill.has(e.s) && !kill.has(e.t));
   sel.clear();
   reindex(); relayout();
-  pushHist(); say('* ' + kill.size + ' 个节点被抹除了。');
+  pushHist();
+  say('* ' + kill.size + ' 个节点被抹除了' + (grps.length ? '，另有 ' + grps.length + ' 个分组被解散。' : '。'));
 }
 function deleteEdgeOnly(e){
   doc.edges = doc.edges.filter(x => x !== e);
@@ -179,7 +188,7 @@ function toggleGroupCollapse(grp){
 }
 /* Space：选中分组就折叠分组，选中节点就折叠节点 */
 function toggleCollapse(){
-  const grp = selectedGroup();
+  const grp = soleGroup();
   if (grp){ toggleGroupCollapse(grp); return; }
   const n = soleSel();
   if (!n){ say('* 先选中一个节点或分组，再按 Space。'); return; }
@@ -205,13 +214,41 @@ function setNodeSize(n, w, h){
   sizeNode(n);
   mark();
 }
-function selectOnly(id){ sel.clear(); selEdgeId = null; selGroupId = null; if (id) sel.add(id); mark(); }
-function selectEdge(id){ sel.clear(); selEdgeId = id || null; selGroupId = null; mark(); }
-function selectGroup(id){ sel.clear(); selEdgeId = null; selGroupId = id || null; mark(); }
+function selectOnly(id){ sel.clear(); selGroups.clear(); selEdgeId = null; if (id) sel.add(id); mark(); }
+function selectEdge(id){ sel.clear(); selGroups.clear(); selEdgeId = id || null; mark(); }
+/* 只选中这一个分组 */
+function selectGroup(id){ sel.clear(); selGroups.clear(); selEdgeId = null; if (id) selGroups.add(id); mark(); }
+/* Shift 点分组：加进/移出多选 */
+function toggleGroupSel(id){
+  if (!id) return;
+  selEdgeId = null;
+  if (selGroups.has(id)) selGroups.delete(id); else selGroups.add(id);
+  mark();
+}
 function selectAll(){
   sel = new Set(doc.nodes.filter(n => !isHidden(n.id)).map(n => n.id));
-  selEdgeId = null; selGroupId = null;
+  selGroups = new Set((doc.groups || []).filter(g => !isHidden(g.id)).map(g => g.id));
+  selEdgeId = null;
   mark();
+}
+/* 选中的分组列表 */
+const selectedGroups = () => [...selGroups].map(id => byGroup(id)).filter(Boolean);
+/* 「整个选择就是一个分组」时才返回它 —— 面板、端点、缩放柄这些单目标操作要用 */
+const soleGroup = () => (selGroups.size === 1 && sel.size === 0) ? byGroup([...selGroups][0]) : null;
+/* 整个选择是不是空的 */
+const nothingSelected = () => sel.size === 0 && selGroups.size === 0 && !selEdgeId;
+/* 一次拖拽要带走的所有东西（选中的分组递归展开 + 选中的节点），按 id 去重 */
+function selectionSnapshot(){
+  const out = [], seen = new Set();
+  const push = (kind, id, x, y) => {
+    const k = kind + ':' + id;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ kind, id, x, y });
+  };
+  for (const grp of selectedGroups()) for (const s of groupSnapshot(grp)) push(s.kind, s.id, s.x, s.y);
+  for (const id of sel){ const n = byId(id); if (n) push('node', id, n.x, n.y); }
+  return out;
 }
 
 /* --- 连线样式 --- */
@@ -337,10 +374,15 @@ const nodeStyleText = (n) => [
 /* =========================================================================
    分组
    ========================================================================= */
-const selectedGroup = () => (selGroupId ? byGroup(selGroupId) : null);
+
 function createGroup(){
-  const ids = [...sel].filter(id => byId(id) && !isHidden(id));
-  if (ids.length < 2){ say('* 至少选中两个节点才能成组（Shift 点选或 Shift 拖拽框选）。'); return null; }
+  // 选中的分组直接作为子分组收进来；已经被这些分组包住的节点就不重复收，
+  // 否则一个节点会同时属于两层，程序算符会被叠加两次。
+  const inSel = new Set();
+  for (const grp of selectedGroups()) for (const id of groupAllNodes(grp.id)) inSel.add(id);
+  const ids = [...sel].filter(id => byId(id) && !isHidden(id) && !inSel.has(id));
+  for (const grp of selectedGroups()) ids.push(grp.id);
+  if (ids.length < 2){ say('* 至少选中两个东西（节点或分组）才能成组，Shift 点选或 Shift 拖拽框选。'); return null; }
   doc.groups = doc.groups || [];
   const grp = { id:uid('g'), title:'分组 ' + (doc.groups.length + 1), members:ids.slice(), color:null };
   doc.groups.push(grp);
@@ -350,12 +392,15 @@ function createGroup(){
   say('* 已把 ' + ids.length + ' 个节点组进「' + grp.title + '」，成员之间的连线关系不变。');
   return grp;
 }
-function dissolveGroup(grp){
+function dissolveGroup(grp, quiet){
   if (!grp) return;
   doc.groups = (doc.groups || []).filter(g => g !== grp);
-  if (selGroupId === grp.id) selGroupId = null;
-  reindex(); pushHist(); mark();
-  say('* 已解散「' + (grp.title || '分组') + '」，成员节点和连线都保留。');
+  selGroups.delete(grp.id);
+  reindex(); mark();
+  if (!quiet){
+    pushHist();
+    say('* 已解散「' + (grp.title || '分组') + '」，成员节点和连线都保留。');
+  }
 }
 function renameGroup(grp, title){
   if (!grp) return;
@@ -374,8 +419,8 @@ function addSelectionToGroup(grp){
   // 分组不能塞进自己或自己的后代里
   const bad = new Set([grp.id, ...groupDescendantGroups(grp.id)]);
   const ids = [...sel].filter(id => byId(id) && grp.members.indexOf(id) < 0);
-  if (selGroupId && selGroupId !== grp.id && !bad.has(selGroupId) && grp.members.indexOf(selGroupId) < 0){
-    ids.push(selGroupId);
+  for (const gid of selGroups){
+    if (gid !== grp.id && grp.members.indexOf(gid) < 0) ids.push(gid);
   }
   const ok = ids.filter(id => !bad.has(id));
   if (!ok.length){ say('* 没有新的东西可以加进去。'); return; }

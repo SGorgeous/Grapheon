@@ -46,7 +46,7 @@ let idx = { children:new Map(), parent:new Map(), byId:new Map(), groups:new Map
             eff:new Map(), box:new Map() };   // eff = 程序化节点叠出来的派生效果
 let sel = new Set();
 let selEdgeId = null;          // 选中的连线（与节点选择互斥）
-let selGroupId = null;         // 选中的分组（同上）
+let selGroups = new Set();     // 选中的分组：可以多个，也可以和节点混选
 let view = { x:0, y:0, z:1 };
 let hover = null, hoverPort = null, hoverEdge = null, hoverGrp = null;
 let drag = null, marquee = null, linking = null, relink = null;
@@ -152,7 +152,7 @@ function reindex(){
     const e = doc.edges.find(x => x.id === selEdgeId);
     if (e && (idx.hidden.has(e.s) || idx.hidden.has(e.t))) selEdgeId = null;
   }
-  if (selGroupId && !idx.groups.has(selGroupId)) selGroupId = null;
+  for (const id of [...selGroups]) if (!idx.groups.has(id) || idx.hidden.has(id)) selGroups.delete(id);
   // 重建 id 占用表，uid() 靠它保证不与既有 id 冲突
   usedIds = new Set();
   for (const n of doc.nodes) usedIds.add(n.id);
@@ -575,7 +575,7 @@ function deserialize(d){
       x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
       collapsed:!!g.collapsed });
   }
-  sel.clear(); selEdgeId = null; selGroupId = null; editing = null; hideEditor();
+  sel.clear(); selEdgeId = null; selGroups.clear(); editing = null; hideEditor();
   reindex(); sizeAll();
 }
 

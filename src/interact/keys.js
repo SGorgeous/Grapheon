@@ -84,9 +84,11 @@ const ACTIONS = {
   'ui.help':          { label:'操作指南', group:'界面', run(){ openHelp(); } },
   'group.create':     { label:'把选中的节点加入分组', group:'分组', run(){ createGroup(); } },
   'group.dissolve':   { label:'解散选中的分组', group:'分组', run(){
-      const grp = selectedGroup();
-      if (!grp) return false;
-      dissolveGroup(grp);
+      const grps = selectedGroups();
+      if (!grps.length) return false;
+      for (const grp of grps) dissolveGroup(grp, true);
+      pushHist(); mark();
+      say('* 解散了 ' + grps.length + ' 个分组。');
       return true;
   }},
 

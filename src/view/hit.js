@@ -31,8 +31,8 @@ function hitPort(p){
   if (sel.size === 1){
     const n = byId([...sel][0]);
     if (n && !isHidden(n.id)){ box = n; id = n.id; }
-  } else if (selGroupId){
-    const grp = byGroup(selGroupId);
+  } else {
+    const grp = soleGroup();          // 整个选择就是一个分组时才给端点
     if (grp){ box = groupBox(grp); id = grp.id; }
   }
   if (!box) return null;
@@ -120,7 +120,7 @@ function hitResizeHandle(p){
   let box = null;
   const n = soleSel();
   if (n && !isHidden(n.id)) box = nodeBox(n);
-  else if (selGroupId){ const grp = byGroup(selGroupId); if (grp) box = groupBox(grp); }
+  else { const grp = soleGroup(); if (grp) box = groupBox(grp); }
   if (!box) return null;
   const r = resizeHandleRect(box);
   const pad = 4 / view.z;

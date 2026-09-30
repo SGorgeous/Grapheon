@@ -53,11 +53,13 @@ canvas.addEventListener('pointerdown', (ev) => {
     if (byGroup(cb.id)) toggleGroupCollapse(cb); else toggleCollapseOf(cb);
     return;
   }
-  // 分组标题栏：选中整组并开始搬动成员
+  // 分组标题栏：选中（Shift 加选）整组并开始搬动所有选中的东西
   const gt = hitGroupTitle(p);
   if (gt){
-    selectGroup(gt.id);
-    drag = { mode:'group', grpId:gt.id, p0:p, snap:groupSnapshot(gt), moved:false };
+    if (ev.shiftKey) toggleGroupSel(gt.id);
+    else if (!selGroups.has(gt.id)) selectGroup(gt.id);
+    lastClickNode = null;
+    drag = { mode:'group', grpId:gt.id, p0:p, snap:selectionSnapshot(), moved:false };
     mark();
     return;
   }
@@ -82,20 +84,22 @@ canvas.addEventListener('pointerdown', (ev) => {
     if (ev.shiftKey || ev.ctrlKey){
       if (sel.has(n.id)) sel.delete(n.id); else sel.add(n.id);
       selEdgeId = null;
-    } else if (!sel.has(n.id) || selEdgeId){
+    } else if (!sel.has(n.id) || selEdgeId || selGroups.size){
+      // 按住已选中的节点拖动时保留整个选择（含选中的分组），点没选中的才重置
       selectOnly(n.id);
     }
     lastClickNode = n.id;
-    const starts = [...sel].map(id => { const m = byId(id); return { id, x:m.x, y:m.y }; });
-    drag = { mode:'node', p0:p, starts, moved:false };
+    drag = { mode:'node', p0:p, snap:selectionSnapshot(), moved:false };
     mark();
     return;
   }
   // 分组边框（框内部已经让给成员节点了）
   const gb = hitGroupBorder(p);
   if (gb){
-    selectGroup(gb.id);
-    drag = { mode:'group', grpId:gb.id, p0:p, snap:groupSnapshot(gb), moved:false };
+    if (ev.shiftKey) toggleGroupSel(gb.id);
+    else if (!selGroups.has(gb.id)) selectGroup(gb.id);
+    lastClickNode = null;
+    drag = { mode:'group', grpId:gb.id, p0:p, snap:selectionSnapshot(), moved:false };
     mark();
     return;
   }
@@ -128,15 +132,11 @@ window.addEventListener('pointermove', (ev) => {
       view.x = drag.vx + (ev.clientX - drag.sx);
       view.y = drag.vy + (ev.clientY - drag.sy);
       mark();
-    } else if (drag.mode === 'node'){
+    } else if (drag.mode === 'node' || drag.mode === 'group'){
+      // 节点和分组走同一套：快照 + 位移，整个选择（节点 + 分组，分组递归带后代）一起走
       const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
-      for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
-      mark();
-    } else if (drag.mode === 'group'){
-      const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
-      applyGroupDelta(drag.snap, dx, dy);      // 快照 + 位移：自己和所有后代一起走
+      applyGroupDelta(drag.snap, dx, dy);
       mark();
     } else if (drag.mode === 'resize'){
       if (drag.isGroup){
@@ -186,14 +186,10 @@ window.addEventListener('pointermove', (ev) => {
 window.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   const p = s2w(ev.clientX, ev.clientY);
-  if (drag.mode === 'node' && drag.moved){
+  if ((drag.mode === 'node' || drag.mode === 'group') && drag.moved){
     // 顺序要紧：先按中心位置同步成员关系（拖出去的就不算成员了），
     // 再让框长大到装得下剩下的成员。反过来的话，刚被移出的节点会把框撑大。
-    if (settleGroups(drag.starts.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
-    pushHist();
-  } else if (drag.mode === 'group' && drag.moved){
-    // 分组也能被拖进别的分组（套娃）；拖完再让父框长大到装得下
-    settleGroups([drag.grpId]);
+    if (settleGroups(drag.snap.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
     pushHist();
   } else if (drag.mode === 'resize' && drag.moved){
     if (drag.isGroup){
@@ -217,13 +213,20 @@ window.addEventListener('pointerup', (ev) => {
     const a = marquee.a, b = marquee.b;
     const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
     const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
-    sel.clear(); selEdgeId = null;
+    sel.clear(); selGroups.clear(); selEdgeId = null;
     for (const n of doc.nodes){
       if (isHidden(n.id)) continue;
       const b = nodeBox(n);
       if (b.x + b.w > x1 && b.x < x2 && b.y + b.h > y1 && b.y < y2) sel.add(n.id);
     }
-    if (sel.size) say('* 选中了 ' + sel.size + ' 个节点。');
+    // 整个框都被框住的分组，也算选中
+    for (const grp of (doc.groups || [])){
+      if (isHidden(grp.id)) continue;
+      const r = groupBox(grp);
+      if (r.x >= x1 && r.x + r.w <= x2 && r.y >= y1 && r.y + r.h <= y2) selGroups.add(grp.id);
+    }
+    if (sel.size || selGroups.size) say('* 选中了 ' + sel.size + ' 个节点' +
+      (selGroups.size ? '、' + selGroups.size + ' 个分组' : '') + '。');
   } else if (drag.mode === 'link'){
     const t = linkTargetAt(p);
     if (t && t.id !== drag.from.node){
