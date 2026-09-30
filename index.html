@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -42,6 +42,12 @@
   </div>
 </div>
 
+<div id="ported" class="ud">
+  <div class="sub" id="portedWho">端点</div>
+  <div class="row"><span class="lb">ID</span><input id="portedId" type="text" inputmode="numeric"></div>
+  <div class="row"><span class="lb">标签</span><input id="portedLabel" type="text"></div>
+  <div class="row portedbtns"><button id="portedOk">确定</button><button id="portedCancel">取消</button></div>
+</div>
 <textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
 <div id="ctx" class="ud"></div>
 
@@ -438,6 +444,7 @@
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>
 <script src="src/ui/settings.js"></script>
+<script src="src/ui/ported.js"></script>
 <script src="src/ui/comps.js"></script>
 <script src="src/ui/library.js"></script>
 <script src="src/ui/toolbar.js"></script>

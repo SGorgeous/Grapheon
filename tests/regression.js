@@ -6952,11 +6952,11 @@
     const pt = { x: pb.x + pb.w - 2, y: pb.y + pb.h / 2 };
     cv.dispatchEvent(new MouseEvent('dblclick', { bubbles:true, cancelable:true, detail:2,
       clientX:Math.round(pt.x * view.z + view.x), clientY:Math.round(pt.y * view.z + view.y) }));
-    ok('PD04g 双击端点打开的是 port 编辑器',
-      !!editing && editing.kind === 'port', editing ? editing.kind : '没开');
-    ok('PD04h 框里先填好当前的 #id', /^#?\d/.test(editor.value), editor.value);
-    editor.value = '9 系数';
-    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    ok('PD04g 双击端点弹出两个输入框（ID + 标签）', portedOpen(), portedOpen() ? '开了' : '没开');
+    ok('PD04h ID 框先填好当前值', /^\d+$/.test(portedIdEl.value), portedIdEl.value);
+    portedIdEl.value = '9';
+    portedLbEl.value = '系数';
+    commitPortEditor();
     commitEdit();
     ok('PD04i ID 和标签一起改上了（右边缘 = 输出端点）', (() => {
       const p = portList(byId(n.id)).outs[0];
@@ -6973,10 +6973,10 @@
     const pt = { x: pb2.x + pb2.w - 2, y: pb2.y + pb2.h / 2 };
     cv.dispatchEvent(new MouseEvent('dblclick', { bubbles:true, cancelable:true, detail:2,
       clientX:Math.round(pt.x * view.z + view.x), clientY:Math.round(pt.y * view.z + view.y) }));
-    ok('PD05 前置：编辑器开着', !!editing && editing.kind === 'port');
-    editor.value = inId + ' 会被挡下的标签';       // ID 撞输入端点
-    editor.dispatchEvent(new Event('input', { bubbles:true }));
-    commitEdit();
+    ok('PD05 前置：弹窗开着', portedOpen());
+    portedIdEl.value = String(inId);              // ID 撞输入端点
+    portedLbEl.value = '会被挡下的标签';
+    commitPortEditor();
     skipDlg();
     ok('PD05b ID 没被改', portList(byId(n.id)).outs[0].id === cur.id,
       portList(byId(n.id)).outs[0].id);

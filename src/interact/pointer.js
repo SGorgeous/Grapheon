@@ -334,7 +334,7 @@ canvas.addEventListener('dblclick', (ev) => {
     // 双击端点 = 改 ID / 标签（一个小框两样都管）
     if (typeof portHitAt === 'function'){
       const ph = portHitAt(p, n);
-      if (ph){ selectOnly(n.id); editPort(n, ph.dir, ph.port.id); return; }
+      if (ph){ selectOnly(n.id); openPortEditor(n, ph.dir, ph.port.id); return; }
     }
     // 表格节点：双击哪个格子就编辑哪个格子
     if (isTableNode(n)){

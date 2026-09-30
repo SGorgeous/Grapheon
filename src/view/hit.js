@@ -89,8 +89,14 @@ function hitPort(p){
     const n = byId([...sel][0]);
     if (n && !isHidden(n.id) && !isEmbed(n)){ box = n; id = n.id; }   // 封闭节点不给端点
   } else {
+    // 顺序要紧：选了分组就给分组的端点；什么都没选时，鼠标停在谁身上
+    // 就允许从谁的端点拉线 —— 以前只有「恰好选中一个」才给端点，
+    // 没选中时根本连不了线，这就是「端点无法连接」的原因之一。
     const grp = soleGroup();          // 整个选择就是一个分组时才给端点
     if (grp){ box = groupBox(grp); id = grp.id; }
+    else if (sel.size === 0 && hover && !isHidden(hover.id) && !isEmbed(hover)){
+      box = hover; id = hover.id;
+    }
   }
   if (!box) return null;
   const P = anchorsFor(box);
@@ -169,10 +175,20 @@ function hitGroupArea(p){
   return null;
 }
 /* 拖线时的落点：优先具体节点，其次它所在的分组框 */
+/* 落在哪儿 = 谁的落点。除了盒子内部，**节点边上一点点**也算 ——
+   不然「把线拖到对方的端点上」会因为差几个像素而连不上。 */
 function linkTargetAt(p){
   const n = hitNode(p);
   if (n && isEmbed(n)) return null;         // 封闭节点不当落点
-  return n || hitGroupArea(p);
+  if (n) return n;
+  const tol = 12 / Math.max(0.2, view.z);
+  for (const m of doc.nodes){
+    if (isHidden(m.id) || isEmbed(m)) continue;
+    const b = nodeBox(m);
+    if (p.x >= b.x - tol && p.x <= b.x + b.w + tol &&
+        p.y >= b.y - tol && p.y <= b.y + b.h + tol) return m;
+  }
+  return hitGroupArea(p);
 }
 function hitEdge(p){
   const tol = 9 / view.z;
