@@ -236,7 +236,10 @@ window.addEventListener('pointerup', (ev) => {
     const tgt = (typeof linkTargetAt === 'function') ? linkTargetAt(p) : null;
     if (tgt && tgt.id !== ownerId && !isEmbed(byId(ownerId))){
       drag = null; mark();
-      const e = linkNodes(ownerId, tgt.id);
+      const tn2 = idx.byId.get(tgt.id);
+      const tp2 = (tn2 && typeof portIdAtPoint === 'function') ? portIdAtPoint(p, tn2) : null;
+      const e = linkNodes(ownerId, tgt.id, null, tp2 ? tp2.id : null);
+      if (e && tp2) pinEdgePort(e, 'b', tn2, tp2);
       if (e){ reindex(); pushHist(); }
       return;
     }
@@ -298,7 +301,12 @@ window.addEventListener('pointerup', (ev) => {
   } else if (drag.mode === 'link'){
     const t = linkTargetAt(p);
     if (t && t.id !== drag.from.node){
-      linkNodes(drag.from.node, t.id, drag.from.portId, null);
+      // 落点压在某个端点上就钉死在那 —— 拖到哪个端点就连哪个。
+      // 以前这里写死 null，于是只能按方向自动挑，同边的多个端点根本分不出来。
+      const tn = idx.byId.get(t.id);
+      const tp = (tn && typeof portIdAtPoint === 'function') ? portIdAtPoint(p, tn) : null;
+      const ne = linkNodes(drag.from.node, t.id, drag.from.portId, tp ? tp.id : null);
+      if (ne && tp) pinEdgePort(ne, 'b', tn, tp);
       reindex(); sizeAll();
       pushHist();
       say('* 已连接。');

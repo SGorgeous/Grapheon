@@ -194,6 +194,29 @@ function resetPorts(n){
   say('* 端点恢复默认。');
 }
 
+/* 落点压在某个端点上就返回它的 id，否则 null。
+   拉线时用它把边**钉死在你拖到的那个端点**上 ——
+   没有这个的话，边只能按「哪条边」自动挑，同边的多个端点就分不出来了
+   （症状：不管怎么选，都吸到同一条边 / 同一个位置）。 */
+function portIdAtPoint(p, node){
+  if (!node || typeof portList !== 'function') return null;
+  const tol = 12 / Math.max(0.2, view.z);
+  let best = null, bestD = Infinity;
+  for (const q of portList(node).ins.concat(portList(node).outs)){
+    const pt = portPoint(node, q);
+    const d = Math.hypot(pt.x - p.x, pt.y - p.y);
+    if (d <= tol && d < bestD){ bestD = d; best = q; }
+  }
+  return best;
+}
+/* 把一条边的某一端钉到端点上，顺带把方向也对齐 */
+function pinEdgePort(e, end, node, port){
+  if (!e || !port) return false;
+  if (end === 'a'){ e.aPort = port.id; e.aSide = port.side; }
+  else { e.bPort = port.id; e.bSide = port.side; }
+  return true;
+}
+
 /* ---------------- 拖动改方向 ---------------- */
 
 /* 按住一个端点往哪条边走。用「离哪条边最近」判断，比算角度稳。 */

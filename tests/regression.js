@@ -7399,6 +7399,91 @@
     ok('LK07m 画布上真的看得到这条线', lit > 60, lit);
   });
 
+
+  T('LK08 落点端点：拖到哪个端点，就连哪个（不再吸到同一条边）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    // 给 b 弄两个输入端点，摆到不同的边上，好分辨
+    addPort(byId(b.id), 'ins');
+    reindex(); sizeAll();
+    let ins = portList(byId(b.id)).ins;
+    ok('LK08 前置：b 有两个输入端点', ins.length === 2, ins.length);
+    const bb = nodeBox(byId(b.id));
+    // 一个摆左边、一个摆上边，位置差得很开
+    const p0 = ins[0], p1 = ins[1];
+    movePort(byId(b.id), 'ins', p0.id, { x:bb.x - 2, y:bb.y + bb.h * 0.5 });
+    movePort(byId(b.id), 'ins', p1.id, { x:bb.x + bb.w * 0.5, y:bb.y - 2 });
+    reindex(); sizeAll();
+    ins = portList(byId(b.id)).ins;
+    ok('LK08b 两个端点在不同的边上',
+      ins[0].side !== ins[1].side, ins.map(q => q.side).join('/'));
+    // 各自都能被 portIdAtPoint 认出来
+    ok('LK08c 点左边的端点认得出左边那个', (() => {
+      const q = portIdAtPoint(portPoint(byId(b.id), ins[0]), byId(b.id));
+      return q && q.id === ins[0].id;
+    })(), JSON.stringify(portIdAtPoint(portPoint(byId(b.id), ins[0]), byId(b.id))));
+    ok('LK08d 点上边的端点认得出上边那个', (() => {
+      const q = portIdAtPoint(portPoint(byId(b.id), ins[1]), byId(b.id));
+      return q && q.id === ins[1].id;
+    })(), JSON.stringify(portIdAtPoint(portPoint(byId(b.id), ins[1]), byId(b.id))));
+    // ★ 真的拉两条线，各连一个端点，看它们是不是钉在不同的端点上
+    const linkTo = (port) => {
+      selectOnly(a.id);
+      const pt = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+      pe('pointerdown', Math.round(pt.x * view.z + view.x), Math.round(pt.y * view.z + view.y));
+      const tp = portPoint(byId(b.id), port);
+      const tx = Math.round(tp.x * view.z + view.x), ty = Math.round(tp.y * view.z + view.y);
+      pe('pointermove', tx, ty);
+      pe('pointerup', tx, ty);
+      skipDlg();
+      return doc.edges[doc.edges.length - 1];
+    };
+    const e1 = linkTo(ins[0]);
+    ok('LK08e 第一条连上了', e1 && e1.t === b.id, e1 ? e1.s + '→' + e1.t : 'null');
+    ok('LK08f 它的落点钉在左边那个端点上', e1 && e1.bPort === ins[0].id,
+      e1 ? String(e1.bPort) : 'null');
+    // 第二条连另一个端点
+    const c = nodeByText('连线');
+    selectOnly(c.id);
+    const cp = portPoint(byId(c.id), portList(byId(c.id)).outs[0]);
+    pe('pointerdown', Math.round(cp.x * view.z + view.x), Math.round(cp.y * view.z + view.y));
+    const tp2 = portPoint(byId(b.id), ins[1]);
+    const tx2 = Math.round(tp2.x * view.z + view.x), ty2 = Math.round(tp2.y * view.z + view.y);
+    pe('pointermove', tx2, ty2);
+    pe('pointerup', tx2, ty2);
+    skipDlg();
+    const e2 = doc.edges[doc.edges.length - 1];
+    ok('LK08g 第二条也连上了', e2 && e2.t === b.id, e2 ? e2.s + '→' + e2.t : 'null');
+    ok('LK08h ★ 它钉的是**另一个**端点（以前两条会吸到同一个）',
+      e2 && e2.bPort === ins[1].id, e2 ? String(e2.bPort) : 'null');
+    ok('LK08i 两条边的 bPort 不同', e1.bPort !== e2.bPort,
+      e1.bPort + ' vs ' + e2.bPort);
+    // 线的终点必须分别落在各自那个端点上
+    ok('LK08j 第一条的终点在它自己的端点上', (() => {
+      const en = geomEndpoints(edgeGeomFor(byId(e1.id) ? e1 : e1));
+      const wp = portPoint(byId(b.id), ins[0]);
+      return Math.hypot(en.b.x - wp.x, en.b.y - wp.y) < 1.5;
+    })());
+    ok('LK08k 第二条的终点在它自己的端点上', (() => {
+      const en = geomEndpoints(edgeGeomFor(byId(e2.id) ? e2 : e2));
+      const wp = portPoint(byId(b.id), ins[1]);
+      return Math.hypot(en.b.x - wp.x, en.b.y - wp.y) < 1.5;
+    })());
+    ok('LK08l 两条终点不重合',
+      (() => {
+        const g1 = geomEndpoints(edgeGeomFor(e1)), g2 = geomEndpoints(edgeGeomFor(e2));
+        return Math.hypot(g1.b.x - g2.b.x, g1.b.y - g2.b.y) > 10;
+      })(), '两条线终点应当分开');
+    ok('LK08m 方向也跟着端点对齐', e1.bSide === ins[0].side && e2.bSide === ins[1].side,
+      e1.bSide + ' / ' + e2.bSide);
+    ok('LK08n 存读往返保住落点端点', (() => {
+      const snap = JSON.parse(JSON.stringify(serialize()));
+      deserialize(snap);
+      const x1 = doc.edges.find(x => x.id === e1.id);
+      return x1 && x1.bPort === ins[0].id;
+    })());
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
