@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/hit.js
    命中测试：节点 / 连接端口 / 连线 / 连线端点手柄 / 拐点手柄 / 缩放柄 / 折叠标记。
@@ -129,6 +129,10 @@ function groupGestureTarget(p, forNewNode){
   if (t) return t;
   const b = hitGroupBorder(p);
   if (b) return b;
+  // ⚠ 框内部：**打在成员身上的不算「点在分组上」**。
+  //   少了这一步，双击组内的节点会被当成双击分组、dblclick 直接早退，
+  //   节点就永远编辑不了 —— 这是实打实踩过的坑。
+  if (hitNode(p) || hitEdge(p) || hitWaypoint(p)) return null;
   const g = groupAtPoint(p);
   if (!g) return null;
   if (forNewNode && !groupAllNodes(g.id).length) return null;

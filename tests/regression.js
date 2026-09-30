@@ -5898,6 +5898,55 @@
     cancelEdit();
   });
 
+
+  T('DC08 双击组内的节点，编辑的是节点（不是分组）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    // 把 a 装进一个分组：a 现在「在分组范围内」
+    const g = newEmptyGroup(0, 0);
+    renameGroup(g, '装着 a 的框');
+    g.members = [a.id];
+    reindex(); sizeAll();
+    // 把框拉大一点，确保 a 真的落在框的范围内
+    setGroupSize(byGroup(g.id), Math.max(400, groupBox(byGroup(g.id)).w),
+                                  Math.max(300, groupBox(byGroup(g.id)).h));
+    reindex(); sizeAll();
+    const nb = nodeBox(byId(a.id));
+    ok('DC08 前置：a 确实在框的范围里', (() => {
+      const r = groupBox(byGroup(g.id));
+      return nb.x >= r.x && nb.x + nb.w <= r.x + r.w && nb.y >= r.y && nb.y + nb.h <= r.y + r.h;
+    })(), JSON.stringify({ node:nb, grp:groupBox(byGroup(g.id)) }));
+    const cx = Math.round(nb.x + nb.w / 2 + view.x), cy = Math.round(nb.y + nb.h / 2 + view.y);
+    ok('DC08b 前置：那个点命中的是节点，不是分组手势',
+      !groupGestureTarget({ x:nb.x + nb.w / 2, y:nb.y + nb.h / 2 }, true),
+      String(groupGestureTarget({ x:nb.x + nb.w / 2, y:nb.y + nb.h / 2 }, true)));
+    // 真实的双击序列
+    pe('pointerdown', cx, cy);
+    pe('pointerup', cx, cy);
+    cv.dispatchEvent(new MouseEvent('click', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    ok('DC08c 双击组内节点会打开编辑器（这是之前的 bug）',
+      !!editing && editing.kind === 'node' && editing.id === a.id,
+      editing ? editing.kind + ':' + editing.id : '没开');
+    ok('DC08d 选中的是那个节点，不是组内全部', sel.has(a.id) && !sel.has(b.id),
+      [...sel].join(','));
+    ok('DC08e 外框没被选中', selGroups.size === 0);
+    cancelEdit();
+    // 但双击框里的空白，仍然算双击分组
+    selectGroup(null); sel.clear();
+    const r = groupBox(byGroup(g.id));
+    let blank = null;
+    for (let y = r.y + 40; y < r.y + r.h - 20 && !blank; y += 10){
+      for (let x = r.x + 10; x < r.x + r.w - 10; x += 10){
+        if (!hitNode({ x, y }) && !hitEdge({ x, y }) && !hitWaypoint({ x, y })){ blank = { x, y }; break; }
+      }
+    }
+    ok('DC08f 前置：框内找得到空白点', !!blank);
+    ok('DC08g 框内空白仍然算双击分组',
+      !!groupGestureTarget(blank, true),
+      String(groupGestureTarget(blank, true)));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
