@@ -106,13 +106,16 @@ function hitWaypoint(p){
   }
   return null;
 }
-/* 选中节点的缩放柄 */
+/* 选中对象的缩放柄：节点和分组共用同一个手柄（返回的都是「有 id/x/y/w/h 的盒子」） */
 function hitResizeHandle(p){
+  let box = null;
   const n = soleSel();
-  if (!n || isHidden(n.id)) return null;
-  const r = resizeHandleRect(n);
+  if (n && !isHidden(n.id)) box = n;
+  else if (selGroupId){ const grp = byGroup(selGroupId); if (grp) box = groupBox(grp); }
+  if (!box) return null;
+  const r = resizeHandleRect(box);
   const pad = 4 / view.z;
-  if (p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad) return n;
+  if (p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad) return box;
   return null;
 }
 /* 折叠标记（同时也是展开按钮） */

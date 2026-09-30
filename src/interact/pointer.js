@@ -38,11 +38,12 @@ canvas.addEventListener('pointerdown', (ev) => {
     mark();
     return;
   }
-  // 缩放柄
+  // 缩放柄（节点 / 分组共用；返回的盒子带 isGroup 区分）
   const rz = hitResizeHandle(p);
   if (rz){
-    selectOnly(rz.id);
-    drag = { mode:'resize', nodeId:rz.id, startW:rz.w, startH:rz.h, moved:false };
+    if (rz.isGroup) selectGroup(rz.id); else selectOnly(rz.id);
+    drag = { mode:'resize', targetId:rz.id, isGroup:!!rz.isGroup,
+             startW:rz.w, startH:rz.h, moved:false };
     mark();
     return;
   }
@@ -56,7 +57,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const gt = hitGroupTitle(p);
   if (gt){
     selectGroup(gt.id);
-    drag = { mode:'group', grpId:gt.id, p0:p,
+    drag = { mode:'group', grpId:gt.id, p0:p, ox:gt.x, oy:gt.y,
              starts:gt.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
     mark();
     return;
@@ -95,7 +96,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const gb = hitGroupBorder(p);
   if (gb){
     selectGroup(gb.id);
-    drag = { mode:'group', grpId:gb.id, p0:p,
+    drag = { mode:'group', grpId:gb.id, p0:p, ox:gb.x, oy:gb.y,
              starts:gb.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
     mark();
     return;
@@ -137,12 +138,15 @@ window.addEventListener('pointermove', (ev) => {
     } else if (drag.mode === 'group'){
       const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
+      const grp = byGroup(drag.grpId);
+      if (grp){ grp.x = drag.ox + dx; grp.y = drag.oy + dy; }   // 框自己也要走
       for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
       mark();
     } else if (drag.mode === 'resize'){
-      const n = byId(drag.nodeId);
-      if (n){
-        setNodeSize(n, p.x - n.x, p.y - n.y);
+      const box = drag.isGroup ? groupBox(byGroup(drag.targetId)) : byId(drag.targetId);
+      if (box){
+        if (drag.isGroup) setGroupSize(byGroup(drag.targetId), p.x - box.x, p.y - box.y);
+        else setNodeSize(box, p.x - box.x, p.y - box.y);
         drag.moved = true;
       }
       mark();
@@ -184,12 +188,19 @@ window.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   const p = s2w(ev.clientX, ev.clientY);
   if (drag.mode === 'node' && drag.moved){
+    // 拖进 / 拖出分组框 → 自动收纳 / 移出
+    if (syncGroupMembership(drag.starts.map(s => s.id))) say('* 分组成员已按位置更新。');
     pushHist();
   } else if (drag.mode === 'group' && drag.moved){
     pushHist();
   } else if (drag.mode === 'resize' && drag.moved){
-    const n = byId(drag.nodeId);
-    if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
+    if (drag.isGroup){
+      const grp = byGroup(drag.targetId);
+      if (grp) say('* 分组框改成 ' + grp.w + ' × ' + grp.h + '。往框里拖节点就会自动收纳。');
+    } else {
+      const n = byId(drag.targetId);
+      if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
+    }
     pushHist();
   } else if (drag.mode === 'bend' && drag.moved){
     const e = doc.edges.find(x => x.id === drag.edgeId);
@@ -256,6 +267,7 @@ canvas.addEventListener('dblclick', (ev) => {
   if (e){ selectEdge(e.id); startEdit('edge', e.id); return; }
   const nn = addNodeAt('新节点', p.x - 70, p.y - 24, 'rect');
   reindex(); relayout();
+  syncGroupMembership([nn.id]);          // 落在框里就直接收纳
   sel.clear(); sel.add(nn.id);
   pushHist(); mark();
   startEdit('node', nn.id, '');

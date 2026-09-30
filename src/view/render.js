@@ -245,8 +245,15 @@ function drawGroup(g, grp){
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   g.fillText(fitText(g, grp.title || '分组', tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
-  // 选中时四个端点
+  // 选中时：四个端点 + 右下角缩放柄（和节点一样，框也能自由拉大小）
   if (sel){
+    const rsz = resizeHandleRect(r);
+    g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+    g.beginPath();
+    g.rect(Math.round(rsz.x), Math.round(rsz.y), rsz.w, rsz.h);
+    g.fill(); g.stroke();
+    g.fillStyle = C.yellow;
+    g.fillRect(Math.round(rsz.x + rsz.w - 8), Math.round(rsz.y + rsz.h - 8), 5, 5);
     const P = anchorsFor(r);
     for (const k of ['r', 'l', 't', 'b']){
       const a = P[k];

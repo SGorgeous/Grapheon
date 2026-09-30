@@ -1280,21 +1280,121 @@
     ok('U02b 连线数不变', doc.edges.length === e0, doc.edges.length);
     ok('U02c 连线的两端也没变', doc.edges.map(e => e.s + '>' + e.t).sort().join(',') === before);
   });
-  T('U03 外框永远包住所有成员', () => {
+  T('U03 新建分组给一个刚好装下成员的框；之后框是独立的', () => {
     fresh(); layoutMind();
     const a = nodeByText('节点'), b = nodeByText('连线');
     sel.clear(); sel.add(a.id); sel.add(b.id);
     const grp = createGroup();
     const r = groupBox(grp);
-    ok('U03 成员都在框里', [a, b].every(n =>
+    ok('U03 尺寸是正的', r.w > 0 && r.h > 0, JSON.stringify({ w:r.w, h:r.h }));
+    ok('U03b 成员都在框里', [a, b].every(n =>
       n.x >= r.x && n.y >= r.y && n.x + n.w <= r.x + r.w && n.y + n.h <= r.y + r.h),
       JSON.stringify(r));
-    a.x += 400; a.y += 200;                            // 成员一动框就跟着变
+    const before = { x:r.x, y:r.y, w:r.w, h:r.h };
+    a.x += 400; a.y += 200;                            // 自由框：成员自己动，框不动
     const r2 = groupBox(grp);
-    ok('U03b 成员移动后框跟着长大/移动', r2.x !== r.x || r2.w !== r.w, JSON.stringify(r2));
-    ok('U03c 移动后依然包住', [a, b].every(n =>
-      n.x >= r2.x && n.y >= r2.y && n.x + n.w <= r2.x + r2.w && n.y + n.h <= r2.y + r2.h));
+    ok('U03c 框不跟着成员跑（自由框，不是自动包络）',
+      r2.x === before.x && r2.y === before.y && r2.w === before.w && r2.h === before.h,
+      JSON.stringify(r2));
   });
+  T('U03d 框能像节点一样拖右下角自由改尺寸', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    selectGroup(grp.id);
+    const r = groupBox(grp);
+    const h = S({ x:r.x + r.w - 4, y:r.y + r.h - 4 });
+    pe('pointerdown', h.x, h.y);
+    ok('U03d 抓住的是分组缩放柄', drag && drag.mode === 'resize' && drag.isGroup === true,
+      drag && drag.mode + '/' + (drag && drag.isGroup));
+    const tgt = S({ x:grp.x + 520, y:grp.y + 380 });
+    pe('pointermove', tgt.x, tgt.y);
+    ok('U03e 宽度跟着变', Math.abs(grp.w - 520) <= 1, grp.w);
+    ok('U03f 高度跟着变', Math.abs(grp.h - 380) <= 1, grp.h);
+    pe('pointerup', tgt.x, tgt.y);
+    ok('U03g 拉大后成员关系没被动过', grp.members.length === 2, grp.members.length);
+  });
+  T('U03h 框缩不到没有', () => {
+    fresh(); layoutMind();
+    sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
+    const grp = createGroup();
+    selectGroup(grp.id);
+    setGroupSize(grp, 5, 5);
+    ok('U03h 有下限', grp.w >= 120 && grp.h >= 80, grp.w + 'x' + grp.h);
+  });
+  T('U14 把节点拖进框会自动收纳，拖出去会自动移出', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    // 造一个空的自由框，再把「操作」拖进去
+    const c = nodeByText('操作');
+    const empty = newEmptyGroup(c.x + 600, c.y + 400);
+    ok('U14 前置：空框没有成员', empty.members.length === 0, empty.members.length);
+    const cc = center(c);
+    pe('pointerdown', cc.x, cc.y);
+    const dst = S({ x:empty.x + empty.w / 2, y:empty.y + empty.h / 2 });
+    pe('pointermove', dst.x, dst.y);
+    pe('pointerup', dst.x, dst.y);
+    ok('U14b 拖进去之后自动成为成员', empty.members.indexOf(c.id) >= 0, JSON.stringify(empty.members));
+    // 再拖出来
+    const cc2 = center(c);
+    pe('pointerdown', cc2.x, cc2.y);
+    const outS = S({ x:empty.x - 500, y:empty.y - 400 });
+    pe('pointermove', outS.x, outS.y);
+    pe('pointerup', outS.x, outS.y);
+    ok('U14c 拖出去之后自动移出', empty.members.indexOf(c.id) < 0, JSON.stringify(empty.members));
+  });
+  T('U15 分组也能用节点那套端点吸附面板', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const c = nodeByText('操作');
+    const e = linkNodes(grp.id, c.id);
+    reindex();
+    ok('U15 前置：分组上有一条线', !!e && anchorEdges(grp.id).length === 1);
+    // 右键分组标题 → 菜单里应当有「连线端点吸附…」
+    const tb = groupTitleBox(grp);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:h.x, clientY:h.y, bubbles:true, cancelable:true }));
+    const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('U15b 分组菜单里有「连线端点吸附…」',
+      labels.some(t => t.indexOf('连线端点吸附') === 0), labels.join(' | '));
+    ok('U15c 分组菜单里也有「重命名」（和节点共用同一段代码）',
+      labels.some(t => t.indexOf('重命名') === 0), labels.join(' | '));
+    const it = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('连线端点吸附') === 0);
+    if (it) it.click();
+    ok('U15d 面板打开', endBoxEl.style.display === 'block');
+    ok('U15d2 选中的是分组，不是把分组 id 混进节点选择集',
+      selGroupId === grp.id && sel.size === 0 && !byId(grp.id), selGroupId + '/' + sel.size);
+    ok('U15e 面板标题写的是分组', endSubEl.textContent.indexOf('分组') === 0, endSubEl.textContent);
+    ok('U15f 列出了那条线', endListEl.querySelectorAll('.endrow').length === 1,
+      endListEl.querySelectorAll('.endrow').length);
+    // 选「上」→ 分组的 aSide 应当钉在框的上边中点
+    const opts = [...endListEl.querySelectorAll('.endrow')[0].querySelectorAll('.opt')];
+    opts[1].click();
+    ok('U15g aSide 钉成 t', e.aSide === 't', e.aSide);
+    const ep = edgeEndpoints(e);
+    const want = anchorsFor(groupBox(grp)).t;
+    ok('U15h 起点锚点就在分组框上边中点',
+      Math.abs(ep.a.x - want.x) < 0.01 && Math.abs(ep.a.y - want.y) < 0.01,
+      JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
+    closeEndBox();
+  });
+  T('U16 空分组框不会自己消失', () => {
+    fresh(); layoutMind();
+    const grp = newEmptyGroup(0, 0);
+    ok('U16 建出来是空的', grp.members.length === 0);
+    reindex();
+    ok('U16b 重新索引后还在', (doc.groups || []).indexOf(grp) >= 0);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    ok('U16c 存下来再读还在', (doc.groups || []).length === 1 && doc.groups[0].w > 0,
+      JSON.stringify(doc.groups));
+  });
+
   T('U04 分组可以重命名', () => {
     fresh(); layoutMind();
     sel.clear(); sel.add(nodeByText('节点').id); sel.add(nodeByText('连线').id);
@@ -1311,7 +1411,7 @@
     const a = nodeByText('节点'), b = nodeByText('连线');
     sel.clear(); sel.add(a.id); sel.add(b.id);
     const grp = createGroup();
-    const p0 = { ax:a.x, ay:a.y, bx:b.x, by:b.y };
+    const p0 = { ax:a.x, ay:a.y, bx:b.x, by:b.y, gx:grp.x, gy:grp.y };
     const tb = groupTitleBox(grp);
     const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
     pe('pointerdown', h.x, h.y);
@@ -1322,6 +1422,8 @@
     ok('U05b 成员整体位移', Math.abs(a.x - p0.ax - dx) < 2 && Math.abs(a.y - p0.ay - dy) < 2,
       Math.round(a.x - p0.ax) + ',' + Math.round(a.y - p0.ay));
     ok('U05c 相对位置不变', Math.abs((b.x - a.x) - (p0.bx - p0.ax)) < 0.01);
+    ok('U05e 框自己也跟着走了', Math.abs(grp.x - p0.gx - dx) < 2 && Math.abs(grp.y - p0.gy - dy) < 2,
+      Math.round(grp.x - p0.gx) + ',' + Math.round(grp.y - p0.gy));
     ok('U05d 拖完清干净了', !drag);
   });
   T('U06 分组外框有四个端点且能命中', () => {
@@ -1388,7 +1490,7 @@
     doc.nodes = doc.nodes.filter(n => n.id !== b.id);
     doc.edges = doc.edges.filter(e => e.s !== b.id && e.t !== b.id);
     reindex();
-    ok('U09c 空分组自动消失', (doc.groups || []).indexOf(grp) < 0, doc.groups.length);
+    ok('U09c 空掉的框还留着（自由框可以是个空盒子）', (doc.groups || []).indexOf(grp) >= 0, doc.groups.length);
   });
   T('U10 解散分组：成员和连线都留着', () => {
     fresh(); layoutMind();

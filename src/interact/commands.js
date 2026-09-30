@@ -368,3 +368,52 @@ function removeSelectionFromGroup(grp){
   reindex(); pushHist(); mark();
   say('* 已移出分组。');
 }
+
+/* 分组自由框：手动改尺寸（下限跟节点一样，别缩没） */
+function setGroupSize(grp, w, h){
+  if (!grp) return;
+  const MINW2 = 120, MINH2 = 80;
+  grp.w = Math.max(MINW2, Math.round(w));
+  grp.h = Math.max(MINH2, Math.round(h));
+  mark();
+}
+/* 拖进拖出自动收纳：节点中心落在框里就加入，离开就移除。
+   只在「拖完节点」「新建节点」时调用，其它操作（排版、改尺寸）不碰成员关系，免得误伤。 */
+function syncGroupMembership(ids){
+  const list = doc.groups || [];
+  if (!list.length || !ids || !ids.length) return false;
+  let changed = false;
+  for (const grp of list){
+    for (const id of ids){
+      const n = byId(id);
+      if (!n) continue;
+      const inside = pointInGroup(grp, n.x + n.w / 2, n.y + n.h / 2);
+      const at = grp.members.indexOf(id);
+      if (inside && at < 0){ grp.members.push(id); changed = true; }
+      else if (!inside && at >= 0){ grp.members.splice(at, 1); changed = true; }
+    }
+  }
+  if (changed) mark();
+  return changed;
+}
+/* 把框收缩到刚好包住成员 */
+function tidyGroup(grp){
+  if (!grp) return;
+  fitGroupToMembers(grp);
+  pushHist(); mark();
+  say('* 已把「' + (grp.title || '分组') + '」收缩到刚好包住成员。');
+}
+
+/* 直接画一个空的分组框，等着往里拖节点 */
+function newEmptyGroup(cx, cy){
+  doc.groups = doc.groups || [];
+  const w = 320, h = 220;
+  const grp = { id:uid('g'), title:'分组 ' + (doc.groups.length + 1), members:[], color:null,
+                x:Math.round(cx - w / 2), y:Math.round(cy - h / 2), w, h };
+  doc.groups.push(grp);
+  reindex();
+  selectGroup(grp.id);
+  pushHist();
+  say('* 建了一个空分组框。把节点拖进去就会自动收纳，拖右下角可以改大小。');
+  return grp;
+}

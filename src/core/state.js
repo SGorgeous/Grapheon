@@ -59,12 +59,12 @@ const mark   = () => { dirty = true; };
 function reindex(){
   idx.children = new Map(); idx.parent = new Map(); idx.byId = new Map(); idx.groups = new Map();
   for (const n of doc.nodes) { idx.children.set(n.id, []); idx.byId.set(n.id, n); }
-  // 分组：丢掉已经不在文档里的成员；空了的分组自动消失
+  // 自由框：成员允许为空（就是个空盒子，等着往里拖东西），所以只清理「已不在文档里」的成员
   if (!Array.isArray(doc.groups)) doc.groups = [];
-  doc.groups = doc.groups.filter(g => {
+  for (const g of doc.groups){
     g.members = (g.members || []).filter(id => idx.byId.has(id));
-    return g.members.length > 0;
-  });
+    if (!(+g.w > 0) || !(+g.h > 0)) fitGroupToMembers(g);   // 老档案没尺寸就按成员补一个
+  }
   for (const g of doc.groups) idx.groups.set(g.id, g);
   const seen = new Set();
   for (const e of doc.edges){
@@ -113,23 +113,33 @@ function anchorOf(id){
   if (g) return groupBox(g);
   return null;
 }
-/* 分组的外框完全由成员算出来：永远包住成员，成员一动框就跟着动，不会脱节。 */
+/* 分组是个「自由框」：尺寸自己存着，可以随便拉大拉小；成员靠拖进拖出同步。 */
 function groupBox(g){
+  return { id:g.id, isGroup:true, group:g, x:g.x, y:g.y, w:g.w, h:g.h };
+}
+/* 按当前成员算一个刚好装下它们的框（新建分组、以及老档案缺尺寸时用） */
+function fitGroupToMembers(g){
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const id of g.members){
+  for (const id of (g.members || [])){
     const n = idx.byId.get(id);
     if (!n) continue;
     minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
     maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
   }
-  if (!isFinite(minX)) return { id:g.id, isGroup:true, group:g, x:0, y:0, w:0, h:0 };
-  return {
-    id:g.id, isGroup:true, group:g,
-    x: minX - GROUP_PAD,
-    y: minY - GROUP_TITLE_H,
-    w: (maxX - minX) + GROUP_PAD * 2,
-    h: (maxY - minY) + GROUP_TITLE_H + GROUP_PAD
-  };
+  if (!isFinite(minX)){
+    g.x = +g.x || 0; g.y = +g.y || 0;
+    g.w = Math.max(200, +g.w || 0); g.h = Math.max(150, +g.h || 0);
+    return g;
+  }
+  g.x = minX - GROUP_PAD;
+  g.y = minY - GROUP_TITLE_H;
+  g.w = (maxX - minX) + GROUP_PAD * 2;
+  g.h = (maxY - minY) + GROUP_TITLE_H + GROUP_PAD;
+  return g;
+}
+/* 一个点（一般是节点中心）在不在这个框里 */
+function pointInGroup(g, x, y){
+  return x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h;
 }
 /* 分组标题栏的矩形（命中测试和绘制共用） */
 function groupTitleBox(g){
@@ -171,7 +181,8 @@ function serialize(){
         ? e.waypoints.map(p => ({ x:Math.round(p.x), y:Math.round(p.y) })) : null
     })),
     groups: (doc.groups || []).map(g => ({
-      id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null
+      id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null,
+      x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
     }))
   };
 }
