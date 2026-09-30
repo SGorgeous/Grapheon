@@ -121,29 +121,98 @@ function showCtx(x, y, n, e, info){
   info = info || {};
   const items = [];
   if (n){
-    items.push(['添加子节点', 'Tab', () => addChild()]);
-    items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
-    pushCommonItems(items, n, 'node', 'F2');
-    // 选了多个才给对齐相关的项（一个东西没法对齐）
-    if (sel.size + selGroups.size >= 2){
-      items.push(['对齐与分布', '▶', null, [
-        ['左对齐',      '', () => alignSelection('h-left')],
-        ['水平居中',    '', () => alignSelection('h-center')],
-        ['右对齐',      '', () => alignSelection('h-right')],
-        'hr',
-        ['顶对齐',      '', () => alignSelection('v-top')],
-        ['垂直居中',    '', () => alignSelection('v-center')],
-        ['底对齐',      '', () => alignSelection('v-bottom')],
-        'hr',
-        ['横向等距分布', '至少三个', () => distributeSelection('x')],
-        ['竖向等距分布', '至少三个', () => distributeSelection('y')]
-      ]]);
+    /* =====================================================================
+       节点右键菜单（重排过）
+       ---------------------------------------------------------------------
+       以前最多 26 个顶层项，长得看不到头。现在按**用途**归成几组，
+       顶层常驻不超过 8 项：重命名 / 外观 / 数据 / 连接 / 结构 / 表格 / 对齐 / 删除。
+       ===================================================================== */
+    items.push(['重命名', 'F2', () => startEdit('node', n.id)]);
+    if (doc.edges.some(e => e.s === n.id || e.t === n.id)){
+      items.push(['连线端点吸附…', '改这条线接在哪条边上', () => openEndBox(n)]);
     }
+
+    /* ---------------- 外观 ▶ ---------------- */
+    const look = [];
+    look.push(['形状', '', null, [
+      [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
+      [(n.shape === 'round'   ? '● ' : '   ') + '圆角矩形',   '', () => setShape('round')],
+      [(n.shape === 'diamond' ? '● ' : '   ') + '菱形（判断）', '', () => setShape('diamond')],
+      [(n.shape === 'oval'    ? '● ' : '   ') + '椭圆',       '', () => setShape('oval')],
+      'hr',
+      ['恢复自适应尺寸', n.fixedW || n.fixedH ? '现在是你手动拉的' : '尺寸本来就是自适应',
+        n.fixedW || n.fixedH ? () => autoSizeNode(n) : null]
+    ]]);
+    look.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
+    look.push(['组件…', 'C', () => openComps()]);
+    if (n.kind === 'image'){
+      look.push('hr');
+      look.push(['换一张图片…', '', () => pickImageFile(null, n)]);
+      look.push(['编辑描述…', '双击图下方', () => startEdit('nodeDesc', n.id)]);
+      look.push(['编辑名称…', '双击右上角', () => startEdit('node', n.id)]);
+    }
+    if (isEmbed(n)){
+      look.push('hr');
+      look.push(['进入编辑', '双击', () => enterEmbed(n)]);
+      look.push(['换个文档…', '', () => pickEmbedFile()]);
+    }
+    items.push(['外观', '形状 / 样式 / 组件', null, look]);
+
+    /* ---------------- 数据 ▶（一切和「值」有关的）---------------- */
+    const data = [];
     if (isBroadcast(n)){
-      items.push(['广播：值来自输入，只能设名字', '全局可见，不用连线', null]);
-      items.push('hr');
+      data.push(['广播：值来自输入，只能设名字', '全局可见，不用连线', null]);
+      data.push('hr');
     }
-    // 端点：加 / 删 / 改 id / 改标签 / 恢复默认
+    if (isVarNode(n)){
+      const v = normalizeVarDef(n.varDef);
+      data.push(['控件：' + VAR_CONTROL_LABEL[v.control], '▶', null,
+        VAR_CONTROLS.map(c => [(v.control === c ? '● ' : '   ') + VAR_CONTROL_LABEL[c], '', () => {
+          setVarControl(n, c);
+        }])]);
+      if (v.control === 'check'){
+        data.push(['编辑选项…', '逗号分隔', () => startEdit('checkOpts', n.id)]);
+        data.push(['清空勾选', '', () => { setVarDef(n, { picked:[] }); pushHist(); }]);
+      }
+      if (v.control === 'slider'){
+        data.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
+          ['精确填…（可写 {变量}）', '上下限 / 步长', () => startEdit('sliderRange', n.id)],
+          'hr',
+          ['下限 -10', '', () => setSliderRange(n, { min:v.min - 10 })],
+          ['下限 +10', '', () => setSliderRange(n, { min:v.min + 10 })],
+          ['上限 -10', '', () => setSliderRange(n, { max:v.max - 10 })],
+          ['上限 +10', '', () => setSliderRange(n, { max:v.max + 10 })],
+          ['步长归 1', '', () => setSliderRange(n, { step:1 })],
+          ['步长归 5', '', () => setSliderRange(n, { step:5 })]
+        ]]);
+      }
+      if (v.control === 'cond'){
+        const ctx0 = liveCtx();
+        const inc = (typeof gateOpenIn === 'function') ? valueFromUpstream(ctx0, n.id) : null;
+        data.push(['条件：输入 ' + (inc == null ? '（没接）' : String(inc))
+          + ' → ' + (gateOpenIn(ctx0, n) ? '通' : '不通'), '输入为 1 才通', null]);
+      }
+      data.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
+        VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
+          () => { setVarDef(n, { scope:s }); pushHist();
+                  say('* 作用域改成「' + VAR_SCOPE_LABEL[s] + '」：' + VAR_SCOPE_HINT[s] + '。'); }])]);
+      data.push(['值类型：' + VAR_TYPE_LABEL[v.type], '▶', null,
+        VAR_TYPES.map(x => [(v.type === x ? '● ' : '   ') + VAR_TYPE_LABEL[x], '',
+          () => { setVarDef(n, { type:x }); pushHist(); }])]);
+    }
+    if (isOpNode(n)){
+      const od = normalizeOpDef(n.opDef);
+      data.push(['运算符：' + opDefOf(od.op).label, '▶', null,
+        OPERATORS.map(o => [(od.op === o.id ? '● ' : '   ') + o.label, o.hint,
+          () => { setOpOperator(n, o.id); }])]);
+      data.push(['操作数…', '可以写 {变量}', () => startEdit('opVal0', n.id)]);
+    }
+    data.push('hr');
+    data.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '程序节点才有作用域 / 输出',
+      () => toggleProgramNode(n)]);
+    items.push(['数据', '作用域 / 控件 / 运算符', null, data]);
+
+    /* ---------------- 连接 ▶（端点相关）---------------- */
     if (!isEmbed(n)){
       const PL = portList(n);
       /* ⚠ 三类都要有名字。以前只有 ins/outs 两个分支，
@@ -173,95 +242,62 @@ function showCtx(x, y, n, e, info){
               portId:p.id })
         ])]);
       portItems.push(['恢复默认端点', '回到这个节点种类默认的样子', () => resetPorts(n)]);
-      items.push(['端点', '点一下改标签', null, portItems]);
+      items.push(['连接', '端点：加 / 删 / 改 ID / 换边', null, portItems]);
     }
-    // 表格节点：行列的增删
+
+    /* ---------------- 结构 ▶ ---------------- */
+    const struct = [
+      ['添加子节点', 'Tab', () => addChild()],
+      ['添加兄弟节点', 'Enter', () => addSibling()],
+      'hr'
+    ];
+    const owner = (doc.groups || []).find(grp => grp.members.indexOf(n.id) >= 0);
+    if (sel.size >= 2){
+      struct.push(['把选中的 ' + sel.size + ' 个组成新分组', 'Ctrl+G', () => createGroup()]);
+    }
+    if (owner){
+      struct.push(['移出「' + (owner.title || '分组') + '」', '',
+        () => { selectOnly(n.id); removeSelectionFromGroup(owner); }]);
+    }
+    if (sel.size < 2 && !owner){
+      struct.push(['分组', '选中两个以上才能成组（Ctrl+G）', null]);
+    }
+    struct.push('hr');
+    struct.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', () => toggleCollapseOf(n)]);
+    items.push(['结构', '子节点 / 兄弟 / 分组 / 折叠', null, struct]);
+
+    /* ---------------- 表格 ▶（只有表格节点才有）---------------- */
     if (isTableNode(n)){
       const tt = tableOf(n);
-      items.push(['表格：' + tt.rows + ' 行 × ' + tt.cols + ' 列', '双击格子改内容', null, [
+      items.push(['表格', tt.rows + ' 行 × ' + tt.cols + ' 列', null, [
         ['末尾加一行', '行高固定', () => tableAddRow(n)],
         ['末尾加一列', '列宽按内容算', () => tableAddCol(n)],
         'hr',
         ['删掉最后一行', '至少留一行', () => tableDelRow(n)],
         ['删掉最后一列', '至少留一列', () => tableDelCol(n)],
         'hr',
-        [(tt.header ? '● ' : '   ') + '第 0 行当表头', '底色反一下，用它当标题行', () => toggleTableHeader(n)]
+        [(tt.header ? '● ' : '   ') + '第 0 行当表头', '底色反一下，用它当标题行',
+          () => toggleTableHeader(n)]
       ]]);
     }
-    items.push(['组件…', 'C', () => openComps()]);
-    if (isVarNode(n)){
-      const v = normalizeVarDef(n.varDef);
-      items.push(['控件：' + VAR_CONTROL_LABEL[v.control], '▶', null,
-        VAR_CONTROLS.map(c => [(v.control === c ? '● ' : '   ') + VAR_CONTROL_LABEL[c], '', () => {
-          setVarControl(n, c);
-        }])]);
-      if (v.control === 'check'){
-        items.push(['编辑选项…', '逗号分隔', () => startEdit('checkOpts', n.id)]);
-        items.push(['清空勾选', '', () => { setVarDef(n, { picked:[] }); pushHist(); }]);
-      }
-      if (v.control === 'slider'){
-        items.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
-          ['下限 -10', '', () => setSliderRange(n, { min:v.min - 10 })],
-          ['下限 +10', '', () => setSliderRange(n, { min:v.min + 10 })],
-          ['上限 -10', '', () => setSliderRange(n, { max:v.max - 10 })],
-          ['上限 +10', '', () => setSliderRange(n, { max:v.max + 10 })],
-          ['步长归 1', '', () => setSliderRange(n, { step:1 })],
-          ['步长归 5', '', () => setSliderRange(n, { step:5 })]
-        ]]);
-      }
-      if (v.control === 'cond'){
-        const inc = (typeof gateOpenIn === 'function') ? valueFromUpstream(liveCtx(), n.id) : null;
-        items.push(['条件：输入 ' + (inc == null ? '（没接）' : String(inc))
-          + ' → ' + (gateOpenIn(liveCtx(), n) ? '通' : '不通'), '输入为 1 才通', null]);
-      }
-      items.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
-        VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
-          () => { setVarDef(n, { scope:s }); pushHist(); say('* 作用域改成「' + VAR_SCOPE_LABEL[s] + '」：' + VAR_SCOPE_HINT[s] + '。'); }])]);
-      items.push(['值类型：' + VAR_TYPE_LABEL[v.type], '▶', null,
-        VAR_TYPES.map(x => [(v.type === x ? '● ' : '   ') + VAR_TYPE_LABEL[x], '', () => { setVarDef(n, { type:x }); pushHist(); }])]);
-      items.push('hr');
+
+    /* ---------------- 对齐与分布 ▶（选了多个才有意义）---------------- */
+    if (sel.size + selGroups.size >= 2){
+      items.push(['对齐与分布', '▶', null, [
+        ['左对齐',      '', () => alignSelection('h-left')],
+        ['水平居中',    '', () => alignSelection('h-center')],
+        ['右对齐',      '', () => alignSelection('h-right')],
+        'hr',
+        ['顶对齐',      '', () => alignSelection('v-top')],
+        ['垂直居中',    '', () => alignSelection('v-center')],
+        ['底对齐',      '', () => alignSelection('v-bottom')],
+        'hr',
+        ['横向等距分布', '至少三个', () => distributeSelection('x')],
+        ['竖向等距分布', '至少三个', () => distributeSelection('y')]
+      ]]);
     }
-    if (isOpNode(n)){
-      const od = normalizeOpDef(n.opDef);
-      items.push(['运算符：' + opDefOf(od.op).label, '▶', null,
-        OPERATORS.map(o => [(od.op === o.id ? '● ' : '   ') + o.label, o.hint, () => { setOpOperator(n, o.id); }])]);
-      items.push('hr');
-    }
-    if (isEmbed(n)){
-      items.push(['进入编辑', '双击', () => enterEmbed(n)]);
-      items.push(['换个文档…', '', () => pickEmbedFile()]);
-      items.push('hr');
-    }
-    if (n.kind === 'image'){
-      items.push(['换一张图片…', '', () => pickImageFile(null, n)]);
-      items.push(['编辑描述…', '双击图下方', () => startEdit('nodeDesc', n.id)]);
-      items.push(['编辑名称…', '双击右上角', () => startEdit('node', n.id)]);
-      items.push('hr');
-    }
-    items.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
-    items.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '', () => toggleProgramNode(n)]);
-    // 优先级改到「组件…」面板里填了 —— 它现在是个可引用变量的组件，
-    // 这里再放一份子菜单就是两处维护同一个东西。
+
     items.push('hr');
-    items.push(['形状', '', null, [
-      [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
-      [(n.shape === 'round'   ? '● ' : '   ') + '圆角矩形',   '', () => setShape('round')],
-      [(n.shape === 'diamond' ? '● ' : '   ') + '菱形（判断）', '', () => setShape('diamond')],
-      [(n.shape === 'oval'    ? '● ' : '   ') + '椭圆',       '', () => setShape('oval')],
-      'hr',
-      ['恢复自适应尺寸', n.fixedW || n.fixedH ? '' : '尺寸本来就是自适应', n.fixedW || n.fixedH ? () => autoSizeNode(n) : null]
-    ]]);
-    // 分组相关：只有选中的节点确实能加进去 / 确实在某个组里时才给
-    const owner = (doc.groups || []).find(grp => grp.members.indexOf(n.id) >= 0);
-    if (sel.size >= 2 || owner){
-      items.push(['分组', '', null, [
-        ['把选中的 ' + Math.max(sel.size, 1) + ' 个节点组成新分组', 'Ctrl+G',
-          sel.size >= 2 ? () => createGroup() : null],
-        owner ? ['移出「' + (owner.title || '分组') + '」', '', () => { selectOnly(n.id); removeSelectionFromGroup(owner); }] : null
-      ].filter(Boolean)]);
-    }
-    items.push('hr');
-    items.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', () => toggleCollapseOf(n)]);
     items.push(['删除节点', 'Del', () => { selectOnly(n.id); deleteSelection(); }]);
   } else if (info.group){
     const grp = info.group;
@@ -365,12 +401,12 @@ function showCtx(x, y, n, e, info){
           selectOnly(nn.id); pushHist(); mark();
           say('* 建了一个运算符节点。左边两个输入端点各对一个操作数：接上了就用接进来的值，没接就用格子里的。');
         }],
-        ['程序化节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
+        ['外观节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
           const p = s2w(x, y);
           const nn = createProgramNode(p.x - 70, p.y - 24);
           reindex(); relayout();
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个程序化节点。从它拉一条线到目标节点，算符就会叠加过去。');
+          say('* 建了一个外观节点。从它拉一条线到目标节点，算符就会叠加过去。');
         }]
       ]],
       ['程序组', '组内变量 + 运算 + 输出，外面接它的输出（原函数分组）', () => {
@@ -442,7 +478,7 @@ function showInsertMenu(anchor){
       const n = addVarNode('x', Math.round(c.x - 137), Math.round(c.y - 50));
       selectOnly(n.id); pushHist(); mark();
     }],
-    ['运算节点', '+ - * / 可以叠加', () => {
+    ['运算符节点', '+ - * / 可以叠加', () => {
       const c = viewCenter();
       const n = addOpNode('运算', Math.round(c.x - 110), Math.round(c.y - 40));
       selectOnly(n.id); pushHist(); mark();

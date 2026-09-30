@@ -13,7 +13,7 @@ function bboxAll(){
   if (!doc.nodes.length) return { minX:-100, minY:-100, maxX:100, maxY:100, w:200, h:200 };
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of doc.nodes){
-    const b = nodeBox(n);            // 有效位置：程序化节点可能把目标挪走了
+    const b = nodeBox(n);            // 有效位置：外观节点可能把目标挪走了
     minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
     maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
   }

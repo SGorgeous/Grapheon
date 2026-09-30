@@ -22,8 +22,6 @@ let compEditor = null;            // 正在编辑的自定义组件草稿（null
 
 function compsOpen(){ return compsEl.style.display === 'block'; }
 function closeComps(){ compsEl.style.display = 'none'; compsTargetCache = null; compEditor = null; mark(); }
-function toggleComps(){ compsOpen() ? closeComps() : openComps(); }
-
 function compsTarget(){
   if (selGroups.size === 1 && sel.size === 0){
     const g = byGroup([...selGroups][0]);
@@ -397,5 +395,4 @@ function exportUserComponents(){
   say('* 已导出 ' + USER_COMPONENTS.length + ' 个自定义组件。');
 }
 
-const compsRefresh = () => refreshCompsIfOpen();
 document.getElementById('compsClose').onclick = () => closeComps();

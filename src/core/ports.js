@@ -27,8 +27,6 @@ const PORT_DIRS = ['ins', 'outs', 'conns'];
 const PORT_MAX_PER_DIR = 8;                    // 一边最多几个，太多画不下也点不准
 const PORT_HIT_R = 12;                         // 命中半径（世界单位，缩放会修正）
 const PORT_DOT_R = 4.5;
-const PORT_LABEL_GAP = 10;
-
 /* ★ 哪些节点**有**输入 / 输出端点：只有「有明确输入输出」的程序节点。
    普通节点 / 图片 / 表格 / 嵌入 都不画端点 ——
    它们靠边上的锚点连线就行，摆一堆小方块反而糊。
@@ -382,13 +380,6 @@ function parsePortEdit(text){
   if (!m) return { id:null, label:s };
   return { id:Math.round(+m[1]), label:(m[2] == null ? null : m[2].trim()) };
 }
-/* 双击端点的入口 */
-function editPort(n, dir, id){
-  const p = portById(n, id);
-  if (!p) return;
-  startEdit('port', n.id, '#' + p.id + (p.label ? ' ' + p.label : ''), { dir, portId:id });
-}
-
 /* ---------------- 绘制 ---------------- */
 
 /* 端点小圆点。标签只在**悬停或选中**时画 —— 平时画会糊成一片。 */

@@ -389,7 +389,7 @@ function drawEmbedNode(g, n, b, selected, hov){
   g.strokeRect(b.x, b.y, b.w, b.h);
   g.restore();
 }
-/* ---------------- 变量 / 运算节点 ----------------
+/* ---------------- 变量 / 运算符节点 ----------------
    两个都是「框里有框」：描述在左上角，下面一排小框。
    这里算出来的方框几何，绘制和命中测试共用，不会打架。 */
 function varBoxes(n){
@@ -675,7 +675,7 @@ function drawNode(g, n){
   const hov = hover && hover.id === n.id;
   const prog = isProgram(n);
   const eff = effOf(n);
-  // 位置/形状一律走「有效盒子」：程序化节点可能把目标挪走、或者改了它的形状
+  // 位置/形状一律走「有效盒子」：外观节点可能把目标挪走、或者改了它的形状
   const b = nodeBox(n);
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
   if (n.kind === 'image') drawImageNode(g, n, b, selected, hov);

@@ -35,11 +35,16 @@
   const labelOf   = (d) => d.querySelector('.lb').textContent.trim().replace(/^●\s*/, '');
   const menuItem  = (prefix) => menuItems().find(d => labelOf(d).indexOf(prefix) === 0);
   /* 在根菜单里找到某一项并把它的子菜单展开（mouseenter 不冒泡，直接派发） */
+  /* 打开子菜单。**先看当前最深的那层** —— 菜单归类之后
+     「形状」跑到了「外观」下面，只看根菜单是找不到的。
+     可以连着调：openSub('外观'); openSub('形状'); */
   const openSub = (prefix) => {
-    const d = [...ctxEl.querySelectorAll('.item')].find(x => labelOf(x).indexOf(prefix) === 0);
-    if (!d) throw new Error('根菜单里没有「' + prefix + '」');
-    d.onmouseenter && d.onmouseenter();
-    return d;
+    const scopes = [menuStack[menuStack.length - 1], ctxEl].filter(Boolean);
+    for (const sc of scopes){
+      const d = [...sc.querySelectorAll('.item')].find(x => labelOf(x).indexOf(prefix) === 0);
+      if (d){ d.onmouseenter && d.onmouseenter(); return d; }
+    }
+    throw new Error('菜单里没有「' + prefix + '」（当前开了 ' + menuStack.length + ' 层）');
   };
   const clickSub = (prefix) => {
     const d = menuItem(prefix);
@@ -1139,7 +1144,7 @@
     ok('W04 先改成固定尺寸', n.fixedW === 300);
     const c = center(n);
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
-    openSub('形状');
+    openSub('外观'); openSub('形状');
     const it = menuItem('恢复自适应尺寸');
     ok('W04b 右键「形状」子菜单里有恢复项', !!it);
     if (it) it.click();
@@ -1837,7 +1842,7 @@
     ok('M01 根菜单打开', ctxEl.style.display === 'block');
     const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
     ok('M01b 根菜单收短了（≤11 项（加「端点」之后放宽一格））', tops.length <= 11, tops.length + ' 项: ' + tops.join(' | '));
-    ok('M01c 有「形状」子菜单', tops.indexOf('形状') >= 0, tops.join(' | '));
+    ok('M01c 顶层按用途归了类（有「外观」这一组）', tops.indexOf('外观') >= 0, tops.join(' | '));
     ok('M01d 顶层不再平铺四个形状', tops.indexOf('矩形') < 0 && tops.indexOf('菱形（判断）') < 0, tops.join(' | '));
     ok('M01e 子菜单项右边有 ▶', !!document.querySelector('.menu .item.sub .k'));
     hideCtx();
@@ -1850,16 +1855,16 @@
     const c = center(n);
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
     ok('M02 一开始只有一级菜单', menuStack.length === 1, menuStack.length);
-    openSub('形状');
-    ok('M02b 展开后有二级菜单', menuStack.length === 2, menuStack.length);
+    openSub('外观'); openSub('形状');
+    ok('M02b 展开后有三级（根 → 外观 → 形状）', menuStack.length === 3, menuStack.length);
     ok('M02c 形状项本身还在（子菜单是新的元素）', ctxEl.querySelectorAll('.item').length > 0);
-    const subs = [...menuStack[1].querySelectorAll('.item')].map(labelOf);
+    const subs = [...menuStack[2].querySelectorAll('.item')].map(labelOf);
     ok('M02d 四个形状都在子菜单里',
       ['矩形', '圆角矩形', '菱形（判断）', '椭圆'].every(s => subs.some(x => x === s)), subs.join(' | '));
     // 移到一个没有子菜单的顶层项上 → 二级菜单应当收起来
     const plain = [...ctxEl.querySelectorAll('.item')].find(d => !d.classList.contains('sub'));
     plain.onmouseenter && plain.onmouseenter();
-    ok('M02e 移到普通项上二级菜单收起', menuStack.length === 1, menuStack.length);
+    ok('M02e 移到普通项上子菜单全收起', menuStack.length === 1, menuStack.length);
     hideCtx();
   });
   T('M03 子菜单里的当前值带 ●，点了就生效', () => {
@@ -1918,7 +1923,7 @@
       { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
     ok('M05 根菜单夹进视口了', ctxEl.getBoundingClientRect().right <= innerWidth + 0.5,
       ctxEl.getBoundingClientRect().right + ' / ' + innerWidth);
-    openSub('形状');
+    openSub('外观'); openSub('形状');
     const sr = menuStack[1].getBoundingClientRect();
     ok('M05b 子菜单也在视口内', sr.right <= innerWidth + 0.5 && sr.left >= -0.5,
       Math.round(sr.left) + '..' + Math.round(sr.right) + ' / ' + innerWidth);
@@ -6055,8 +6060,8 @@
     // 这两项原来是**出不来**的（少了个逗号），专门盯一下
     ok('RB04c 运算符节点也在（原来因为少逗号显示不出来）',
       sub.some(t => t.indexOf('运算符节点') === 0), sub.join(' / '));
-    ok('RB04d 程序化节点也在（同上）',
-      sub.some(t => t.indexOf('程序化节点') === 0), sub.join(' / '));
+    ok('RB04d 外观节点也在（同上）',
+      sub.some(t => t.indexOf('外观节点') === 0), sub.join(' / '));
     hideCtx();
   });
   T('RB05 每一项都带灰字说明', () => {
@@ -6235,8 +6240,8 @@
     selectOnly(t.id);
     showCtx(500, 400, byId(t.id), null, { p:{} });
     const items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
-    ok('TB07 菜单上有表格那一项', items.some(x => x.indexOf('表格：3 行 × 3 列') === 0), items.join(' / '));
-    const sub = subMenu('表格：');
+    ok('TB07 菜单上有表格那一项', items.some(x => x.indexOf('表格') === 0), items.join(' / '));
+    const sub = subMenu('表格');
     ok('TB07b 有加行 / 加列 / 删行 / 删列 / 表头',
       ['末尾加一行', '末尾加一列', '删掉最后一行', '删掉最后一列', '第 0 行当表头']
         .every(L => sub.some(x => x.indexOf(L) >= 0)), sub.join(' / '));
@@ -8140,6 +8145,100 @@
       L2.conns.length === 1 && L2.outs.length === outBefore && L2.ins.length === inBefore,
       'conns=' + L2.conns.length + ' ins=' + L2.ins.length + ' outs=' + L2.outs.length);
     ok('CP05g 那个连接端点在下边', L2.conns[0].side === 'b', L2.conns[0].side);
+  });
+
+  T('PM01 菜单归类：顶层按用途分组，不超过 8 项', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    showCtx(500, 400, byId(n.id), null, { p:{} });
+    const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('PM01 顶层不超过 8 项', tops.length <= 8, tops.length + ' 项: ' + tops.join(' | '));
+    ok('PM01b 五组都在', ['外观', '数据', '连接', '结构'].every(g => tops.indexOf(g) >= 0),
+      tops.join(' | '));
+    ok('PM01c 重命名 / 删除在顶层（常用，不藏）',
+      tops.indexOf('重命名') >= 0 && tops.indexOf('删除节点') >= 0, tops.join(' | '));
+    ok('PM01d 形状收进「外观」了，不再平铺在顶层',
+      tops.indexOf('形状') < 0 && tops.indexOf('矩形') < 0, tops.join(' | '));
+    ok('PM01e 作用域 / 控件收进「数据」了',
+      tops.indexOf('作用域：全局') < 0 && tops.indexOf('控件：普通') < 0, tops.join(' | '));
+    ok('PM01f 端点收进「连接」了', tops.indexOf('端点') < 0, tops.join(' | '));
+    hideCtx();
+  });
+  T('PM02 数据组里放的是「和值有关」的东西', () => {
+    fresh(); layoutMind();
+    const v = addVarNode('变量', 0, 0, { name:'量', value:'7' });
+    selectOnly(v.id);
+    showCtx(500, 400, byId(v.id), null, { p:{} });
+    const data = subMenu('数据');
+    ok('PM02 数据组里有控件 / 作用域 / 值类型',
+      ['控件：', '作用域：', '值类型：'].every(x => data.some(t => t.indexOf(x) >= 0)),
+      data.join(' / '));
+    ok('PM02b 数据组里有「转为 / 转回」',
+      data.some(t => t.indexOf('转成程序节点') >= 0 || t.indexOf('转回普通节点') >= 0),
+      data.join(' / '));
+    ok('PM02c 外观组里没有数据类的东西', (() => {
+      // ⚠ 别用 subMenu —— 它是**全局**搜的，会把根菜单的项一起返回。
+      //    openSub 之后 menuStack 最后一层才是那个子菜单。
+      openSub('外观');
+      const look = [...menuStack[menuStack.length - 1].querySelectorAll('.item')].map(labelOf);
+      return look.length > 0
+        && look.some(t => t.indexOf('形状') >= 0)
+        && !look.some(t => t.indexOf('作用域') >= 0 || t.indexOf('控件') >= 0);
+    })(), (() => {
+      const look = [...menuStack[menuStack.length - 1].querySelectorAll('.item')].map(labelOf);
+      return look.join(' / ');
+    })());
+    hideCtx();
+  });
+  T('PM03 数值参数可以引用变量：滑条范围', () => {
+    fresh(); layoutMind();
+    const w = addVarNode('宽', 0, 0, { name:'宽', value:'40', type:'number' });
+    const s = addVarNode('滑条', 500, 0,
+      { name:'量', value:'50', type:'number', control:'slider',
+        min:'{宽}', max:'200', step:'{宽}' });
+    reindex(); sizeAll();
+    const vd = normalizeVarDef(byId(s.id).varDef);
+    ok('PM03 含 { } 的参数字段**原样留住字符串**', vd.min === '{宽}' && vd.step === '{宽}',
+      vd.min + ' / ' + vd.step);
+    ok('PM03b 纯数字的字段还是数字', vd.max === 200, typeof vd.max + ' ' + vd.max);
+    ok('PM03c paramNum 能把它解析出来', paramNum(liveCtx(), '{宽}', s.id, 0) === 40,
+      paramNum(liveCtx(), '{宽}', s.id, 0));
+    // 上下限 = 40 ~ 200、步长 40 → 50 会被对齐到 40
+    ok('PM03d 滑条按解析后的上下限和步长对齐', sliderValue(vd, s.id) === 40,
+      sliderValue(vd, s.id));
+    // 改上游，滑条跟着变
+    setVarDef(byId(w.id), { value:'80' });
+    reindex();
+    ok('PM03e 上游一改，上下限跟着变（80 ~ 200，步长 80 → 80）',
+      sliderValue(normalizeVarDef(byId(s.id).varDef), s.id) === 80,
+      sliderValue(normalizeVarDef(byId(s.id).varDef), s.id));
+    ok('PM03f 分数也跟着算对', (() => {
+      const f = sliderFrac(normalizeVarDef(byId(s.id).varDef), s.id);
+      return Math.abs(f - 0) < 1e-6;      // 80 在下限上 → 0
+    })(), sliderFrac(normalizeVarDef(byId(s.id).varDef), s.id));
+  });
+  T('PM04 数值参数可以引用变量：运算符操作数', () => {
+    fresh(); layoutMind();
+    const w = addVarNode('宽', 0, 0, { name:'宽', value:'40', type:'number' });
+    const a = addVarNode('三', 0, 300, { name:'三', value:'3', type:'number' });
+    const op = addOpNode('乘', 600, 300, { op:'*', operand:'{宽}' });
+    const out = mkOut('结果');
+    linkNodes(a.id, op.id); linkNodes(op.id, out.id);
+    reindex(); sizeAll();
+    ok('PM04 操作数原样留着 {宽}',
+      normalizeOpDef(byId(op.id).opDef).operands[0] === '{宽}',
+      normalizeOpDef(byId(op.id).opDef).operands[0]);
+    ok('PM04b 求值用的是解析后的值：3 × 40 = 120',
+      outputValueIn(liveCtx(), byId(out.id)) === 120,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    setVarDef(byId(w.id), { value:'5' });
+    reindex();
+    ok('PM04c 上游一改，结果跟着变：3 × 5 = 15',
+      outputValueIn(liveCtx(), byId(out.id)) === 15,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    ok('PM04d applyOperator 也认（走的是同一条解析）',
+      applyOperator(3, { op:'*', operands:['{宽}'] }, op.id) === 15,
+      String(applyOperator(3, { op:'*', operands:['{宽}'] }, op.id)));
   });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {

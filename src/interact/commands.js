@@ -309,8 +309,6 @@ function selectAll(){
 const selectedGroups = () => [...selGroups].map(id => byGroup(id)).filter(Boolean);
 /* 「整个选择就是一个分组」时才返回它 —— 面板、端点、缩放柄这些单目标操作要用 */
 const soleGroup = () => (selGroups.size === 1 && sel.size === 0) ? byGroup([...selGroups][0]) : null;
-/* 整个选择是不是空的 */
-const nothingSelected = () => sel.size === 0 && selGroups.size === 0 && !selEdgeId;
 /* 一次拖拽要带走的所有东西（选中的分组递归展开 + 选中的节点），按 id 去重 */
 function selectionSnapshot(){
   const out = [], seen = new Set();
@@ -345,8 +343,6 @@ function cycleEdgeRoute(e){
   e.route = e.route === 'ortho' ? 'curve' : 'ortho';
   mark(); say('* 走线：' + ROUTE_LABEL[e.route]);
 }
-/* --- 端点钉位（自由连接）：null = 自动吸附 --- */
-function edgeSideOf(e, which){ return which === 'a' ? e.aSide : e.bSide; }
 function setEdgeSide(e, which, side){
   if (!e) return;
   if (which === 'a') e.aSide = normSide(side); else e.bSide = normSide(side);
@@ -393,9 +389,6 @@ function pruneWaypoint(e, index){
   return false;
 }
 
-function moveSelection(dx, dy){
-  for (const id of sel){ const n = byId(id); if (n){ n.x += dx; n.y += dy; } }
-}
 /* Ctrl+方向键：就近跳转选择（不再有「父/子/兄弟」那套，那是模式时代的产物） */
 function navigate(dir){
   const n = soleSel();
@@ -580,7 +573,7 @@ function newEmptyGroup(cx, cy){
 }
 
 /* =========================================================================
-   程序化节点
+   外观节点
    ========================================================================= */
 /* 把算符写成人看得懂的一行字，用来当程序节点的标题 */
 function programLabel(p){
@@ -804,7 +797,7 @@ function exitEmbed(){
 const clearDocStack = () => { docStack = []; };
 
 /* =========================================================================
-   变量定义节点 / 运算节点 / 函数分组
+   变量定义节点 / 运算符节点 / 函数分组
    ========================================================================= */
 function addVarNode(name, x, y, opts){
   const n = addNodeAt('', x, y, 'rect');

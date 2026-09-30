@@ -115,13 +115,6 @@ function tableCellAt(n, p){
    这些按钮都在节点**外面**，hitNode 抓不到，得单独做命中（hitTableButton）。
    ========================================================================== */
 const TBL_BTN = 15, TBL_BTN_GAP = 6, TBL_BTN_SP = 2;
-function tableCellHasData(n){
-  const t = tableOf(n);
-  for (let r = 0; r < t.rows; r++)
-    for (let c = 0; c < t.cols; c++)
-      if (String((t.cells[r] || [])[c] || '').trim() !== '') return true;
-  return false;
-}
 /* 这一行 / 这一列里有没有东西 —— 删之前的确认就靠它 */
 function tableRowHasData(n, r){
   const t = tableOf(n);

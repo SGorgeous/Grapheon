@@ -32,9 +32,9 @@ const NODE_COLORS = [
   ['#ffffff', '白'], ['#ffd800', '黄'], ['#ff7f27', '橙'], ['#ff0000', '红'],
   ['#00ffff', '青'], ['#00ff00', '绿'], ['#3b7dff', '蓝'], ['#b967ff', '紫'], ['#8a8a8a', '灰']
 ];
-/* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
+/* 节点的「种类」。目前只有普通节点；program 是给外观节点预留的接缝。 */
 const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op', 'out', 'table', 'broadcast'];
-/* ---------------- 变量定义节点 / 运算节点 ----------------
+/* ---------------- 变量定义节点 / 运算符节点 ----------------
    两个都是「框里有框」：描述文字在左上角，下面一排输入框。 */
 const VAR_PAD = 12;
 const VAR_NAME_W = 118, VAR_VAL_W = 152, VAR_BOX_H = 30;   // 值可能是个表达式的结果，留宽一点
@@ -63,7 +63,7 @@ const IMG_SRC_MAX = 900;   // 导入时等比缩放的最长边
 const IMG_BUDGET  = 700000; // data URL 超过这个长度就改用 JPEG 压
 const SHAPES = ['rect', 'round', 'diamond', 'oval'];
 const SHAPE_LABEL = { rect:'矩形', round:'圆角矩形', diamond:'菱形', oval:'椭圆' };
-/* ---------------- 程序化节点 ----------------
+/* ---------------- 外观节点 ----------------
    程序节点通过「指向目标的那条线」把自己的算符叠到目标上，多个可以累加。 */
 const PROGRAM_OPS = ['style', 'shape', 'move', 'value'];
 const PROGRAM_OP_LABEL = { style:'外观', shape:'形状', move:'位置', value:'数值' };
@@ -76,7 +76,7 @@ const PROGRAM_KEYS = {
 const PROGRAM_MODES = ['add', 'set'];
 const PROGRAM_MODE_LABEL = { add:'累加', set:'覆盖' };
 const PROGRAM_DEFAULT = { op:'style', key:'fsPx', mode:'add', value:8 };
-/* 这两个读的是「有效外观」（含程序化节点叠加上来的算符），不是节点裸字段 */
+/* 这两个读的是「有效外观」（含外观节点叠加上来的算符），不是节点裸字段 */
 const nodeFontFamily = (n) => NODE_FONTS[effFont(n)] || FONT;
 const nodeFontSize   = (n) => effFsPx(n) || ((n && n.big) ? FS_BIG : FS);
 
@@ -95,7 +95,6 @@ const C = {
 /* ---------------- 小工具 ---------------- */
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-const clamp = (v, lo, hi) => v < lo ? lo : (v > hi ? hi : v);
 function el(tag, cls, html){
   const d = document.createElement(tag);
   if (cls) d.className = cls;

@@ -91,7 +91,7 @@ function sizeVarNode(n){
   const natH = Math.round(varLayout({ x:0, y:0, w:n.w }, v, n.lines.length * n.lh).height);
   n.h = (+n.fixedH > 0) ? Math.max(natH, Math.round(+n.fixedH)) : natH;
 }
-/* 运算节点：左上角描述 + 中间「算符 运算值」 */
+/* 运算符节点：左上角描述 + 中间「算符 运算值」 */
 function sizeOpNode(n){
   setFont(mctx, FS, 'normal', FONT);
   const desc = displayTextOf(n);

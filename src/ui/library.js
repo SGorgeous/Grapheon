@@ -14,7 +14,6 @@ const libFileEl  = document.getElementById('libfile');
 
 function openLib(){ hideCtx(); closeHelp(); toggleSettingsIfOpen(); libEl.style.display = 'block'; refreshLib(); mark(); }
 function closeLib(){ libEl.style.display = 'none'; mark(); }
-function toggleLib(){ libEl.style.display === 'block' ? closeLib() : openLib(); }
 const libOpen = () => libEl.style.display === 'block';
 function toggleSettingsIfOpen(){ if (typeof settingsOpen === 'function' && settingsOpen()) closeSettings(); }
 
@@ -179,11 +178,6 @@ async function insertAsset(it){
     applyTheme(id);
     say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。不想要了可以在设置里「删除当前主题」。');
   }
-}
-
-/* 套用主题后给个小反馈，顺便告诉他怎么删 */
-function btnApplyFeedback(it){
-  return '不想要了可以在设置里「删除当前主题」。';
 }
 
 /* ---------------- 导入 ---------------- */

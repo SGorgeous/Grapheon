@@ -21,12 +21,12 @@ function hitNode(p){
   for (let i = doc.nodes.length - 1; i >= 0; i--){
     const n = doc.nodes[i];
     if (isHidden(n.id)) continue;
-    if (inBox(nodeBox(n), p)) return n;   // 用有效盒子：程序化节点可能挪过位置 / 改过形状
+    if (inBox(nodeBox(n), p)) return n;   // 用有效盒子：外观节点可能挪过位置 / 改过形状
   }
   return null;
 }
 /* 变量节点分四块：描述 / 变量名框 / 变量值框 / 作用域行
-   运算节点分三块：描述 / 算符框 / 运算值框 */
+   运算符节点分三块：描述 / 算符框 / 运算值框 */
 const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 function hitVarPart(n, p){
   if (!n || !isVarNode(n)) return null;      // 含广播节点

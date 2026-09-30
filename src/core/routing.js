@@ -118,8 +118,6 @@ function cub(p0, p1, p2, p3, t){
 const AVOID_MAX_BOXES = 400;          // 障碍超过这个数就不避让了
 const AVOID_PAD = 6;                  // 离盒子多远算「擦到」
 const AVOID_OFFSETS = [0, 45, -45, 100, -100, 170, -170, 250, -250];
-let avoidBoxesCache = null, avoidBoxesKey = '';
-
 /* 当前文档里所有可以当障碍的盒子。按位置签名缓存 —— 没动就不重算。 */
 function avoidBoxes(excludeA, excludeB){
   const list = [];

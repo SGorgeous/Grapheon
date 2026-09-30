@@ -109,7 +109,7 @@ function renderNodeBox(){
   }
   if (isOpr){
     const od = normalizeOpDef(n.opDef);
-    nbSubEl.textContent = '运算节点 · 作用在从它上游流下来的变量值上';
+    nbSubEl.textContent = '运算符节点 · 作用在从它上游流下来的变量值上';
     buildOpts(nbOprKindEl, OPR_OPTS, od.op, (x) => { setOpDef(n, { op:x }); afterNodeEdit(); });
     buildOpts(nbOprTypeEl, VTYPE_OPTS, od.type, (x) => { setOpDef(n, { type:x }); afterNodeEdit(); });
   }

@@ -198,7 +198,7 @@ window.addEventListener('pointermove', (ev) => {
         if (grp){ const gb = groupBox(grp); setGroupSize(grp, p.x - gb.x, p.y - gb.y); drag.moved = true; }
       } else {
         const n = byId(drag.targetId);
-        // 手柄画在「有效位置」上（程序化节点可能挪过它），所以量尺寸也要用有效位置
+        // 手柄画在「有效位置」上（外观节点可能挪过它），所以量尺寸也要用有效位置
         if (n){ const eb = nodeBox(n); setNodeSize(n, p.x - eb.x, p.y - eb.y); drag.moved = true; }
       }
       mark();
@@ -404,7 +404,7 @@ canvas.addEventListener('dblclick', (ev) => {
       const cell = tableCellAt(n, p);
       if (cell){ startEdit('cell', n.id, null, { row:cell.r, col:cell.c }); return; }
     }
-    // 变量 / 运算节点：双击哪个小框就编辑哪个字段
+    // 变量 / 运算符节点：双击哪个小框就编辑哪个字段
     const vp = hitVarPart(n, p);
     if (vp === 'varName' || vp === 'varValue'){ startEdit(vp, n.id); return; }
     const op = hitOpPart(n, p);

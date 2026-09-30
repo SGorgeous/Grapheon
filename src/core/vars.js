@@ -1,7 +1,7 @@
 ﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/vars.js
-   变量系统：变量定义节点、文本里的 {name} 引用、运算节点、函数分组、输出节点、优先级。
+   变量系统：变量定义节点、文本里的 {name} 引用、运算符节点、函数分组、输出节点、优先级。
 
    五条贯穿全篇的规矩：
 
@@ -18,7 +18,7 @@
    ========================================================================== */
 
 const VAR_PRIORITY = 1000;        // 变量定义节点的默认优先级（最高）
-const OP_PRIORITY  = 100;         // 运算节点的默认优先级
+const OP_PRIORITY  = 100;         // 运算符节点的默认优先级
 const OUT_PRIORITY = 900;         // 输出节点仅次于变量定义
 /* 作用域只有两种：
      全局  同作用域内到处能用，不用连线
@@ -97,10 +97,19 @@ function normalizeVarDef(v){
     .map(x => Math.round(+x)).filter(i => i >= 0 && i < out.options.length);
   out.picked = [...new Set(out.picked)].sort((a, b) => a - b);
   // 滑条：上下限和步长
-  out.min = isFinite(+out.min) ? +out.min : 0;
-  out.max = isFinite(+out.max) ? +out.max : 100;
-  if (out.max < out.min){ const t = out.min; out.min = out.max; out.max = t; }
-  out.step = (isFinite(+out.step) && +out.step > 0) ? +out.step : 1;
+  /* ★ 允许写 {变量} —— 含花括号的一律**原样留着字符串**，求值时再解析。
+     以前这里无条件 +x 强转，{宽} 会变成 NaN→0，参数化就无从谈起。 */
+  const keepNum = (x, dflt) => {
+    if (typeof x === 'string' && x.indexOf('{') >= 0) return x;
+    return isFinite(+x) ? +x : dflt;
+  };
+  out.min = keepNum(out.min, 0);
+  out.max = keepNum(out.max, 100);
+  if (isFinite(+out.min) && isFinite(+out.max) && +out.max < +out.min){
+    const t = out.min; out.min = out.max; out.max = t;
+  }
+  out.step = (typeof out.step === 'string' && out.step.indexOf('{') >= 0)
+    ? out.step : ((isFinite(+out.step) && +out.step > 0) ? +out.step : 1);
   out.on = !!out.on;
   out.name = String(out.name == null ? '' : out.name).replace(/[{}.\s]/g, '') || 'x';
   if (VAR_TYPES.indexOf(out.type) < 0) out.type = 'number';
@@ -114,7 +123,7 @@ function normalizeOutDef(o){
   out.name = String(out.name == null ? '' : out.name).replace(/[{}.\s]/g, '') || 'output';
   return out;
 }
-/* 运算节点：老数据是单个 operand，新数据是 operands 数组，两种都收 */
+/* 运算符节点：老数据是单个 operand，新数据是 operands 数组，两种都收 */
 function normalizeOpDef(o){
   const src = o || {};
   const id = OP_BY_ID.has(src.op) ? src.op : OP_IDS[0];
@@ -130,14 +139,27 @@ const VAR_RESOLVING = new Set();
 
 /* 滑条的值：夹在上下限里，并对齐到步长。
    fromId 给了就先把它自己填的 value 过一遍插值 —— 滑条的值也能引用变量。 */
+/* 把**参数字段**解析成数字。字段可以是数字，也可以是带 {变量} 的字符串 ——
+   这就是「参数化」。fromId 决定按哪个作用域去解析那些变量。 */
+function paramNum(ctx, raw, fromId, dflt){
+  if (raw == null || raw === '') return dflt;
+  const isRef = (typeof raw === 'string' && raw.indexOf('{') >= 0);
+  const s = (isRef && fromId != null) ? interpolateIn(ctx, raw, fromId) : String(raw);
+  const n = toNum(s);
+  return n == null ? dflt : n;
+}
 function sliderValue(vd, fromId){
   const v = normalizeVarDef(vd);
-  const raw = (fromId == null) ? v.value : interpolateIn(liveCtx(), v.value, fromId);
+  const ctx = liveCtx();
+  const lo = paramNum(ctx, v.min, fromId, 0);
+  const hi = paramNum(ctx, v.max, fromId, lo + 100);
+  const st = Math.max(1e-9, paramNum(ctx, v.step, fromId, 1));
+  const raw = (fromId == null) ? v.value : interpolateIn(ctx, v.value, fromId);
   let x = toNum(raw);
-  if (x == null) x = v.min;
-  x = Math.min(v.max, Math.max(v.min, x));
-  const n = Math.round((x - v.min) / v.step);
-  x = v.min + n * v.step;
+  if (x == null) x = lo;
+  x = Math.min(hi, Math.max(lo, x));
+  const n = Math.round((x - lo) / st);
+  x = lo + n * st;
   return Math.round(x * 1e6) / 1e6;
 }
 /* 勾选的值：选中的选项拼成一串 */
@@ -183,9 +205,6 @@ function gateOpenIn(ctx, n){
   if (v.control === 'cond') return true;
   return true;
 }
-/* 没有 ctx 时的老接口：只知道它自己，不知道上游 —— 一律当通的 */
-const switchOpen = (n) => isVarNode(n) ? normalizeVarDef(n.varDef).control !== 'cond' : true;
-
 /* 节点的优先级：输出 > 变量 > 运算，其余看 n.priority，最后 0 */
 function priorityOf(n){
   if (!n) return 0;
@@ -232,7 +251,7 @@ function condOutputIn(ctx, node){
 /* 运算符节点的输出：**所有输入端点按 ID 升序依次运算**。
    · 1 号端点（ID 最小的那个）= 沿当前这条路径流进来的值
    · 其余端点 = 接在它上面的那一路上来的值；没接就用格子里填的
-   ★ 老存档零改动：老的运算节点只有一个 operand 格子、没有第二条入边，
+   ★ 老存档零改动：老的运算符节点只有一个 operand 格子、没有第二条入边，
      于是其它端点都退回格子值 —— 行为和以前一模一样。 */
 function opOutputIn(ctx, node, incoming){
   const od = normalizeOpDef(node.opDef);
@@ -250,21 +269,32 @@ function opOutputIn(ctx, node, incoming){
      OPERATORS 的 apply(v, args) 本来就是收一个数组的，
      逐次折叠对 arity>1 的算符是错的（老行为就是一次调用）。
      没接任何端点时 args 全来自格子值，和以前逐字一致。 */
-  return def.apply(incoming, args);
+  /* 格子里的值也可能写了 {变量} —— 走同样的解析 */
+  const ctxA = liveCtx();
+  const realArgs = args.map(x => (typeof x === 'string' && x.indexOf('{') >= 0)
+    ? interpolateIn(ctxA, x, node.id) : x);
+  return def.apply(incoming, realArgs);
 }
 function applyNodeOut(ctx, node, incoming){
   if (!node) return incoming;
-  if (isOpNode(node)) return opOutputIn(ctx, node, incoming);
+  if (isOpNode(node)) return opOutputIn(ctx, node, incoming, node.id);
   // 条件节点：输出自己的值（或「无」），不把上游的值放过去
   if (isVarNode(node) && normalizeVarDef(node.varDef).control === 'cond'){
     return condOutputIn(ctx, node);
   }
   return incoming;                       // 其余节点原样透传
 }
-function applyOperator(v, od){
+/* 算符的**操作数也可以写 {变量}** —— 参数化的另一半。
+   fromId = 站在哪个节点上求值，作用域规则和别处一致。 */
+function applyOperator(v, od, fromId){
   const o = normalizeOpDef(od);
   const def = OP_BY_ID.get(o.op);
-  return def ? def.apply(v, o.operands) : v;
+  if (!def) return v;
+  const ctx = liveCtx();
+  const args = o.operands.map(x =>
+    (typeof x === 'string' && x.indexOf('{') >= 0 && fromId != null)
+      ? interpolateIn(ctx, x, fromId) : x);
+  return def.apply(v, args);
 }
 function valueToText(v){
   if (v == null || v === VAR_BLOCKED) return '[未定义]';
@@ -427,14 +457,13 @@ function sourceVarOf(ctx, nodeId, inside){
 }
 /* 从 viaId 那一侧流进 targetId 的值。
    注意 targetId 和 viaId 是分开的：问「流进输出节点的值」时，
-   targetId 是输出节点，而我们要从它上游那个运算节点开始倒推源头，
-   否则会把 targetId 当成运算节点，只拿到它的输入值。 */
+   targetId 是输出节点，而我们要从它上游那个运算符节点开始倒推源头，
+   否则会把 targetId 当成运算符节点，只拿到它的输入值。 */
 function valueInto(ctx, targetId, viaId, inside){
   const src = sourceVarOf(ctx, viaId, inside);
   if (!src) return null;
   return evalFromIn(ctx, src, defValueIn(ctx, src), inside, targetId);
 }
-const valueAtNodeIn = (ctx, nodeId, inside) => valueInto(ctx, nodeId, nodeId, inside);
 /* 输出节点的值：有入边就用入边推出来的值，没有就按名字找同作用域的变量 */
 function outputValueIn(ctx, out){
   const scopeId = scopeKeyOfIn(ctx, out.id);
@@ -480,8 +509,8 @@ function evalFromIn(ctx, def, start, inside, targetId){
         if (m && isVarNode(m) && !gateOpenIn(ctx, m)){ blocked = true; continue; }   // 条件不成立 = 这条连接逻辑上断开
         const out = applyNodeOut(ctx, m, cur.v);
         if (targetId && e.t === targetId){
-          // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
-          // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
+          // 看到的是「进这个节点时的值」：运算符节点自己看输入，别的一律看输出
+          // 看到的是「进这个节点时的值」：运算符节点自己看输入，别的一律看输出
           return (m && isOpNode(m)) ? cur.v : out;
         }
         last = out;
@@ -657,8 +686,6 @@ const interpolate   = (text, fromId) => interpolateIn(liveCtx(), text, fromId);
 const resolveVar    = (name, fromId) => resolveVarIn(liveCtx(), name, fromId);
 const functionResult = (grp) => functionResultIn(liveCtx(), grp);
 const defValue      = (def) => defValueIn(liveCtx(), def);
-const scopeOutputNodeOf = (scopeId) => scopeOutputNode(liveCtx(), scopeId);
-
 /* 渲染和量尺寸都读这个：没被替换过就还是原文 */
 function displayTextOf(n){
   if (!n) return '';
@@ -804,8 +831,11 @@ function sliderValueAt(n, worldX){
 /* 滑条：值 → 轨道上的比例 */
 function sliderFrac(vd, fromId){
   const v = normalizeVarDef(vd);
-  if (v.max === v.min) return 0;
-  return Math.max(0, Math.min(1, (sliderValue(v, fromId) - v.min) / (v.max - v.min)));
+  const ctx = liveCtx();
+  const lo = paramNum(ctx, v.min, fromId, 0);
+  const hi = paramNum(ctx, v.max, fromId, lo + 100);
+  if (hi === lo) return 0;
+  return Math.max(0, Math.min(1, (sliderValue(v, fromId) - lo) / (hi - lo)));
 }
 /* 变量节点上那行小字：作用域 + （控件类型或值类型） */
 function varScopeText(vd){

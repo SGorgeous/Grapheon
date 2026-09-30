@@ -51,7 +51,7 @@ function mkId(prefix, set){
 }
 const uid = (p) => mkId(p || 'n', usedIds);
 let idx = { children:new Map(), parent:new Map(), byId:new Map(), groups:new Map(), hidden:new Set(),
-            eff:new Map(), box:new Map() };   // eff = 程序化节点叠出来的派生效果
+            eff:new Map(), box:new Map() };   // eff = 外观节点叠出来的派生效果
 let sel = new Set();
 let selEdgeId = null;          // 选中的连线（与节点选择互斥）
 let selGroups = new Set();     // 选中的分组：可以多个，也可以和节点混选
@@ -384,7 +384,7 @@ function innermostGroupAt(x, y, exclude){
 }
 
 /* =========================================================================
-   程序化节点
+   外观节点
    -------------------------------------------------------------------------
    程序节点通过「从它出发、指向目标的那条线」把自己的算符叠到目标上。
    同一个目标被多条这样的线指到时，按边在 doc.edges 里的先后顺序依次叠加。

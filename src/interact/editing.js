@@ -28,6 +28,11 @@ const editValue = (kind, t) => {
   if (kind === 'portLabel') return (portById(t, editing.portId) || {}).label || '';
   if (kind === 'portId') return String(editing.portId);
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
+  /* 滑条范围：一行填「下限 上限 [步长]」。**每一项都能写 {变量}**。 */
+  if (kind === 'sliderRange'){
+    const v = normalizeVarDef(t.varDef);
+    return [v.min, v.max, v.step].join(' ');
+  }
   if (/^opVal[0-9]+$/.test(kind)) return normalizeOpDef(t.opDef).operands[+kind.slice(5)] || '';
   return t.text;
 };
@@ -51,6 +56,12 @@ function editSetValue(kind, t, v){
   else if (kind === 'portLabel') setPortLabel(t, editing.dir, editing.portId, v.trim());
   else if (kind === 'portId'){
     if (setPortId(t, editing.dir, editing.portId, v.trim())) editing.portId = Math.round(+v.trim());
+  }
+  else if (kind === 'sliderRange'){
+    const parts = String(v).trim().split(/[\s,，]+/).filter(x => x !== '');
+    if (parts.length >= 2){
+      setSliderRange(t, { min:parts[0], max:parts[1], step:(parts[2] == null ? 1 : parts[2]) });
+    }
   }
   else if (kind === 'opVal' || /^opVal[0-9]+$/.test(kind)){
     const i = kind === 'opVal' ? 0 : +kind.slice(5);
@@ -101,9 +112,9 @@ function positionEditor(){
     editor.style.textAlign = 'left';
   } else if (editing.kind === 'varName' || editing.kind === 'varValue'
              || editing.kind === 'outName' || editing.kind === 'checkOpts' || editing.kind === 'cell'
-             || editing.kind === 'portLabel' || editing.kind === 'portId' || editing.kind === 'port'
+             || editing.kind === 'portLabel' || editing.kind === 'portId' || editing.kind === 'sliderRange' || editing.kind === 'port'
              || editing.kind === 'opOp' || /^opVal[0-9]?$/.test(editing.kind)){
-    // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
+    // 变量 / 运算符节点里那一个个小框：直接把编辑框盖上去
     const n = byId(editing.id);
     if (!n){ hideEditor(); return; }
     let box;
