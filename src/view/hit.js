@@ -31,9 +31,14 @@ const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= 
 function hitVarPart(n, p){
   if (!n || n.kind !== 'var') return null;
   const L = varBoxes(n);
-  if (inRect(L.nameBox, p)) return 'varName';
-  if (inRect(L.valBox, p)) return 'varValue';
-  if (inRect(L.scopeBox, p)) return 'varScope';
+  // ⚠ 控件节点（勾选 / 滑条 / 通路）**没有 nameBox / valBox** ——
+  //   varLayout 只给它们 listBox / trackBox / knobBox。
+  //   以前这里直接 inRect(L.nameBox, p)，undefined 一进去就抛异常，
+  //   整个双击处理器当场死掉 —— 这就是「控件节点双击名字改不了名」的原因。
+  //   它们的名字画的是节点的 text（顶部描述行），所以落回 'text' 走通用改名。
+  if (L.nameBox  && inRect(L.nameBox,  p)) return 'varName';
+  if (L.valBox   && inRect(L.valBox,   p)) return 'varValue';
+  if (L.scopeBox && inRect(L.scopeBox, p)) return 'varScope';
   return 'text';
 }
 /* 变量节点上的三个控件命中。返回 null 或 { kind, index }。

@@ -6194,6 +6194,70 @@
     hideCtx();
   });
 
+
+  T('RN01 各种程序节点双击名字都能改名', () => {
+    fresh(); layoutMind();
+    /* 在节点靠上那条带（名字通常在这儿）双击，看进的是不是改名 */
+    const dblAt = (n, dy) => {
+      cancelEdit();
+      selectOnly(n.id);
+      const b = nodeBox(byId(n.id));
+      const cx = Math.round(b.x + b.w / 2 + view.x);
+      const cy = Math.round(b.y + (dy == null ? 10 : dy) + view.y);
+      cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+      return editing ? editing.kind : null;
+    };
+    const rows = [];
+    const chk = (name, n, dy) => {
+      const k = dblAt(n, dy);
+      rows.push(name + '=' + k);
+      ok('RN01 ' + name + ' 双击名字进的是改名（node）', k === 'node', name + ' -> ' + k);
+      if (k === 'node'){
+        editor.value = '改过的' + name;
+        editor.dispatchEvent(new Event('input', { bubbles:true }));
+        commitEdit();
+        ok('RN01b ' + name + ' 改完真的写进去了', byId(n.id).text === '改过的' + name,
+          byId(n.id).text);
+      }
+      cancelEdit();
+    };
+
+    // 变量节点（这个本来是好的，当对照组）
+    const v = addVarNode('变量', 0, 0);
+    reindex(); sizeAll();
+    chk('变量节点', v, 8);
+
+    // 运算节点
+    const op = addOpNode('运算', 0, 0);
+    reindex(); sizeAll();
+    chk('运算节点', op);
+
+    // 输出节点
+    const out = addOutNode('输出', 0, 0);
+    reindex(); sizeAll();
+    chk('输出节点', out);
+
+    // 三种控件
+
+    for (const c of ['check', 'slider', 'switch']){
+      const n = addControlNode(c, 0, 0);
+      reindex(); sizeAll();
+      chk(c === 'check' ? '勾选节点' : c === 'slider' ? '滑条节点' : '通路节点', n, 8);
+    }
+
+    // 程序化节点
+    const pg = createProgramNode(0, 0);
+    reindex(); sizeAll();
+    chk('程序化节点', pg);
+
+    // 普通文本节点
+    const tx = addNodeAt('文本', 0, 0, 'rect');
+    reindex(); sizeAll();
+    chk('文本节点', tx);
+
+    say('* RN01 明细：' + rows.join(' | '));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
