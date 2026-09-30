@@ -1581,6 +1581,55 @@
 
   });
 
+  T('U17 排版之后框自动跟上，重新贴合成员', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    // 先把框手动拉得很大，模拟「框比成员大很多」
+    const need = groupMinSize(grp);
+    grp.x = need.x - 260; grp.y = need.y - 180;
+    grp.w = need.w + 620; grp.h = need.h + 460;
+    ok('U17 前置：框明显比成员大', grp.w > need.w + 500, grp.w + ' vs ' + Math.round(need.w));
+    tidyLayout();
+    const after = groupMinSize(grp);
+    ok('U17b 排版后框重新贴合成员',
+      Math.abs(grp.x - after.x) < 1 && Math.abs(grp.y - after.y) < 1 &&
+      Math.abs(grp.w - after.w) < 1 && Math.abs(grp.h - after.h) < 1,
+      JSON.stringify({ box:{ x:grp.x, y:grp.y, w:grp.w, h:grp.h },
+                       need:{ x:after.x, y:after.y, w:after.w, h:after.h } }));
+    ok('U17c 成员都在框里', [a, b].every(n =>
+      n.x >= grp.x && n.y >= grp.y && n.x + n.w <= grp.x + grp.w && n.y + n.h <= grp.y + grp.h));
+    ok('U17d 排版没改成员关系', grp.members.length === 2, grp.members.length);
+  });
+  T('U18 排版不会动空框（那是你手动拉的尺寸）', () => {
+    fresh(); layoutMind();
+    const empty = newEmptyGroup(0, 0);
+    const w0 = empty.w, h0 = empty.h, x0 = empty.x, y0 = empty.y;
+    tidyLayout();
+    ok('U18 空框纹丝不动',
+      empty.w === w0 && empty.h === h0 && empty.x === x0 && empty.y === y0,
+      [empty.x, empty.y, empty.w, empty.h].join(','));
+  });
+  T('U19 排版会把成员摆到新位置，框跟到新位置', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('单向箭头'), b = nodeByText('双向箭头');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const before = { x:grp.x, y:grp.y, w:grp.w, h:grp.h };
+    // 先把成员挪走，让排版真的有东西可改
+    a.x += 900; a.y += 700;
+    growAllGroups();                       // 拖拽语义：只长不缩，框先被撑大
+    const grown = { w:grp.w, h:grp.h };
+    ok('U19 前置：框被撑大了', grown.w > before.w + 100, before.w + ' -> ' + grown.w);
+    tidyLayout();
+    ok('U19b 排版后框收缩回贴合成员（不再是从前那个大框）',
+      grp.w < grown.w - 100, grown.w + ' -> ' + grp.w + '（原有的 ' + before.w + '）');
+    const need = groupMinSize(grp);
+    ok('U19c 框仍然精确贴合成员',
+      Math.abs(grp.x - need.x) < 1 && Math.abs(grp.w - need.w) < 1,
+      JSON.stringify({ box:{ x:grp.x, w:grp.w }, need:{ x:need.x, w:need.w } }));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

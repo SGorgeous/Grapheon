@@ -92,6 +92,9 @@ function relayout(){
 function tidyLayout(){
   sizeAll();
   layoutMind();
+  // 排版是「全局重排」，成员都被摆到别处去了，框必须跟着重排 —— 重新贴合到成员。
+  // （拖拽时的规矩是「只长不缩」，那是局部操作；这里是显式的整体重排，所以允许收缩。）
+  refitAllGroups();
   fitIfNeeded();
   mark();
 }

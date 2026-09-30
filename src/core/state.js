@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -162,7 +162,17 @@ function groupGrowToFit(grp){
   if (needB > grp.y + grp.h){ grp.h = needB - grp.y; changed = true; }
   return changed;
 }
-function growAllGroups(){
+/* 把每个非空框重新贴合到它的成员（排版这种「全局重排」之后用）。
+   空框不动 —— 那是你手动拉的尺寸，没有成员就没有参照。 */
+function refitAllGroups(){
+  let changed = false;
+  for (const grp of (doc.groups || [])){
+    if (!grp.members || !grp.members.length) continue;
+    fitGroupToMembers(grp);
+    changed = true;
+  }
+  return changed;
+}function growAllGroups(){
   let changed = false;
   for (const grp of (doc.groups || [])) if (groupGrowToFit(grp)) changed = true;
   return changed;
