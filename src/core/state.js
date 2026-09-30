@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -48,7 +48,7 @@ let sel = new Set();
 let selEdgeId = null;          // 选中的连线（与节点选择互斥）
 let selGroupId = null;         // 选中的分组（同上）
 let view = { x:0, y:0, z:1 };
-let hover = null, hoverPort = null, hoverEdge = null;
+let hover = null, hoverPort = null, hoverEdge = null, hoverGrp = null;
 let drag = null, marquee = null, linking = null, relink = null;
 let editing = null;
 let lastClickNode = null;      // Shift 连线的第一个节点
@@ -57,6 +57,41 @@ const isRoot = (n) => !idx.parent.has(n.id);
 const byId   = (id) => idx.byId.get(id);
 const mark   = () => { dirty = true; };
 
+/* =========================================================================
+   折叠：算一遍「谁被藏起来了」
+   -------------------------------------------------------------------------
+   两种折叠：
+     · 节点折叠 —— 节点以下的整棵子树藏起来
+     · 分组折叠 —— 组内所有后代（节点和分组）藏起来，但分组自己的框还留着
+   外加一条「幽灵框抑制」：一个没被折叠的分组，如果它的内容全被藏起来了，
+   那它自己也藏起来 —— 否则折叠一个节点会在画布上留下一个空框。
+   空分组（本来就没东西）不适用这条，那是你手动画的框，得留着。
+   ========================================================================= */
+function computeHidden(){
+  const hidden = new Set();
+  // 1) 节点折叠
+  for (const n of doc.nodes){
+    if (!n.collapsed) continue;
+    for (const d of descendants(n.id)) hidden.add(d);
+  }
+  // 2) 分组折叠：组内全部后代都藏起来（分组自己不算，框要留着给人展开）
+  for (const g of (doc.groups || [])){
+    if (!g.collapsed) continue;
+    for (const id of groupDescendantIds(g.id)) hidden.add(id);
+  }
+  // 3) 幽灵框抑制：迭代到不动点，套娃时会一层层往外收
+  let changed = true;
+  while (changed){
+    changed = false;
+    for (const g of (doc.groups || [])){
+      if (g.collapsed || hidden.has(g.id)) continue;
+      const kids = groupChildNodes(g).concat(groupChildGroups(g));
+      if (!kids.length) continue;                       // 空框保持可见
+      if (kids.every(id => hidden.has(id))){ hidden.add(g.id); changed = true; }
+    }
+  }
+  return hidden;
+}
 function reindex(){
   idx.children = new Map(); idx.parent = new Map(); idx.byId = new Map(); idx.groups = new Map();
   for (const n of doc.nodes) { idx.children.set(n.id, []); idx.byId.set(n.id, n); }
@@ -109,12 +144,8 @@ function reindex(){
     n.big = !idx.parent.has(n.id) &&
             ((idx.children.get(n.id) || []).length > 0 || doc.nodes.length === 1);
   }
-  // 折叠：把被折叠节点以下的整棵子树标记为隐藏（绘制/命中/选择/导出都要跳过它们）
-  idx.hidden = new Set();
-  for (const n of doc.nodes){
-    if (!n.collapsed) continue;
-    for (const d of descendants(n.id)) idx.hidden.add(d);
-  }
+  // 折叠：算一遍这个文档里所有「被藏起来」的东西（节点和分组都可能被藏）
+  idx.hidden = computeHidden();
   // 选中集里不该留着看不见的东西
   for (const id of [...sel]) if (idx.hidden.has(id)) sel.delete(id);
   if (selEdgeId){
@@ -167,6 +198,18 @@ function groupDescendantGroups(id, out, seen){
     if (!idx.groups.has(m)) continue;
     out.push(m);
     groupDescendantGroups(m, out, seen);
+  }
+  return out;
+}
+/* 一个分组里所有后代（节点 + 分组）的 id，分组折叠时用 */
+function groupDescendantIds(id, out, seen){
+  out = out || []; seen = seen || new Set();
+  const g = idx.groups.get(id);
+  if (!g || seen.has(id)) return out;
+  seen.add(id);
+  for (const m of (g.members || [])){
+    if (idx.groups.has(m)){ out.push(m); groupDescendantIds(m, out, seen); }
+    else if (idx.byId.has(m)) out.push(m);
   }
   return out;
 }
@@ -488,6 +531,7 @@ function serialize(){
     })),
     groups: (doc.groups || []).map(g => ({
       id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null,
+      collapsed:!!g.collapsed,
       x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
     }))
   };
@@ -527,7 +571,9 @@ function deserialize(d){
     let id = g.id;
     if (!id || seen.has(id)) id = mkId('g', seen); else seen.add(id);
     doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
-      members:(g.members || []).slice(), color:g.color || null });
+      members:(g.members || []).slice(), color:g.color || null,
+      x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
+      collapsed:!!g.collapsed });
   }
   sel.clear(); selEdgeId = null; selGroupId = null; editing = null; hideEditor();
   reindex(); sizeAll();

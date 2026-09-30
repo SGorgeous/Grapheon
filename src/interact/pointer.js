@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -47,10 +47,10 @@ canvas.addEventListener('pointerdown', (ev) => {
     mark();
     return;
   }
-  // 折叠标记 = 展开按钮
+  // 折叠标记 = 展开按钮（节点和分组共用）
   const cb = hitCollapseBadge(p);
   if (cb){
-    toggleCollapseOf(cb);
+    if (byGroup(cb.id)) toggleGroupCollapse(cb); else toggleCollapseOf(cb);
     return;
   }
   // 分组标题栏：选中整组并开始搬动成员
@@ -177,6 +177,7 @@ window.addEventListener('pointermove', (ev) => {
   }
   hover = ev.target === canvas ? hitNode(p) : null;
   hoverEdge = null;
+  hoverGrp = ev.target === canvas ? hitGroupTitle(p) : null;   // 悬停分组标题时把折叠角标显出来
   hoverPort = hitPort(p);
   if (!hoverPort && !hover && ev.target === canvas) hoverEdge = hitEdge(p);
   mark();

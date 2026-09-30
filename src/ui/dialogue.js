@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -47,9 +47,12 @@ function updateMeta(){
     const grp = selectedGroup();
     if (grp) selTxt = ' · 选中分组「' + (grp.title || '分组') + '」（' + grp.members.length + ' 个成员）';
   }
-  const hid = idx.hidden ? idx.hidden.size : 0;
+  // idx.hidden 里既有节点也有分组，分开数才好读
+  let hidN = 0, hidG = 0;
+  if (idx.hidden) for (const id of idx.hidden){ if (idx.byId.has(id)) hidN++; else hidG++; }
   const gN = (doc.groups || []).length;
-  dlgMeta.textContent = doc.nodes.length + ' 节点' + (hid ? '（隐藏 ' + hid + '）' : '') +
+  const hid = hidN ? '（隐藏 ' + hidN + (hidG ? ' + ' + hidG + ' 组' : '') + '）' : '';
+  dlgMeta.textContent = doc.nodes.length + ' 节点' + hid +
     ' / ' + doc.edges.length + ' 连线' + (gN ? ' / ' + gN + ' 分组' : '') + selTxt +
     ' · ' + Math.round(view.z * 100) + '%';
   dlgHint.textContent = HINT;

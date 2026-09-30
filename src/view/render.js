@@ -52,7 +52,10 @@ function drawGrid(){
   ctx.restore();
 }
 function drawGraph(g){
-  for (const grp of (idx.groupOrder || doc.groups || [])) drawGroup(g, grp);   // 祖先先画、子分组叠在上面
+  for (const grp of (idx.groupOrder || doc.groups || [])){
+    if (isHidden(grp.id)) continue;                    // 被折叠藏起来的分组不画
+    drawGroup(g, grp);                                 // 祖先先画、子分组叠在上面
+  }
   for (const e of doc.edges){
     if (!edgeVisible(e)) continue;                    // 被折叠藏起来的不画
     if (relink && relink.edgeId === e.id) continue;   // 正在拖端点的那条改用预览画
@@ -106,6 +109,15 @@ function collapseBadgeRect(n){
   setFont(mctx, FS, 'normal');
   const bw = Math.max(22, mctx.measureText(label).width + 12), bh = 22;
   return { x:n.x + n.w - bw / 2, y:n.y + n.h / 2 - bh / 2, w:bw, h:bh, label };
+}
+/* 分组标题右边的小角标：折叠时显示藏了多少个节点，点它就展开。
+   放在标题栏右边，不和分组四个端点（在边框正中）打架。 */
+function groupBadgeRect(g){
+  const tb = groupTitleBox(g);
+  const label = String(groupAllNodes(g.id).length);
+  setFont(mctx, FS, 'normal', FONT);
+  const bw = Math.max(22, mctx.measureText(label).width + 12), bh = 22;
+  return { x:tb.x + tb.w + 8, y:tb.y + (tb.h - bh) / 2, w:bw, h:bh, label };
 }
 /* 选中节点的右下角缩放手柄 */
 const RESIZE_SZ = 15;
@@ -280,6 +292,20 @@ function drawGroup(g, grp){
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   g.fillText(fitText(g, grp.title || '分组', tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
+  // 折叠角标：折叠时画（显示藏了多少），鼠标悬在标题栏上也画（提示这里能点）
+  if (grp.collapsed || hoverGrp === grp){
+    const bb = groupBadgeRect(grp);
+    g.fillStyle = C.bg;
+    g.strokeStyle = grp.collapsed ? C.yellow : C.gray;
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.rect(Math.round(bb.x), Math.round(bb.y), Math.round(bb.w), bb.h);
+    g.fill(); g.stroke();
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = grp.collapsed ? C.yellow : C.gray;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(grp.collapsed ? bb.label : '−', bb.x + bb.w / 2, bb.y + bb.h / 2 + 1);
+  }
   // 选中时：四个端点 + 右下角缩放柄（和节点一样，框也能自由拉大小）
   if (sel){
     const rsz = resizeHandleRect(r);

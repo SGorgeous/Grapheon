@@ -153,6 +153,7 @@ function showCtx(x, y, n, e, info){
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
       grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');
     })]);
+    items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Space', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
     items.push('hr');
     items.push(['解散分组（保留成员）', 'Del', () => dissolveGroup(grp)]);

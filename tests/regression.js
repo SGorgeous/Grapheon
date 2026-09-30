@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    GRAPHEON · tests/regression.js
    在真实浏览器里跑的断言套件。用 node tests/run.mjs 执行。
    直接操作全局的模块函数（它们都是普通脚本，共享同一个全局作用域）。
@@ -2281,6 +2281,167 @@
     pg.text = '我的算符';
     setProgram(pg, { value:24 });
     ok('Q14c 用户改过的标题不动', pg.text === '我的算符', pg.text);
+  });
+
+  /* ==================== 折叠分组 ==================== */
+  const twoNodeGroup = () => {
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    return { a, b, grp };
+  };
+  T('S1 折叠分组：组内后代藏起来，框自己留着', () => {
+    fresh(); layoutMind();
+    const { grp } = twoNodeGroup();
+    ok('S1 前置：组内节点都可见', groupAllNodes(grp.id).every(id => !isHidden(id)));
+    selectGroup(grp.id);
+    toggleGroupCollapse(grp);
+    reindex();
+    ok('S1b 分组标记为已折叠', grp.collapsed === true);
+    ok('S1c 组内节点全藏了', groupAllNodes(grp.id).every(id => isHidden(id)),
+      groupAllNodes(grp.id).filter(id => !isHidden(id)).join(','));
+    ok('S1d 分组自己的框还在（要留着给人展开）', !isHidden(grp.id));
+    ok('S1e 角标写着藏了几个节点', groupBadgeRect(grp).label === '2', groupBadgeRect(grp).label);
+    toggleGroupCollapse(grp);
+    reindex();
+    ok('S1f 展开后成员都回来了',
+      !grp.collapsed && groupAllNodes(grp.id).every(id => !isHidden(id)));
+  });
+  T('S2 折叠分组后画布能正常绘制', () => {
+    fresh(); layoutMind();
+    const { grp } = twoNodeGroup();
+    toggleGroupCollapse(grp);
+    reindex();
+    dirty = true; draw();
+    ok('S2 绘制不报错', true);
+    const c = buildExportCanvas([nodeByText('操作')]);
+    ok('S2b 导出也不报错', c.width > 0);
+  });
+  T('S3 折叠节点后，内容全没了的分组不留幽灵框', () => {
+    fresh(); layoutMind();
+    const b = nodeByText('连线');
+    const kids = descendants(b.id);
+    sel.clear(); sel.add(b.id); kids.forEach(id => sel.add(id));
+    const grp = createGroup();
+    ok('S3 前置：框可见', !isHidden(grp.id));
+    selectOnly(b.id); toggleCollapseOf(b); reindex();
+    ok('S3b 还有成员（b 自己）可见，框就留着', !isHidden(grp.id), [...idx.hidden].join(','));
+    // 再把 b 也藏起来（折叠它的父节点）
+    const parent = byId(idx.parent.get(b.id));
+    selectOnly(parent.id); toggleCollapseOf(parent); reindex();
+    ok('S3c 组内全被藏了 → 框也藏起来', isHidden(grp.id),
+      'hidden=' + [...idx.hidden].join(',') + ' 成员=' + grp.members.join(','));
+    ok('S3d 框不画也不可点', hitGroupTitle({ x:grp.x + 10, y:grp.y + 10 }) === null &&
+      hitGroupArea({ x:grp.x + grp.w / 2, y:grp.y + grp.h / 2 }) === null);
+  });
+  T('S4 空分组不会被幽灵框抑制干掉', () => {
+    fresh(); layoutMind();
+    const empty = newEmptyGroup(0, 0);
+    reindex();
+    ok('S4 空框照样可见', !isHidden(empty.id));
+    const b = nodeByText('连线');
+    selectOnly(b.id); toggleCollapseOf(b); reindex();
+    ok('S4b 别处折叠也不影响它', !isHidden(empty.id));
+  });
+  T('S5 套娃时折叠分组会一层层收', () => {
+    fresh(); layoutMind();
+    const a  = nodeByText('节点');
+    const n1 = nodeByText('矩形 / 圆角 / 菱形 / 椭圆');
+    const n2 = nodeByText('Tab 加子节点');
+    const inner = newEmptyGroup(a.x - 400, a.y - 300);
+    const outer = newEmptyGroup(a.x - 400, a.y - 300);
+    inner.members = [n1.id, n2.id];
+    outer.members = [inner.id, a.id];
+    reindex(); sizeAll();
+    // 折内层：内层成员藏起来，内层和外层都还在
+    toggleGroupCollapse(inner); reindex();
+    ok('S5 内层成员藏了', isHidden(n1.id) && isHidden(n2.id));
+    ok('S5b 内层框还在', !isHidden(inner.id));
+    ok('S5c 外层框也还在（因为 a 还可见）', !isHidden(outer.id));
+    // 折外层：内层和外层的内容全藏，但外层框留着
+    toggleGroupCollapse(outer); reindex();
+    ok('S5d 内层也被藏了', isHidden(inner.id), [...idx.hidden].join(','));
+    ok('S5e 外层框自己还在', !isHidden(outer.id));
+    ok('S5f a 也藏了', isHidden(a.id));
+    toggleGroupCollapse(outer); reindex();
+    ok('S5g 展开外层：内层回来了但内层仍是折叠状态',
+      !isHidden(outer.id) && !isHidden(inner.id) && isHidden(n1.id) && inner.collapsed === true);
+  });
+  T('S6 点标题右边的角标就能展开', () => {
+    fresh(); layoutMind();
+    const { grp } = twoNodeGroup();
+    toggleGroupCollapse(grp); reindex();
+    const bb = groupBadgeRect(grp);
+    const c = S({ x:bb.x + bb.w / 2, y:bb.y + bb.h / 2 });
+    pe('pointerdown', c.x, c.y);
+    ok('S6 点角标后展开了', grp.collapsed === false, grp.collapsed);
+    ok('S6b 成员回来了', groupAllNodes(grp.id).every(id => !isHidden(id)));
+    pe('pointerup', c.x, c.y);
+  });
+  T('S7 选中分组按 Space 折叠', () => {
+    fresh(); layoutMind();
+    const { grp } = twoNodeGroup();
+    selectGroup(grp.id);
+    keyRaw(' ');
+    ok('S7 Space 折叠了分组', grp.collapsed === true);
+    keyRaw(' ');
+    ok('S7b 再按一次展开', grp.collapsed === false);
+  });
+  T('S8 折叠着的分组仍然能点；被藏起来的分组点不到', () => {
+    fresh(); layoutMind();
+    // (a) 折叠着的分组：框还留着，标题栏照样能点
+    const { grp } = twoNodeGroup();
+    toggleGroupCollapse(grp); reindex();
+    ok('S8 折叠的分组自己的框还可见', !isHidden(grp.id));
+    const tb1 = groupTitleBox(grp);
+    ok('S8b 它的标题还能点中', (hitGroupTitle({ x:tb1.x + 4, y:tb1.y + 8 }) || {}).id === grp.id);
+    // (b) 内容被节点折叠全藏掉的分组：连标题都点不到
+    const b = nodeByText('操作');
+    const kids = descendants(b.id);
+    ok('S8c 前置：操作有子节点', kids.length >= 1, kids.length);
+    sel.clear(); kids.forEach(id => sel.add(id));
+    const g2 = createGroup();
+    selectOnly(b.id); toggleCollapseOf(b); reindex();
+    ok('S8d 内容全被藏的分组确实被藏了', isHidden(g2.id),
+      'hidden=' + [...idx.hidden].join(',') + ' 成员=' + g2.members.join(','));
+    const tb2 = groupTitleBox(g2);
+    const h = S({ x:tb2.x + 4, y:tb2.y + 8 });
+    pe('pointerdown', h.x, h.y);
+    ok('S8e 点不到它', selGroupId !== g2.id, selGroupId);
+    ok('S8f 也没进入拖拽', !drag || drag.grpId !== g2.id, drag && drag.mode);
+    pe('pointerup', h.x, h.y);
+  });
+  T('S9 分组折叠能存下来', () => {
+    fresh(); layoutMind();
+    const { grp } = twoNodeGroup();
+    toggleGroupCollapse(grp); reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('S9 序列化里有 collapsed', snap.groups.find(g => g.id === grp.id).collapsed === true);
+    deserialize(snap);
+    const g2 = byGroup(grp.id);
+    ok('S9b 往返保留', g2.collapsed === true);
+    ok('S9c 重新索引后成员仍然被藏着', groupAllNodes(g2.id).every(id => isHidden(id)),
+      [...idx.hidden].join(','));
+  });
+  T('S10 藏起来的成员不会被选中 / 框选 / 导出', () => {
+    fresh(); layoutMind();
+    const { a, grp } = twoNodeGroup();
+    toggleGroupCollapse(grp); reindex();
+    selectOnly(a.id);
+    reindex();                                   // 清理发生在 reindex 里
+    ok('S10 藏起来的节点选不上（reindex 会清掉）', !sel.has(a.id), [...sel].join(','));
+    const p1 = S({ x:bboxAll().minX - 80, y:bboxAll().minY - 80 });
+    const p2 = S({ x:bboxAll().maxX + 80, y:bboxAll().maxY + 80 });
+    pe('pointerdown', p1.x, p1.y, { shiftKey:true });
+    pe('pointermove', p2.x, p2.y, { shiftKey:true });
+    pe('pointerup', p2.x, p2.y, { shiftKey:true });
+    ok('S10b 框选也不会选中被藏的', [...sel].every(id => !isHidden(id)), sel.size + ' 个');
+    selectAll();
+    ok('S10c 全选跳过被藏的', [...sel].every(id => !isHidden(id)));
+    expScope = 'all'; renderScopes();
+    const set = currentExportSet();
+    ok('S10d 导出范围跳过被藏的', set.every(n => !isHidden(n.id)), set.length + ' / ' + doc.nodes.length);
+    ok('S10e 没选中时导出信息不会算错', typeof expInfoEl.textContent === 'string');
   });
 
   });

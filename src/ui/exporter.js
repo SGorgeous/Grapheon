@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/exporter.js
    导出面板：范围选择、标题与文件名、PNG 输出。
@@ -143,10 +143,20 @@ function drawGraphForExport(g, nodes, edges){
   nodes = nodes || doc.nodes;
   if (!edges){ const ids = new Set(nodes.map(n => n.id)); edges = doc.edges.filter(e => ids.has(e.s) && ids.has(e.t)); }
   const savedHover = hover, savedEdge = hoverEdge, savedSel = sel, savedSelEdge = selEdgeId;
+  const savedGrp = selGroupId, savedHoverGrp = hoverGrp;
   hover = null; hoverEdge = null; sel = new Set(); selEdgeId = null;   // 导出图里不要选中态和手柄
+  selGroupId = null; hoverGrp = null;
+  // 分组框也要画：范围里有它的成员就画出来（所见即所得）
+  const inSet = new Set(nodes.map(n => n.id));
+  for (const grp of (idx.groupOrder || doc.groups || [])){
+    if (isHidden(grp.id)) continue;
+    if (!groupAllNodes(grp.id).some(id => inSet.has(id))) continue;
+    drawGroup(g, grp);
+  }
   for (const e of edges) drawEdge(g, e);
   for (const n of nodes) drawNode(g, n);
   hover = savedHover; hoverEdge = savedEdge; sel = savedSel; selEdgeId = savedSelEdge;
+  selGroupId = savedGrp; hoverGrp = savedHoverGrp;
 }
 function doExport(){
   const nodes = currentExportSet();

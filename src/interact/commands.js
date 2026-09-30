@@ -163,9 +163,26 @@ function toggleCollapseOf(n){
   }
   pushHist(); mark();
 }
+/* 折叠一个分组：组内所有后代藏起来，分组自己的框留着（角标显示藏了多少） */
+function toggleGroupCollapse(grp){
+  if (!grp) return;
+  const ids = groupAllNodes(grp.id);
+  if (!ids.length && !groupChildGroups(grp).length){
+    say('* 这个分组还是空的，没什么可折叠的。');
+    return;
+  }
+  grp.collapsed = !grp.collapsed;
+  reindex(); pushHist(); mark();
+  say(grp.collapsed
+    ? '* 已折叠分组「' + (grp.title || '分组') + '」，藏起 ' + ids.length + ' 个节点。点标题右边的角标展开。'
+    : '* 已展开分组「' + (grp.title || '分组') + '」。');
+}
+/* Space：选中分组就折叠分组，选中节点就折叠节点 */
 function toggleCollapse(){
+  const grp = selectedGroup();
+  if (grp){ toggleGroupCollapse(grp); return; }
   const n = soleSel();
-  if (!n){ say('* 先选中一个节点，再按 Space。'); return; }
+  if (!n){ say('* 先选中一个节点或分组，再按 Space。'); return; }
   toggleCollapseOf(n);
 }
 function setShape(shape){

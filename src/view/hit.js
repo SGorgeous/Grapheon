@@ -49,6 +49,7 @@ function hitGroupTitle(p){
   // 从最内层往外判：套娃时里面那个先接住点击
   const list = (idx.groupOrder || doc.groups || []).slice().reverse();
   for (let i = 0; i < list.length; i++){
+    if (isHidden(list[i].id)) continue;
     const b = groupTitleBox(list[i]);
     if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return list[i];
   }
@@ -59,6 +60,7 @@ function hitGroupBorder(p){
   const list = (idx.groupOrder || doc.groups || []).slice().reverse();
   const tol = Math.max(10, 10 / view.z);
   for (let i = 0; i < list.length; i++){
+    if (isHidden(list[i].id)) continue;
     const grp = list[i], r = groupBox(grp);
     if (p.x < r.x - tol || p.x > r.x + r.w + tol || p.y < r.y - tol || p.y > r.y + r.h + tol) continue;
     const inner = p.x > r.x + tol && p.x < r.x + r.w - tol &&
@@ -72,6 +74,7 @@ function hitGroup(p){ return hitGroupTitle(p) || hitGroupBorder(p); }
 function hitGroupArea(p){
   const list = (idx.groupOrder || doc.groups || []).slice().reverse();
   for (let i = 0; i < list.length; i++){
+    if (isHidden(list[i].id)) continue;
     const r = groupBox(list[i]);
     if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return r;
   }
@@ -124,8 +127,15 @@ function hitResizeHandle(p){
   if (p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad) return box;
   return null;
 }
-/* 折叠标记（同时也是展开按钮） */
+/* 折叠标记（同时也是展开按钮）。节点和分组的角标都在这儿判。 */
 function hitCollapseBadge(p){
+  // 先把分组判一遍（它们画在上面）
+  for (const grp of (idx.groupOrder || doc.groups || []).slice().reverse()){
+    if (isHidden(grp.id)) continue;
+    if (!grp.collapsed && hoverGrp !== grp) continue;
+    const bb = groupBadgeRect(grp);
+    if (p.x >= bb.x && p.x <= bb.x + bb.w && p.y >= bb.y && p.y <= bb.y + bb.h) return grp;
+  }
   for (let i = doc.nodes.length - 1; i >= 0; i--){
     const n = doc.nodes[i];
     if (!n.collapsed || isHidden(n.id)) continue;
