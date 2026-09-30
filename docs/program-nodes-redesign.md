@@ -195,3 +195,58 @@ src/view/render.js     drawEdge / drawVarNode / drawOpNode / drawSwitchControl
 src/interact/pointer.js 拉线 / 拖端点改接
 tests/regression.js    J / K / VV / GX / SC 几组是求值语义的主力断言
 ```
+
+---
+
+## D 期剩余：一个变量节点多个变量（未做）
+
+### 为什么不能"顺手加一下"
+
+`defValueIn(ctx, def)` 里的 `def` **现在就是一个节点**。一个节点只有一个变量时这没问题；
+一个节点有多个变量时，「这个 `{名字}` 指的是哪一个」就说不清了。
+
+所以核心是把 `def` 从「节点」升级成「节点 + 下标」。这会一路牵动：
+
+| 函数 | 现在 | 要变成 |
+|---|---|---|
+| `findVarDefIn` | 返回节点 | 返回 `{ node, index }` |
+| `varVisibleIn` | 用 `def.id` | 用 `(def.node \|\| def).id` |
+| `defValueIn` | 读 `def.varDef` | 按 index 读 `def.node.varDefs[index]` |
+| `evalFromIn` | 用 `def.id` 当起点 | 同上 |
+| `refAnchorOf` | 节点本身就够了 | 同上 |
+
+### 建议的兼容策略（关键）
+
+**保留 `varDef` 作为第 0 个变量**，新增可选的 `varDefs`：
+
+```js
+node.varDef              // 第 0 个（老存档、老代码全都靠它）
+node.varDefs             // 可选；存在时 [0] 必须和 varDef 一致
+```
+
+于是 `def` 可以是**一个节点**（= 第 0 个变量）或者 `{node, index}`。
+所有老调用点一行都不用改，新代码用带下标的形状。
+
+### 还有几处要一起改
+
+- `varLayout` / `sizeVarNode` / `drawVarNode`：N 行，每行「名字格 + 值格」
+- `hitVarPart`：返回 `varName0` / `varValue1` 这种带下标的
+- `editing.js` 的 `editValue` / `editSetValue`：认下标
+- `refreshVarText`：每个变量各自插值
+- 三种控件（勾选 / 滑条 / 条件）算第几个变量？**建议：控件只管第 0 个**，其余是普通变量
+- `serialize` / `deserialize`：加 `varDefs`，老存档读进来只有 `varDef`
+
+### 该有的断言
+
+- 一个节点两个变量，各自能被子节点引用到，互不串
+- 老存档（只有 `varDef`）读进来 = 一个变量，行为不变
+- 同名变量跨节点时，优先级仍然决定谁赢
+- 第 1 个变量上的插值用**这个节点**当锚点（作用域规则和以前一致）
+- 存读往返
+- 三种控件仍然只作用在第 0 个变量上
+
+### 为什么这轮不做
+
+它牵动约 100 条现有断言（J / K / VV / GX / SC 几组都是求值语义的主力），
+而 `def` 的形状一改就是全线影响 —— **塞在尾巴上做会把变量系统弄坏**。
+单独一轮，先把 `def` 的双形状铺开、跑绿，再加 UI。
