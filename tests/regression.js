@@ -5195,6 +5195,183 @@
     })(), JSON.stringify(serialize().nodes.find(n => n.id === pg.id).program));
   });
 
+
+  /* ==================== 变量定义节点的「值」也能引用变量 ==================== */
+  T('VV01 普通变量：值里能写 {别的变量}', () => {
+    fresh(); layoutMind();
+    const w = mkVar('宽', '6');
+    const h = mkVar('高', '7');
+    const area = mkVar('面积', '{宽}');
+    reindex(); sizeAll();
+    ok('VV01 值解析成 6', controlValue(area.varDef, area.id) === '6',
+      controlValue(area.varDef, area.id));
+    ok('VV01b 引用它的人拿到 6', resolveVar('面积', nodeByText('节点').id) === '6',
+      String(resolveVar('面积', nodeByText('节点').id)));
+    ok('VV01c 裸字段还是原文（可编辑的那份）', byId(area.id).varDef.value === '{宽}',
+      byId(area.id).varDef.value);
+    // 改被引用的那个
+    setVarDef(byId(w.id), { value:'60' });
+    reindex(); sizeAll();
+    ok('VV01d 上游一改它就跟着变', controlValue(byId(area.id).varDef, area.id) === '60',
+      controlValue(byId(area.id).varDef, area.id));
+    ok('VV01e 下游也跟着变', resolveVar('面积', nodeByText('节点').id) === '60',
+      String(resolveVar('面积', nodeByText('节点').id)));
+    // 值可以拼字符串
+    const msg = mkVar('标语', '共 {宽} 个');
+    reindex();
+    ok('VV01f 值里能拼字符串', controlValue(byId(msg.id).varDef, msg.id) === '共 60 个',
+      controlValue(byId(msg.id).varDef, msg.id));
+    // 值里引用不存在的变量
+    const bad = mkVar('缺', '{没有这个}');
+    reindex();
+    ok('VV01g 引用不存在的还是 [未定义]', controlValue(byId(bad.id).varDef, bad.id) === '[未定义]',
+      controlValue(byId(bad.id).varDef, bad.id));
+    // 值里能转义
+    const lit = mkVar('字面', '\\{宽}');
+    reindex();
+    ok('VV01h 值里也能用反斜杠转义', controlValue(byId(lit.id).varDef, lit.id) === '{宽}',
+      controlValue(byId(lit.id).varDef, lit.id));
+  });
+  T('VV02 值可以链式引用（A → B → C）', () => {
+    fresh(); layoutMind();
+    const c = mkVar('C', '5');
+    const b = mkVar('B', '{C}');
+    const a = mkVar('A', '{B}');
+    reindex(); sizeAll();
+    ok('VV02 两级链能穿到底', controlValue(byId(a.id).varDef, a.id) === '5',
+      controlValue(byId(a.id).varDef, a.id));
+    setVarDef(byId(c.id), { value:'9' });
+    reindex();
+    ok('VV02b 源头一改，整条链跟着变', controlValue(byId(a.id).varDef, a.id) === '9',
+      controlValue(byId(a.id).varDef, a.id));
+  });
+  T('VV03 循环引用不会爆栈，会显示 [循环]', () => {
+    fresh(); layoutMind();
+    const a = mkVar('甲', '{乙}');
+    const b = mkVar('乙', '{甲}');
+    reindex(); sizeAll();
+    ok('VV03 甲 = [循环]', controlValue(byId(a.id).varDef, a.id) === '[循环]',
+      controlValue(byId(a.id).varDef, a.id));
+    ok('VV03b 乙 = [循环]', controlValue(byId(b.id).varDef, b.id) === '[循环]',
+      controlValue(byId(b.id).varDef, b.id));
+    ok('VV03c 引用它们的地方也不会炸', (() => {
+      const n = addNodeAt('看 {甲} 和 {乙}', 0, 0, 'rect');
+      reindex(); sizeAll();
+      return displayTextOf(n) === '看 [循环] 和 [循环]';
+    })(), (() => {
+      const n = doc.nodes.find(x => x.text === '看 {甲} 和 {乙}');
+      return n ? displayTextOf(n) : '(没有)';
+    })());
+    ok('VV03d 自己引用自己也挡得住', (() => {
+      const s = mkVar('自己', '{自己}');
+      reindex();
+      return controlValue(byId(s.id).varDef, s.id) === '[循环]';
+    })(), (() => {
+      const s = doc.nodes.find(x => x.varDef && x.varDef.name === '自己');
+      return s ? controlValue(s.varDef, s.id) : '(没有)';
+    })());
+    ok('VV03e 画得出来（不会死循环）', (dirty = true, draw(), true));
+  });
+  T('VV04 值里的引用走的是同一套作用域规则', () => {
+    fresh(); layoutMind();
+    const far = nodeByText('节点');
+    const g = mkVar('G', '11', { scope:'global' });
+    // 用全局变量拼一个值，从老远的地方取
+    const joined = mkVar('拼接', 'G 是 {G}', { scope:'global' });
+    reindex(); sizeAll();
+    ok('VV04 全局变量在值里零连线可取', controlValue(byId(joined.id).varDef, joined.id) === 'G 是 11',
+      controlValue(byId(joined.id).varDef, joined.id));
+    // 局内：值里引用一个「不是它下游」的局内变量，应该看不到
+    const lv = mkVar('L', '22', { scope:'local' });
+    const uses = mkVar('用', '{L}', { scope:'global' });
+    reindex();
+    ok('VV04b 局内变量不连线时，值里也看不到', controlValue(byId(uses.id).varDef, uses.id) === '[未定义]',
+      controlValue(byId(uses.id).varDef, uses.id));
+    linkNodes(lv.id, uses.id);
+    reindex();
+    ok('VV04c 连上就看到了', controlValue(byId(uses.id).varDef, uses.id) === '22',
+      controlValue(byId(uses.id).varDef, uses.id));
+    // 函数分组隔离照样管用
+    const fg = newEmptyGroup(0, 0); fg.isFunction = true;
+    const inner = mkVar('IN', '33');
+    fg.members = [byId(inner.id).id];
+    reindex();
+    const outerUse = mkVar('外', '{IN}', { scope:'global' });
+    reindex();
+    ok('VV04d 函数分组里的变量，外面在值里也看不到',
+      controlValue(byId(outerUse.id).varDef, outerUse.id) === '[未定义]',
+      controlValue(byId(outerUse.id).varDef, outerUse.id));
+  });
+  T('VV05 勾选 / 滑条 / 开关的值也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('数', '80');
+    // 勾选：选项本身不会插值（那是选项名），但输出照旧是一串
+    const ck = addControlNode('check', 0, 0, { name:'选', options:['甲', '乙'], picked:[1] });
+    reindex();
+    ok('VV05 勾选的值不受影响', controlValue(byId(ck.id).varDef, ck.id) === '乙',
+      controlValue(byId(ck.id).varDef, ck.id));
+    // 滑条：值填表达式，先插值再夹取对齐
+    const sl = addControlNode('slider', 0, 0, { name:'滑', value:'{数}', min:0, max:100, step:10 });
+    reindex(); sizeAll();
+    ok('VV05b 滑条的值能引用变量（80）', sliderValue(byId(sl.id).varDef, sl.id) === 80,
+      sliderValue(byId(sl.id).varDef, sl.id));
+    ok('VV05c 走的值通道也对', controlValue(byId(sl.id).varDef, sl.id) === '80',
+      controlValue(byId(sl.id).varDef, sl.id));
+    setVarDef(byId(v.id), { value:'37' });
+    reindex();
+    ok('VV05d 上游改了，滑条跟着对齐到步长（37 → 40）',
+      sliderValue(byId(sl.id).varDef, sl.id) === 40, sliderValue(byId(sl.id).varDef, sl.id));
+    ok('VV05e 超范围照样夹住', (() => {
+      setVarDef(byId(v.id), { value:'999' });
+      reindex();
+      return sliderValue(byId(sl.id).varDef, sl.id) === 100;
+    })(), sliderValue(byId(sl.id).varDef, sl.id));
+    // 开关：只有 on/off 两种，值本身就是个固定串，不涉及插值
+    const sw = addControlNode('switch', 0, 0, { name:'闸', on:true });
+    reindex();
+    ok('VV05f 开关的值不受影响', controlValue(byId(sw.id).varDef, sw.id) === '开',
+      controlValue(byId(sw.id).varDef, sw.id));
+    toggleSwitch(byId(sw.id));
+    ok('VV05g 关掉还是「关」', controlValue(byId(sw.id).varDef, sw.id) === '关',
+      controlValue(byId(sw.id).varDef, sw.id));
+  });
+  T('VV06 值里引用变量之后，下游拿到的是解析后的结果', () => {
+    fresh(); layoutMind();
+    const price = mkVar('单价', '12');
+    const qty = mkVar('数量', '3');
+    const line = mkVar('小计', '{单价}');
+    const show = addNodeAt('小计 {小计}', 0, 0, 'rect');
+    linkNodes(qty.id, line.id);     // 连上只为证明连线不影响
+    reindex(); sizeAll();
+    ok('VV06 下游看到解析后的值', displayTextOf(byId(show.id)) === '小计 12',
+      displayTextOf(byId(show.id)));
+    // 运算节点照样能作用在「值来自引用」的变量上
+    const op = addOpNode('乘三', 0, 0, { op:'*', operand:'3' });
+    linkNodes(line.id, op.id);
+    linkNodes(op.id, show.id);
+    reindex(); sizeAll();
+    ok('VV06b 运算节点接在后面也对（12 × 3）', displayTextOf(byId(show.id)) === '小计 36',
+      displayTextOf(byId(show.id)));
+    ok('VV06c 源头一改整条链路都对', (() => {
+      setVarDef(byId(price.id), { value:'20' });
+      reindex(); sizeAll();
+      return displayTextOf(byId(show.id)) === '小计 60';
+    })(), displayTextOf(byId(show.id)));
+  });
+  T('VV07 带引用的值能存读往返', () => {
+    fresh(); layoutMind();
+    const w = mkVar('w', '4');
+    const area = mkVar('area', '{w} 平方');
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('VV07 存档里存的是原文（表达式要保住）',
+      snap.nodes.find(n => n.id === area.id).varDef.value === '{w} 平方',
+      snap.nodes.find(n => n.id === area.id).varDef.value);
+    deserialize(snap);
+    ok('VV07b 读回来还能算', controlValue(byId(area.id).varDef, area.id) === '4 平方',
+      controlValue(byId(area.id).varDef, area.id));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

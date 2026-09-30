@@ -37,7 +37,7 @@ const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op', 'out'];
 /* ---------------- 变量定义节点 / 运算节点 ----------------
    两个都是「框里有框」：描述文字在左上角，下面一排输入框。 */
 const VAR_PAD = 12;
-const VAR_NAME_W = 118, VAR_VAL_W = 118, VAR_BOX_H = 30;
+const VAR_NAME_W = 118, VAR_VAL_W = 152, VAR_BOX_H = 30;   // 值可能是个表达式的结果，留宽一点
 const VAR_SCOPE_H = 22;
 const OP_OP_W = 54, OP_VAL_W = 116, OP_BOX_H = 32;
 /* 三种特殊变量控件 */

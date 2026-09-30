@@ -108,10 +108,15 @@ function normalizeOpDef(o){
   args.length = def.arity;
   return { op:id, operands:args, type: VAR_TYPES.indexOf(src.type) >= 0 ? src.type : 'number' };
 }
-/* 滑条的值：夹在上下限里，并对齐到步长 */
-function sliderValue(vd){
+/* 正在求值的变量定义节点。用来挡循环引用（A={B} 且 B={A} 会栈溢出）。 */
+const VAR_RESOLVING = new Set();
+
+/* 滑条的值：夹在上下限里，并对齐到步长。
+   fromId 给了就先把它自己填的 value 过一遍插值 —— 滑条的值也能引用变量。 */
+function sliderValue(vd, fromId){
   const v = normalizeVarDef(vd);
-  let x = toNum(v.value);
+  const raw = (fromId == null) ? v.value : interpolateIn(liveCtx(), v.value, fromId);
+  let x = toNum(raw);
   if (x == null) x = v.min;
   x = Math.min(v.max, Math.max(v.min, x));
   const n = Math.round((x - v.min) / v.step);
@@ -122,14 +127,31 @@ function sliderValue(vd){
 const checkValue = (vd) => normalizeVarDef(vd).picked
   .map(i => normalizeVarDef(vd).options[i]).filter(x => x != null).join(', ');
 /* 一个变量定义节点「对外提供的值」的原始来源（不看函数分组替换）。
-   普通节点读 value；三个特殊控件各自算。 */
-function controlValue(vd){
+   普通节点读 value；三个特殊控件各自算。
+
+   ★ value 自己也能引用别的变量（`{宽度}` 这种）。
+     给了 fromId 就把 value 过一遍插值 —— 作用域锚点就是这个变量定义节点本身，
+     和它的描述文字走的是同一套规则。 */
+function controlValue(vd, fromId){
   const v = normalizeVarDef(vd);
   if (v.control === 'check')  return checkValue(v);
-  if (v.control === 'slider') return String(sliderValue(v));
   if (v.control === 'switch') return v.on ? (v.type === 'number' ? '1' : '开')
                                           : (v.type === 'number' ? '0' : '关');
-  return v.value;
+  // 没给 fromId 就不插值（有些调用点手里只有 varDef，没有所属节点）
+  if (fromId == null){
+    return v.control === 'slider' ? String(sliderValue(v)) : v.value;
+  }
+  // 循环引用：退回一个显眼的标记，别递归到爆栈
+  if (VAR_RESOLVING.has(fromId)) return '[循环]';
+  VAR_RESOLVING.add(fromId);
+  try {
+    const raw = interpolateIn(liveCtx(), v.value, fromId);
+    return v.control === 'slider'
+      ? String(sliderValue(Object.assign({}, v, { value:raw })))
+      : raw;
+  } finally {
+    VAR_RESOLVING.delete(fromId);
+  }
 }
 /* 开关节点：关掉时「逻辑上断开」，值不往下游流 */
 const switchOpen = (n) => isVarNode(n) && normalizeVarDef(n.varDef).control === 'switch'
@@ -396,7 +418,7 @@ function defValueIn(ctx, def){
     // 不能退回自己填的那个值，那样看起来像「有输出」但其实是假的。
     if (grp && isFunctionGroup(grp)) return functionResultIn(ctx, grp);
   }
-  return controlValue(def.varDef);
+  return controlValue(def.varDef, def.id);   // 把锚点传进去，value 里的 {变量} 才解析得了
 }
 /* 函数分组的结果 = 它声明的输出节点的值。没有输出节点就是空。 */
 function functionResultIn(ctx, grp){
@@ -577,7 +599,7 @@ function varLayout(box, varDef, lineH){
 function sliderValueAt(n, worldX){
   const L = varBoxes(n);
   const b = L.trackBox;
-  if (!b) return sliderValue(n.varDef);
+  if (!b) return sliderValue(n.varDef, n.id);
   const v = normalizeVarDef(n.varDef);
   const pad = 12;
   const t = Math.max(0, Math.min(1, (worldX - (b.x + pad)) / Math.max(1, b.w - pad * 2)));
@@ -586,10 +608,10 @@ function sliderValueAt(n, worldX){
   return Math.round((v.min + steps * v.step) * 1e6) / 1e6;
 }
 /* 滑条：值 → 轨道上的比例 */
-function sliderFrac(vd){
+function sliderFrac(vd, fromId){
   const v = normalizeVarDef(vd);
   if (v.max === v.min) return 0;
-  return Math.max(0, Math.min(1, (sliderValue(v) - v.min) / (v.max - v.min)));
+  return Math.max(0, Math.min(1, (sliderValue(v, fromId) - v.min) / (v.max - v.min)));
 }
 /* 变量节点上那行小字：作用域 + （控件类型或值类型） */
 function varScopeText(vd){

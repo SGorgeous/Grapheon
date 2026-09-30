@@ -445,11 +445,11 @@ function drawCheckControl(g, L, v){
   }
   g.restore();
 }
-function drawSliderControl(g, L, v){
+function drawSliderControl(g, L, v, n){
   const b = L.trackBox;
   const cy = b.y + b.h / 2;
   const x0 = b.x + 12, x1 = b.x + b.w - 12;
-  const fx = sliderFrac(v);
+  const fx = sliderFrac(v, n && n.id);
   const kx = x0 + (x1 - x0) * fx;
   g.save();
   // 轨道
@@ -464,7 +464,7 @@ function drawSliderControl(g, L, v){
   // 当前值
   setFont(g, FS, 'normal', FONT);
   g.fillStyle = C.white; g.textAlign = 'center'; g.textBaseline = 'bottom';
-  g.fillText(String(sliderValue(v)), (x0 + x1) / 2, b.y - 2);
+  g.fillText(String(sliderValue(v, n && n.id)), (x0 + x1) / 2, b.y - 2);
   g.restore();
 }
 function drawSwitchControl(g, L, v){
@@ -501,11 +501,11 @@ function drawVarNode(g, n, b, selected, hov){
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
   g.restore();
   if (v.control === 'check')       drawCheckControl(g, L, v);
-  else if (v.control === 'slider') drawSliderControl(g, L, v);
+  else if (v.control === 'slider') drawSliderControl(g, L, v, n);
   else if (v.control === 'switch') drawSwitchControl(g, L, v);
   else {
     drawField(g, L.nameBox, v.name, C.yellow);
-    drawField(g, L.valBox, controlValue(v), v.type === 'number' ? C.white : C.gray);
+    drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
   }
   // 作用域 + 控件类型
   setFont(g, FS, 'normal', FONT);

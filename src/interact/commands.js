@@ -853,7 +853,7 @@ function setSliderFromPointer(n, worldP){
   const v = normalizeVarDef(n.varDef);
   if (v.control !== 'slider') return null;
   const val = sliderValueAt(n, worldP.x);
-  if (String(val) === String(sliderValue(v))) return null;
+  if (String(val) === String(sliderValue(v, n.id))) return null;
   n.varDef = normalizeVarDef(Object.assign({}, v, { value:String(val) }));
   reindex(); sizeAll(); mark();
   return val;
