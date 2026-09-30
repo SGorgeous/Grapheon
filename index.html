@@ -99,8 +99,20 @@
       <div id="nbVarScope" class="opts"></div>
     </div>
     <div class="row">
+      <span class="lab">控件</span>
+      <div id="nbVarCtrl" class="opts"></div>
+    </div>
+    <div class="row">
       <span class="lab">值类型</span>
       <div id="nbVarType" class="opts"></div>
+    </div>
+    <div class="row" id="nbSlideRow" style="display:none">
+      <span class="lab">下限</span>
+      <input type="number" id="nbSlideMin" class="nbnum">
+      <span class="lab">上限</span>
+      <input type="number" id="nbSlideMax" class="nbnum">
+      <span class="lab">步长</span>
+      <input type="number" id="nbSlideStep" class="nbnum">
     </div>
     <div class="hr2"></div>
   </div>
@@ -227,6 +239,10 @@
     <tr><td>跨层取嵌入文档的输出</td><td>写 {嵌入节点名.输出名}</td></tr>
     <tr><td>每个作用域只有一个输出节点生效</td><td>按文档顺序取第一个，其余标「未生效」</td></tr>
     <tr><td>函数分组 = 组内变量 + 运算 + 输出节点</td><td>组内没放输出节点就是空（显示 [未定义]）</td></tr>
+    <tr><td>右键「新建 ▶ 勾选节点」</td><td>点方框勾选，输出是选中的那一串；右键「编辑选项…」加减选项</td></tr>
+    <tr><td>右键「新建 ▶ 滑条节点」</td><td>拖圆点实时改值；上下限 / 步长在面板或右键里设</td></tr>
+    <tr><td>右键「新建 ▶ 开关节点」</td><td>放在连接中间：关掉后这条连接逻辑上断开，下游变成 [未定义]</td></tr>
+    <tr><td>连线标签 / 图片描述 / 分组标题</td><td>和正文一样，写 {名字} 就能引用变量</td></tr>
     <tr><td class="sec" colspan="2">— 布局 —</td></tr>
     <tr><td>防止节点重叠（默认开）</td><td>拖过去的节点会把压到的自动弹开；右键菜单里可以关</td></tr>
     <tr><td>右键 →「弹开所有重叠的节点」</td><td>手动清一次，无视上面的开关</td></tr>

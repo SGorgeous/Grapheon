@@ -809,3 +809,74 @@ function setOpOperator(n, id){
   pushHist();
   say('* 算符改成 ' + opDefOf(id).label + '（' + opDefOf(id).hint + '）。');
 }
+
+/* =========================================================================
+   特殊变量节点：勾选 / 滑条 / 开关
+   都是变量定义节点，只是 control 不同 —— 名字、作用域、优先级、{name} 引用全都共用。
+   ========================================================================= */
+function addControlNode(control, x, y, opts){
+  const n = addNodeAt('', x, y, 'rect');
+  n.kind = 'var';
+  const base = { name: control === 'check' ? '选项' : control === 'slider' ? '数值' : '开关' };
+  if (control === 'check')  Object.assign(base, { control:'check', options:['选项一', '选项二'], picked:[0], type:'string' });
+  if (control === 'slider') Object.assign(base, { control:'slider', value:'50', min:0, max:100, step:1, type:'number' });
+  if (control === 'switch') Object.assign(base, { control:'switch', on:false, type:'string' });
+  n.varDef = normalizeVarDef(Object.assign(base, opts || {}));
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+/* 点一下勾选项：切换选中 */
+function toggleCheckOption(n, i){
+  if (!isVarNode(n)) return null;
+  const v = normalizeVarDef(n.varDef);
+  if (v.control !== 'check' || i < 0 || i >= Math.max(1, v.options.length)) return null;
+  const picked = v.picked.slice();
+  const at = picked.indexOf(i);
+  if (at >= 0) picked.splice(at, 1); else picked.push(i);
+  n.varDef = normalizeVarDef(Object.assign({}, v, { picked }));
+  reindex(); sizeAll(); mark();
+  return n.varDef;
+}
+/* 点一下开关：通 / 断 */
+function toggleSwitch(n){
+  if (!isVarNode(n)) return null;
+  const v = normalizeVarDef(n.varDef);
+  if (v.control !== 'switch') return null;
+  n.varDef = normalizeVarDef(Object.assign({}, v, { on: !v.on }));
+  reindex(); sizeAll(); mark();
+  return n.varDef;
+}
+/* 拖滑条：按世界坐标算出值，实时生效 */
+function setSliderFromPointer(n, worldP){
+  if (!isVarNode(n)) return null;
+  const v = normalizeVarDef(n.varDef);
+  if (v.control !== 'slider') return null;
+  const val = sliderValueAt(n, worldP.x);
+  if (String(val) === String(sliderValue(v))) return null;
+  n.varDef = normalizeVarDef(Object.assign({}, v, { value:String(val) }));
+  reindex(); sizeAll(); mark();
+  return val;
+}
+function setSliderRange(n, patch){
+  if (!isVarNode(n)) return;
+  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, patch));
+  reindex(); sizeAll(); pushHist(); mark();
+  say('* 滑条范围：' + varScopeText(n.varDef) + '。');
+}
+function setVarControl(n, control){
+  if (!isVarNode(n)) return;
+  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, { control }));
+  sizeNode(n);
+  reindex(); sizeAll(); pushHist(); mark();
+  say('* 「' + normalizeVarDef(n.varDef).name + '」现在是' + VAR_CONTROL_LABEL[control] + '节点。');
+}
+/* 勾选节点的选项列表：用一串逗号分隔的文本来编辑 */
+function setCheckOptions(n, text){
+  if (!isVarNode(n)) return;
+  const options = String(text || '').split(/[,，\n]/).map(s => s.trim()).filter(s => s !== '');
+  const v = normalizeVarDef(n.varDef);
+  n.varDef = normalizeVarDef(Object.assign({}, v, { options, picked:[] }));
+  sizeNode(n);
+  reindex(); sizeAll(); mark();
+}

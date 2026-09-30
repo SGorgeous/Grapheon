@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -71,6 +71,21 @@ canvas.addEventListener('pointerdown', (ev) => {
     return;
   }
   const n = hitNode(p);
+  // 变量节点上的勾选 / 滑条 / 开关：先吃掉这次按下，别启动拖动
+  if (n && !isHidden(n.id) && n.kind === 'var'){
+    const ctl = hitVarControl(n, p);
+    if (ctl){
+      selectOnly(n.id);
+      if (ctl.kind === 'check'){ toggleCheckOption(n, ctl.index); pushHist(); return; }
+      if (ctl.kind === 'switch'){ toggleSwitch(n); pushHist(); return; }
+      if (ctl.kind === 'slider'){
+        drag = { mode:'slider', targetId:n.id, moved:false };
+        setSliderFromPointer(n, p);
+        mark();
+        return;
+      }
+    }
+  }
   if (n){
     if (ev.shiftKey && lastClickNode && lastClickNode !== n.id && byId(lastClickNode)){
       const a = lastClickNode, b = n.id;
@@ -131,6 +146,10 @@ window.addEventListener('pointermove', (ev) => {
     if (drag.mode === 'pan'){
       view.x = drag.vx + (ev.clientX - drag.sx);
       view.y = drag.vy + (ev.clientY - drag.sy);
+      mark();
+    } else if (drag.mode === 'slider'){
+      const sn = byId(drag.targetId);
+      if (sn && setSliderFromPointer(sn, p) != null) drag.moved = true;
       mark();
     } else if (drag.mode === 'node' || drag.mode === 'group'){
       // 节点和分组走同一套：快照 + 位移，整个选择（节点 + 分组，分组递归带后代）一起走
@@ -197,6 +216,13 @@ window.addEventListener('pointerup', (ev) => {
       say('* ' + pushed.size + ' 个节点被弹开了（右键可以关掉「防止节点重叠」）。');
     }
     pushHist();
+  } else if (drag.mode === 'slider'){
+    const sn = byId(drag.targetId);
+    if (sn) say('* 「' + normalizeVarDef(sn.varDef).name + '」= ' + controlValue(sn.varDef) + '。');
+    if (drag.moved) pushHist();
+    drag = null;
+    mark();
+    return;
   } else if (drag.mode === 'resize' && drag.moved){
     if (drag.isGroup){
       const grp = byGroup(drag.targetId);

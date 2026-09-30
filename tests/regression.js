@@ -3738,6 +3738,225 @@
       normalizeOpDef(byId(o.id).opDef).operands.length === opArity('*'));
   });
 
+
+  /* ==================== 任意文字引用变量 / 特殊变量控件 ==================== */
+  T('K20 连线标签也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '7');
+    const e = doc.edges[0];                 // 经典示例里根 →「节点」那条
+    e.label = '共 {n} 条';
+    reindex(); sizeAll();
+    ok('K20 插值算出来了', interpolate('共 {n} 条', e.s) === '共 7 条');
+    ok('K20b 显示标签走了派生表', displayLabelOf(e) === '共 7 条', displayLabelOf(e));
+    ok('K20c 裸字段没被改', e.label === '共 {n} 条', e.label);
+    setVarDef(v, { value:'99' });
+    reindex(); sizeAll();
+    ok('K20d 变量一改标签就跟着变', displayLabelOf(e) === '共 99 条', displayLabelOf(e));
+  });
+  T('K21 分组标题也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('who', '甲');
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const g = createGroup();
+    g.title = '给 {who} 的框';
+    reindex(); sizeAll();
+    ok('K21 标题插值了', displayTitleOf(g) === '给 甲 的框', displayTitleOf(g));
+    ok('K21b 裸字段没被改', g.title === '给 {who} 的框', g.title);
+    setVarDef(v, { value:'乙' });
+    reindex();
+    ok('K21c 变量一改标题跟着变', displayTitleOf(g) === '给 乙 的框', displayTitleOf(g));
+  });
+  T('K22 图片描述也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('ver', '3');
+    const n = mkImg(0, 0, { name:'架构图', desc:'版本 {ver}' });
+    ok('K22 描述插值了', displayDescOf(n) === '版本 3', displayDescOf(n));
+    ok('K22b 折行用的是插值后的文本', n.lines.join('').indexOf('3') >= 0, n.lines.join('|'));
+    ok('K22c 裸字段没被改', n.desc === '版本 {ver}', n.desc);
+    const h1 = n.h;
+    setVarDef(v, { value:'很长很长很长很长很长很长很长很长很长很长很长' });
+    reindex(); sizeAll();
+    ok('K22d 值变长，描述折行变多、节点变高', n.h > h1, h1 + ' -> ' + n.h);
+  });
+  T('K23 运算节点的描述也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('k', '5');
+    const op = addOpNode('乘以 {k}', 0, 0, { op:'*', operand:'2' });
+    reindex(); sizeAll();
+    ok('K23 描述插值了', displayTextOf(op) === '乘以 5', displayTextOf(op));
+    ok('K23b 它自己算出来还是 5（运算节点看输入）', resolveVar('k', op.id) === '5');
+  });
+
+  T('K24 勾选节点：选项 / 勾选 / 输出一串列表', () => {
+    fresh(); layoutMind();
+    const n = addControlNode('check', 0, 0, { name:'配料', options:['牛肉', '香菜', '辣椒'], picked:[] });
+    reindex(); sizeAll();
+    ok('K24 kind 还是 var', n.kind === 'var' && isVarNode(n));
+    ok('K24b 控件是 check', normalizeVarDef(n.varDef).control === 'check');
+    ok('K24c 一开始没勾，值是空串', controlValue(n.varDef) === '', JSON.stringify(controlValue(n.varDef)));
+    toggleCheckOption(n, 0); toggleCheckOption(n, 2);
+    ok('K24d 勾了两个', normalizeVarDef(n.varDef).picked.join(',') === '0,2',
+      normalizeVarDef(n.varDef).picked.join(','));
+    ok('K24e 输出是一串', controlValue(n.varDef) === '牛肉, 辣椒', controlValue(n.varDef));
+    toggleCheckOption(n, 0);
+    ok('K24f 再点一下就取消', controlValue(n.varDef) === '辣椒', controlValue(n.varDef));
+    ok('K24g 越界下标不动它', (() => {
+      toggleCheckOption(n, 99);
+      return controlValue(n.varDef) === '辣椒';
+    })());
+    // 引用它
+    const c = addNodeAt('要 {配料}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('K24h 引用得到', displayTextOf(c) === '要 辣椒', displayTextOf(c));
+    // 选项编辑
+    setCheckOptions(n, '盐, 胡椒, 醋');
+    reindex(); sizeAll();
+    ok('K24i 选项换掉了', normalizeVarDef(n.varDef).options.join(',') === '盐,胡椒,醋',
+      normalizeVarDef(n.varDef).options.join(','));
+    ok('K24j 换选项后勾选清空（下标对不上了）', normalizeVarDef(n.varDef).picked.length === 0);
+    ok('K24k 尺寸跟着选项条数变', (() => {
+      const h1 = n.h;
+      setCheckOptions(n, '一, 二, 三, 四, 五');
+      reindex(); sizeAll();
+      return n.h > h1;
+    })(), n.h);
+  });
+  T('K25 滑条节点：上下限 / 步长 / 实时改值', () => {
+    fresh(); layoutMind();
+    const n = addControlNode('slider', 0, 0, { name:'音量', value:'50', min:0, max:100, step:10 });
+    reindex(); sizeAll();
+    ok('K25 控件是 slider', normalizeVarDef(n.varDef).control === 'slider');
+    ok('K25b 值对齐到步长', sliderValue(n.varDef) === 50, sliderValue(n.varDef));
+    setVarDef(n, { value:'53' });
+    ok('K25c 53 对齐到 50', sliderValue(n.varDef) === 50, sliderValue(n.varDef));
+    setVarDef(n, { value:'58' });
+    ok('K25d 58 对齐到 60', sliderValue(n.varDef) === 60, sliderValue(n.varDef));
+    setVarDef(n, { value:'999' });
+    ok('K25e 超上限夹住', sliderValue(n.varDef) === 100, sliderValue(n.varDef));
+    setVarDef(n, { value:'-999' });
+    ok('K25f 超下限夹住', sliderValue(n.varDef) === 0, sliderValue(n.varDef));
+    ok('K25g 输出的是对数齐之后的值', controlValue(n.varDef) === '0', controlValue(n.varDef));
+    // 上下限反过来会自动摆正
+    setSliderRange(n, { min:80, max:20 });
+    ok('K25h 上下限反了会自动交换', normalizeVarDef(n.varDef).min === 20 && normalizeVarDef(n.varDef).max === 80,
+      normalizeVarDef(n.varDef).min + '~' + normalizeVarDef(n.varDef).max);
+    // 按坐标拖
+    n.varDef = normalizeVarDef(Object.assign({}, n.varDef, { min:0, max:100, step:1, value:'50' }));
+    reindex(); sizeAll();
+    const L = varBoxes(n);
+    ok('K25i 拖到最左 = 下限', setSliderFromPointer(n, { x:L.trackBox.x, y:0 }) === 0 ||
+      sliderValue(n.varDef) === 0, sliderValue(n.varDef));
+    setSliderFromPointer(n, { x:L.trackBox.x + L.trackBox.w, y:0 });
+    ok('K25j 拖到最右 = 上限', sliderValue(n.varDef) === 100, sliderValue(n.varDef));
+    setSliderFromPointer(n, { x:L.trackBox.x + L.trackBox.w / 2, y:0 });
+    ok('K25k 拖到中间 ≈ 50', Math.abs(sliderValue(n.varDef) - 50) <= 1, sliderValue(n.varDef));
+    // 引用它
+    const c = addNodeAt('音量 {音量}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('K25l 引用的是滑条当前值', displayTextOf(c) === '音量 ' + sliderValue(n.varDef),
+      displayTextOf(c));
+  });
+  T('K26 开关节点：关掉之后连接逻辑上断开', () => {
+    fresh(); layoutMind();
+    const v = mkVar('src', '42');
+    const sw = addControlNode('switch', 0, 0, { name:'闸门', on:true });
+    const c = addNodeAt('收到 {src}', 0, 0, 'rect');
+    linkNodes(v.id, sw.id); linkNodes(sw.id, c.id);
+    reindex(); sizeAll();
+    ok('K26 接通时值能过去', displayTextOf(c) === '收到 42', displayTextOf(c));
+    ok('K26b 开关自己的值是「开」', controlValue(sw.varDef) === '开', controlValue(sw.varDef));
+    toggleSwitch(sw);
+    reindex(); sizeAll();
+    ok('K26c 断开后值过不去了', displayTextOf(c) === '收到 [未定义]', displayTextOf(c));
+    ok('K26d 开关自己的值变成「关」', controlValue(sw.varDef) === '关', controlValue(sw.varDef));
+    ok('K26e 数字类型的开关给 0/1', (() => {
+      setVarDef(sw, { type:'number' });
+      const off = controlValue(byId(sw.id).varDef);
+      toggleSwitch(byId(sw.id));
+      const on = controlValue(byId(sw.id).varDef);
+      return off === '0' && on === '1';
+    })(), controlValue(byId(sw.id).varDef));
+    // 局内作用域也要认开关
+    ok('K26f 关着的开关后面不算「下游」', (() => {
+      const lv = mkVar('lv', '9', { scope:'local' });
+      const sw2 = addControlNode('switch', 0, 0, { name:'g2', on:false });
+      const down = addNodeAt('{lv}', 0, 0, 'rect');
+      linkNodes(lv.id, sw2.id); linkNodes(sw2.id, down.id);
+      reindex();
+      return resolveVar('lv', down.id) === null;
+    })());
+    ok('K26g 打开就又能用了', (() => {
+      const sw2 = doc.nodes.find(x => x.varDef && x.varDef.name === 'g2');
+      const down = doc.nodes.find(x => x.text === '{lv}');
+      toggleSwitch(sw2); reindex();
+      return resolveVar('lv', down.id) === '9';
+    })());
+  });
+  T('K27 特殊控件和普通变量共用名字 / 作用域 / 优先级', () => {
+    fresh(); layoutMind();
+    const n = addControlNode('slider', 0, 0, { name:'共享', scope:'local', value:'5', min:0, max:10, step:1 });
+    ok('K27 优先级一样最高', priorityOf(n) === VAR_PRIORITY);
+    const down = addNodeAt('{共享}', 0, 0, 'rect');
+    const side = addNodeAt('{共享}', 0, 0, 'rect');
+    linkNodes(n.id, down.id);
+    reindex(); sizeAll();
+    ok('K27b 局内：下游能用', resolveVar('共享', down.id) === '5', resolveVar('共享', down.id));
+    ok('K27c 局内：非下游看不到', resolveVar('共享', side.id) === null, resolveVar('共享', side.id));
+    ok('K27d 能改控件类型', (() => {
+      setVarControl(byId(n.id), 'switch');
+      return normalizeVarDef(byId(n.id).varDef).control === 'switch';
+    })());
+    ok('K27e 改了之后尺寸重算了', byId(n.id).h > 0);
+  });
+  T('K28 控件能存下来', () => {
+    fresh(); layoutMind();
+    const ck = addControlNode('check', 0, 0, { name:'多选', options:['甲', '乙', '丙'], picked:[1] });
+    const sl = addControlNode('slider', 0, 0, { name:'刻度', min:-50, max:50, step:5, value:'15' });
+    const sw = addControlNode('switch', 0, 0, { name:'闸', on:true });
+    toggleCheckOption(ck, 2);
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const rawCk = snap.nodes.find(x => x.id === ck.id).varDef;
+    ok('K28 勾选存下来了', rawCk.control === 'check' && rawCk.options.length === 3
+      && rawCk.picked.join(',') === '1,2', JSON.stringify(rawCk));
+    const rawSl = snap.nodes.find(x => x.id === sl.id).varDef;
+    ok('K28b 滑条范围存下来了', rawSl.control === 'slider' && rawSl.min === -50
+      && rawSl.max === 50 && rawSl.step === 5, JSON.stringify(rawSl));
+    ok('K28c 开关状态存下来了', snap.nodes.find(x => x.id === sw.id).varDef.on === true);
+    deserialize(snap);
+    ok('K28d 往返后勾选还是勾着的', normalizeVarDef(byId(ck.id).varDef).picked.join(',') === '1,2',
+      normalizeVarDef(byId(ck.id).varDef).picked.join(','));
+    ok('K28e 往返后滑条值还是 15', controlValue(byId(sl.id).varDef) === '15',
+      controlValue(byId(sl.id).varDef));
+    ok('K28f 往返后开关还是接通', normalizeVarDef(byId(sw.id).varDef).on === true);
+  });
+  T('K29 三种控件的命中区', () => {
+    fresh(); layoutMind();
+    const ck = addControlNode('check', 0, 0, { options:['一', '二', '三'] });
+    reindex(); sizeAll();
+    let L = varBoxes(ck);
+    ok('K29 勾选命中第 0 行', (() => {
+      const h = hitVarControl(ck, { x:L.listBox.x + 6, y:L.listBox.y + 4 });
+      return h && h.kind === 'check' && h.index === 0;
+    })());
+    ok('K29b 命中第 2 行', (() => {
+      const h = hitVarControl(ck, { x:L.listBox.x + 6, y:L.listBox.y + CHECK_ROW_H * 2 + 4 });
+      return h && h.index === 2;
+    })(), JSON.stringify(hitVarControl(ck, { x:L.listBox.x + 6, y:L.listBox.y + CHECK_ROW_H * 2 + 4 })));
+    ok('K29c 框外面不命中', hitVarControl(ck, { x:L.listBox.x, y:L.listBox.y - 30 }) === null);
+    const sl = addControlNode('slider', 0, 0, {});
+    reindex(); sizeAll();
+    L = varBoxes(sl);
+    ok('K29d 滑条命中轨道', (hitVarControl(sl, { x:L.trackBox.x + 4, y:L.trackBox.y + 4 }) || {}).kind === 'slider');
+    const sw = addControlNode('switch', 0, 0, {});
+    reindex(); sizeAll();
+    L = varBoxes(sw);
+    ok('K29e 开关命中按钮', (hitVarControl(sw, { x:L.knobBox.x + 4, y:L.knobBox.y + 4 }) || {}).kind === 'switch');
+    ok('K29f 普通变量节点没有控件命中',
+      hitVarControl(mkVar('x', '1'), { x:0, y:0 }) === null);
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

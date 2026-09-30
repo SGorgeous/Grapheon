@@ -54,7 +54,7 @@ function sizeImageNode(n){
   const imgH = Math.max(24, Math.round(natH * (w / natW)));
   n.imgDrawW = w;
   n.imgDrawH = imgH;
-  const desc = String(n.desc == null ? '' : n.desc);
+  const desc = displayDescOf(n);      // 描述里也能引用变量
   n.lines = desc ? wrapText(desc, w - PADX * 2, FS, 'normal', FONT) : [];
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
@@ -74,14 +74,17 @@ function sizeEmbedNode(n){
 function sizeVarNode(n){
   setFont(mctx, FS, 'normal', FONT);
   const desc = displayTextOf(n);
-  const inner = VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W;
+  const v = normalizeVarDef(n.varDef);
+  const inner = (v.control === 'plain')
+    ? VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W
+    : VAR_PAD * 2 + CONTROL_MIN_W;
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
   n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
-  n.h = Math.round(8 + n.lines.length * n.lh + VAR_BOX_H + 8 + VAR_SCOPE_H + 10);
+  n.h = Math.round(varLayout({ x:0, y:0, w:n.w }, v, n.lines.length * n.lh).height);
 }
 /* 运算节点：左上角描述 + 中间「算符 运算值」 */
 function sizeOpNode(n){

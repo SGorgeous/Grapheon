@@ -30,6 +30,10 @@ const VAR_SCOPE_HINT = {
 const VAR_TYPES = ['number', 'string'];
 const VAR_TYPE_LABEL = { number:'数字', string:'字符串' };
 
+/* 「被关着的开关挡住了」。和 null（够不着）区分开：
+   够不着的话调用方会退回变量自己的值（组内变量就靠这个），
+   被挡住的话是真的不通，必须显示 [未定义]。 */
+const VAR_BLOCKED = Symbol('varBlocked');
 const isVarNode = (n) => !!n && n.kind === 'var';
 const isOpNode  = (n) => !!n && n.kind === 'op';
 const isOutNode = (n) => !!n && n.kind === 'out';
@@ -64,8 +68,24 @@ const opDefOf = (id) => OP_BY_ID.get(id) || OPERATORS[0];
 const opArity = (id) => opDefOf(id).arity;
 
 /* ---------------- 数据规范化 ---------------- */
+const VAR_CONTROLS = ['plain', 'check', 'slider', 'switch'];
+const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', switch:'开关' };
 function normalizeVarDef(v){
-  const out = Object.assign({ name:'x', value:'0', type:'number', scope:'global' }, v || {});
+  const out = Object.assign({ name:'x', value:'0', type:'number', scope:'global',
+    control:'plain', options:[], picked:[], min:0, max:100, step:1, on:false }, v || {});
+  if (VAR_CONTROLS.indexOf(out.control) < 0) out.control = 'plain';
+  // 勾选：选项列表 + 选中的下标
+  out.options = (Array.isArray(out.options) ? out.options : [])
+    .map(x => String(x == null ? '' : x)).filter(x => x !== '');
+  out.picked = (Array.isArray(out.picked) ? out.picked : [])
+    .map(x => Math.round(+x)).filter(i => i >= 0 && i < out.options.length);
+  out.picked = [...new Set(out.picked)].sort((a, b) => a - b);
+  // 滑条：上下限和步长
+  out.min = isFinite(+out.min) ? +out.min : 0;
+  out.max = isFinite(+out.max) ? +out.max : 100;
+  if (out.max < out.min){ const t = out.min; out.min = out.max; out.max = t; }
+  out.step = (isFinite(+out.step) && +out.step > 0) ? +out.step : 1;
+  out.on = !!out.on;
   out.name = String(out.name == null ? '' : out.name).replace(/[{}.\s]/g, '') || 'x';
   if (VAR_TYPES.indexOf(out.type) < 0) out.type = 'number';
   if (VAR_SCOPES.indexOf(out.scope) < 0) out.scope = 'global';
@@ -88,6 +108,33 @@ function normalizeOpDef(o){
   args.length = def.arity;
   return { op:id, operands:args, type: VAR_TYPES.indexOf(src.type) >= 0 ? src.type : 'number' };
 }
+/* 滑条的值：夹在上下限里，并对齐到步长 */
+function sliderValue(vd){
+  const v = normalizeVarDef(vd);
+  let x = toNum(v.value);
+  if (x == null) x = v.min;
+  x = Math.min(v.max, Math.max(v.min, x));
+  const n = Math.round((x - v.min) / v.step);
+  x = v.min + n * v.step;
+  return Math.round(x * 1e6) / 1e6;
+}
+/* 勾选的值：选中的选项拼成一串 */
+const checkValue = (vd) => normalizeVarDef(vd).picked
+  .map(i => normalizeVarDef(vd).options[i]).filter(x => x != null).join(', ');
+/* 一个变量定义节点「对外提供的值」的原始来源（不看函数分组替换）。
+   普通节点读 value；三个特殊控件各自算。 */
+function controlValue(vd){
+  const v = normalizeVarDef(vd);
+  if (v.control === 'check')  return checkValue(v);
+  if (v.control === 'slider') return String(sliderValue(v));
+  if (v.control === 'switch') return v.on ? (v.type === 'number' ? '1' : '开')
+                                          : (v.type === 'number' ? '0' : '关');
+  return v.value;
+}
+/* 开关节点：关掉时「逻辑上断开」，值不往下游流 */
+const switchOpen = (n) => isVarNode(n) && normalizeVarDef(n.varDef).control === 'switch'
+  ? normalizeVarDef(n.varDef).on : true;
+
 /* 节点的优先级：输出 > 变量 > 运算，其余看 n.priority，最后 0 */
 function priorityOf(n){
   if (!n) return 0;
@@ -109,7 +156,7 @@ function applyOperator(v, od){
   return def ? def.apply(v, o.operands) : v;
 }
 function valueToText(v){
-  if (v == null) return '[未定义]';
+  if (v == null || v === VAR_BLOCKED) return '[未定义]';
   if (typeof v === 'number') return String(Math.round(v * 1e6) / 1e6);
   return String(v);
 }
@@ -184,6 +231,8 @@ function downstreamOfIn(ctx, startId, inside){
         if (e.s !== id) continue;
         if (inside && (!inside.has(e.s) || !inside.has(e.t))) continue;
         if (seen.has(e.t)) continue;
+        const m = ctx.byId.get(e.t);
+        if (m && isVarNode(m) && !switchOpen(m)) continue;   // 关着的开关后面不算下游
         seen.add(e.t);
         next.push(e.t);
       }
@@ -280,6 +329,7 @@ function outputValueIn(ctx, out){
   if (ins.length){
     for (const e of ins){
       const v = valueInto(ctx, out.id, e.s, inside);
+      if (v === VAR_BLOCKED) return null;      // 被开关挡住 = 这个作用域没有输出
       if (v != null) return v;
     }
   }
@@ -299,6 +349,7 @@ function evalFromIn(ctx, def, start, inside, targetId){
   const seen = new Set([def.id]);
   let frontier = [{ id:def.id, v:start }];
   let last = start;
+  let blocked = false;
   while (frontier.length){
     const next = [];
     for (const cur of frontier){
@@ -312,6 +363,7 @@ function evalFromIn(ctx, def, start, inside, targetId){
         if (seen.has(e.t)) continue;
         seen.add(e.t);
         const m = ctx.byId.get(e.t);
+        if (m && isVarNode(m) && !switchOpen(m)){ blocked = true; continue; }   // 开关关着 = 这条连接逻辑上断开
         const out = (m && isOpNode(m)) ? applyOperator(cur.v, m.opDef) : cur.v;
         if (targetId && e.t === targetId){
           // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
@@ -323,7 +375,7 @@ function evalFromIn(ctx, def, start, inside, targetId){
     }
     frontier = next;
   }
-  return targetId ? null : last;
+  return targetId ? (blocked ? VAR_BLOCKED : null) : last;
 }
 /* 一个变量定义节点最终对外提供的值。
    指向函数分组的话，值就是那个分组声明出来的输出。 */
@@ -336,7 +388,7 @@ function defValueIn(ctx, def){
     // 不能退回自己填的那个值，那样看起来像「有输出」但其实是假的。
     if (grp && isFunctionGroup(grp)) return functionResultIn(ctx, grp);
   }
-  return normalizeVarDef(def.varDef).value;
+  return controlValue(def.varDef);
 }
 /* 函数分组的结果 = 它声明的输出节点的值。没有输出节点就是空。 */
 function functionResultIn(ctx, grp){
@@ -353,6 +405,7 @@ function resolveVarIn(ctx, name, fromId){
   const base = defValueIn(ctx, def);
   if (def.id === fromId) return base;
   const mid = evalFromIn(ctx, def, base, null, fromId);
+  if (mid === VAR_BLOCKED) return null;      // 被关着的开关挡住：逻辑上不通，就是没有值
   return (mid == null) ? base : mid;
 }
 
@@ -411,16 +464,44 @@ function displayTextOf(n){
 }
 const hasVarRefs = (n) => !!n && /\{[^}\n]*\}/.test(String(n.text || ''));
 
-/* reindex 末尾调用：算一遍所有节点的显示文本 */
+/* reindex 末尾调用：把**所有可编辑文字**里的 {变量} 都算一遍。
+   节点正文、图片描述、连线标签、分组标题 —— 都能引用变量。 */
 function refreshVarText(){
   idx.vctx = null;              // 文档变了，Ctx 重建
   embedCtxCache = new Map();
   const ctx = liveCtx();
   idx.text = new Map();
+  idx.desc = new Map();
+  idx.edgeLabel = new Map();
+  idx.groupTitle = new Map();
+  const put = (map, id, raw, fromId) => {
+    const t = interpolateIn(ctx, raw, fromId);
+    if (t !== raw) map.set(id, t);
+    return t;
+  };
   for (const n of doc.nodes){
-    const t = interpolateIn(ctx, n.text, n.id);
-    if (t !== n.text) idx.text.set(n.id, t);
+    put(idx.text, n.id, n.text, n.id);
+    // 描述挂在节点自己的作用域上引用（图片节点的描述也是）
+    if (n.desc) put(idx.desc, n.id, n.desc, n.id);
   }
+  for (const e of doc.edges) if (e.label) put(idx.edgeLabel, e.id, e.label, e.s);
+  for (const g of (doc.groups || [])) if (g.title) put(idx.groupTitle, g.id, g.title, g.id);
+}
+/* 四个取显示文字的入口：没被替换过就是原文 */
+function displayDescOf(n){
+  if (!n) return '';
+  const t = idx.desc && idx.desc.get(n.id);
+  return t == null ? String(n.desc == null ? '' : n.desc) : t;
+}
+function displayLabelOf(e){
+  if (!e) return '';
+  const t = idx.edgeLabel && idx.edgeLabel.get(e.id);
+  return t == null ? String(e.label == null ? '' : e.label) : t;
+}
+function displayTitleOf(g){
+  if (!g) return '';
+  const t = idx.groupTitle && idx.groupTitle.get(g.id);
+  return t == null ? String(g.title == null ? '' : g.title) : t;
 }
 
 /* ---------------- 给界面用的小查询 ---------------- */
@@ -441,3 +522,61 @@ function outputEffective(nodeId){
 }
 /* 当前文档的顶层输出节点（嵌入到别处时，外层用 {嵌入名.名字} 取它） */
 const documentOutputNode = () => scopeOutputNode(liveCtx(), null);
+
+/* =========================================================================
+   变量节点的内部布局
+   尺寸计算（text.js）、绘制（render.js）、命中（hit.js）全都调这一个，
+   免得三处各算一遍、改一处忘两处。
+   box 只需要 x / y / w，高度是算出来的。
+   ========================================================================= */
+function varLayout(box, varDef, lineH){
+  const v = normalizeVarDef(varDef);
+  const innerW = Math.max(60, box.w - VAR_PAD * 2);
+  const top = box.y + 8 + lineH;
+  const R = { top, innerW };
+  if (v.control === 'check'){
+    const rows = Math.max(1, v.options.length);
+    R.listBox = { x:box.x + VAR_PAD, y:top, w:innerW, h:rows * CHECK_ROW_H };
+    R.bodyH = R.listBox.h;
+  } else if (v.control === 'slider'){
+    R.trackBox = { x:box.x + VAR_PAD, y:top, w:innerW, h:SLIDER_TRACK_H };
+    R.bodyH = R.trackBox.h;
+  } else if (v.control === 'switch'){
+    R.knobBox = { x:box.x + VAR_PAD, y:top, w:Math.min(190, innerW), h:SWITCH_H };
+    R.bodyH = R.knobBox.h;
+  } else {
+    R.nameBox = { x:box.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
+    R.valBox  = { x:R.nameBox.x + VAR_NAME_W + 10, y:top, w:VAR_VAL_W, h:VAR_BOX_H };
+    R.bodyH = VAR_BOX_H;
+  }
+  R.scopeBox = { x:box.x + VAR_PAD, y:top + R.bodyH + 8, w:innerW, h:VAR_SCOPE_H };
+  R.height = 8 + lineH + R.bodyH + 8 + VAR_SCOPE_H + 10;
+  return R;
+}
+/* 滑条：世界坐标 → 值 */
+function sliderValueAt(n, worldX){
+  const L = varBoxes(n);
+  const b = L.trackBox;
+  if (!b) return sliderValue(n.varDef);
+  const v = normalizeVarDef(n.varDef);
+  const pad = 12;
+  const t = Math.max(0, Math.min(1, (worldX - (b.x + pad)) / Math.max(1, b.w - pad * 2)));
+  const raw = v.min + t * (v.max - v.min);
+  const steps = Math.round((raw - v.min) / v.step);
+  return Math.round((v.min + steps * v.step) * 1e6) / 1e6;
+}
+/* 滑条：值 → 轨道上的比例 */
+function sliderFrac(vd){
+  const v = normalizeVarDef(vd);
+  if (v.max === v.min) return 0;
+  return Math.max(0, Math.min(1, (sliderValue(v) - v.min) / (v.max - v.min)));
+}
+/* 变量节点上那行小字：作用域 + （控件类型或值类型） */
+function varScopeText(vd){
+  const v = normalizeVarDef(vd);
+  const kind = v.control === 'plain' ? VAR_TYPE_LABEL[v.type]
+             : v.control === 'check' ? '列表'
+             : v.control === 'slider' ? (v.min + ' ~ ' + v.max + ' 步长 ' + v.step)
+             : '开关';
+  return VAR_SCOPE_LABEL[v.scope] + ' · ' + kind;
+}

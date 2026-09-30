@@ -124,6 +124,27 @@ function showCtx(x, y, n, e, info){
     pushCommonItems(items, n, 'node', 'F2');
     if (isVarNode(n)){
       const v = normalizeVarDef(n.varDef);
+      items.push(['控件：' + VAR_CONTROL_LABEL[v.control], '▶', null,
+        VAR_CONTROLS.map(c => [(v.control === c ? '● ' : '   ') + VAR_CONTROL_LABEL[c], '', () => {
+          setVarControl(n, c);
+        }])]);
+      if (v.control === 'check'){
+        items.push(['编辑选项…', '逗号分隔', () => startEdit('checkOpts', n.id)]);
+        items.push(['清空勾选', '', () => { setVarDef(n, { picked:[] }); pushHist(); }]);
+      }
+      if (v.control === 'slider'){
+        items.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
+          ['下限 -10', '', () => setSliderRange(n, { min:v.min - 10 })],
+          ['下限 +10', '', () => setSliderRange(n, { min:v.min + 10 })],
+          ['上限 -10', '', () => setSliderRange(n, { max:v.max - 10 })],
+          ['上限 +10', '', () => setSliderRange(n, { max:v.max + 10 })],
+          ['步长归 1', '', () => setSliderRange(n, { step:1 })],
+          ['步长归 5', '', () => setSliderRange(n, { step:5 })]
+        ]]);
+      }
+      if (v.control === 'switch'){
+        items.push([(v.on ? '● 已接通' : '   已断开'), '点一下切换', () => { toggleSwitch(n); pushHist(); }]);
+      }
       items.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
         VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
           () => { setVarDef(n, { scope:s }); pushHist(); say('* 作用域改成「' + VAR_SCOPE_LABEL[s] + '」：' + VAR_SCOPE_HINT[s] + '。'); }])]);
@@ -225,6 +246,24 @@ function showCtx(x, y, n, e, info){
         const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
         selectOnly(nn.id); pushHist(); mark();
         say('* 建了一个变量定义节点。双击左边的框改名，右边的框改值；别的节点文本里用 {名字} 引用它。');
+      }],
+      ['勾选节点', '输出选中的那一串', () => {
+        const p = s2w(x, y);
+        const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 勾选节点：点方框就能勾 / 取消，输出是选中的那一串。右键「编辑选项…」加减选项。');
+      }],
+      ['滑条节点', '拖一下实时改值', () => {
+        const p = s2w(x, y);
+        const nn = addControlNode('slider', Math.round(p.x - 140), Math.round(p.y - 60));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 滑条节点：拖圆点实时改值，引用它的地方跟着变。上下限 / 步长在面板或右键里设。');
+      }],
+      ['开关节点', '断开时逻辑上不通', () => {
+        const p = s2w(x, y);
+        const nn = addControlNode('switch', Math.round(p.x - 140), Math.round(p.y - 60));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 开关节点：放在连接中间，关掉之后这条连接在逻辑上就断了（值流不过去）。');
       }],
       ['输出节点', '本作用域的输出值', () => {
         const p = s2w(x, y);

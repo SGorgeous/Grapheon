@@ -40,6 +40,11 @@ const VAR_PAD = 12;
 const VAR_NAME_W = 118, VAR_VAL_W = 118, VAR_BOX_H = 30;
 const VAR_SCOPE_H = 22;
 const OP_OP_W = 54, OP_VAL_W = 116, OP_BOX_H = 32;
+/* 三种特殊变量控件 */
+const CHECK_ROW_H = 26;          // 勾选：每行一个选项
+const SLIDER_TRACK_H = 34;       // 滑条：轨道高度
+const SWITCH_H = 34;             // 开关：按钮高度
+const CONTROL_MIN_W = 210;       // 控件模式下变量的最小宽度
 /* 输出节点：左上角描述 + 一个变量名框 */
 const OUT_NAME_W = 190, OUT_BOX_H = 30;
 /* ---------------- 嵌入文档节点 ----------------

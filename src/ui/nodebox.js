@@ -31,6 +31,12 @@ const nbOprSecEl   = document.getElementById('nbOprSec');
 const nbOprKindEl  = document.getElementById('nbOprKind');
 const nbOprTypeEl  = document.getElementById('nbOprType');
 const nbPrioEl     = document.getElementById('nbPrio');
+const nbVarCtrlEl  = document.getElementById('nbVarCtrl');
+const nbSlideRowEl = document.getElementById('nbSlideRow');
+const nbSlideMinEl = document.getElementById('nbSlideMin');
+const nbSlideMaxEl = document.getElementById('nbSlideMax');
+const nbSlideStepEl = document.getElementById('nbSlideStep');
+const CTRL_OPTS = VAR_CONTROLS.map(c => [c, VAR_CONTROL_LABEL[c]]);
 const SCOPE_OPTS = VAR_SCOPES.map(s => [s, VAR_SCOPE_LABEL[s]]);
 const VTYPE_OPTS = VAR_TYPES.map(x => [x, VAR_TYPE_LABEL[x]]);
 const OPR_OPTS   = OPERATORS.map(o => [o.id, o.label]);   // 走注册表，以后加算符这里自动跟上
@@ -84,6 +90,22 @@ function renderNodeBox(){
         : x === 'local' ? '只有它的下游能用' : '把它连到一个分组，组内才能用') + '）');
     });
     buildOpts(nbVarTypeEl, VTYPE_OPTS, v.type, (x) => { setVarDef(n, { type:x }); afterNodeEdit(); });
+    buildOpts(nbVarCtrlEl, CTRL_OPTS, v.control, (x) => {
+      setVarControl(n, x);
+      renderNodeBox();
+      say('* 控件改成「' + VAR_CONTROL_LABEL[x] + '」。' + (x === 'switch'
+        ? '它放在连接中间：关掉之后这条连接逻辑上就断了。'
+        : x === 'check' ? '点方框勾选，右键「编辑选项…」加减选项。'
+        : x === 'slider' ? '拖圆点实时改值。' : ''));
+    });
+    // 滑条才有上下限
+    nbSlideRowEl.style.display = (v.control === 'slider') ? 'flex' : 'none';
+    if (v.control === 'slider'){
+      nbSlideMinEl.value = v.min; nbSlideMaxEl.value = v.max; nbSlideStepEl.value = v.step;
+      for (const [el, key] of [[nbSlideMinEl, 'min'], [nbSlideMaxEl, 'max'], [nbSlideStepEl, 'step']]){
+        el.onchange = () => { setSliderRange(n, { [key]: el.value }); renderNodeBox(); };
+      }
+    }
   }
   if (isOpr){
     const od = normalizeOpDef(n.opDef);

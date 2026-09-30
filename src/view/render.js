@@ -305,14 +305,7 @@ function drawEmbedNode(g, n, b, selected, hov){
    这里算出来的方框几何，绘制和命中测试共用，不会打架。 */
 function varBoxes(n){
   const b = nodeBox(n);
-  const textH = Math.max(1, n.lines.length) * n.lh + 8;
-  const top = b.y + textH;
-  const nameBox = { x:b.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
-  const valBox  = { x:nameBox.x + nameBox.w + 10, y:top, w:VAR_VAL_W, h:VAR_BOX_H };
-  return {
-    nameBox, valBox,
-    scopeBox:{ x:b.x + VAR_PAD, y:top + VAR_BOX_H + 8, w:Math.max(60, b.w - VAR_PAD * 2), h:VAR_SCOPE_H }
-  };
+  return varLayout(b, n.varDef, Math.max(1, n.lines.length) * n.lh);
 }
 function opBoxes(n){
   const b = nodeBox(n);
@@ -377,6 +370,74 @@ function drawOutNode(g, n, b, selected, hov){
   g.strokeRect(b.x, b.y, b.w, b.h);
   g.restore();
 }
+/* ---------------- 三种特殊变量控件的绘制 ---------------- */
+function drawCheckControl(g, L, v){
+  const b = L.listBox;
+  g.save();
+  g.strokeStyle = C.gray; g.lineWidth = 2;
+  g.strokeRect(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+  setFont(g, FS, 'normal', FONT);
+  g.textBaseline = 'middle';
+  const rows = Math.max(1, v.options.length);
+  for (let i = 0; i < rows; i++){
+    const y = b.y + i * CHECK_ROW_H + CHECK_ROW_H / 2;
+    const on = v.picked.indexOf(i) >= 0;
+    const text = v.options[i] == null ? '（空）' : v.options[i];
+    // 方框 + 勾
+    const bx = b.x + 10, by = y - 8;
+    g.strokeStyle = on ? C.yellow : C.dim; g.lineWidth = 2;
+    g.strokeRect(Math.round(bx), Math.round(by), 16, 16);
+    if (on){
+      g.beginPath();
+      g.moveTo(bx + 3, by + 8); g.lineTo(bx + 7, by + 12); g.lineTo(bx + 13, by + 4);
+      g.strokeStyle = C.yellow; g.lineWidth = 2; g.stroke();
+    }
+    g.fillStyle = on ? C.white : C.gray;
+    g.textAlign = 'left';
+    g.fillText(fitText(g, text, b.w - 40), bx + 24, y + 1);
+  }
+  g.restore();
+}
+function drawSliderControl(g, L, v){
+  const b = L.trackBox;
+  const cy = b.y + b.h / 2;
+  const x0 = b.x + 12, x1 = b.x + b.w - 12;
+  const fx = sliderFrac(v);
+  const kx = x0 + (x1 - x0) * fx;
+  g.save();
+  // 轨道
+  g.strokeStyle = C.dim; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(x0, cy); g.lineTo(x1, cy); g.stroke();
+  // 已填充的一段
+  g.strokeStyle = C.yellow; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(x0, cy); g.lineTo(kx, cy); g.stroke();
+  // 滑块
+  g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 3;
+  g.beginPath(); g.arc(kx, cy, 9, 0, Math.PI * 2); g.fill(); g.stroke();
+  // 当前值
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = C.white; g.textAlign = 'center'; g.textBaseline = 'bottom';
+  g.fillText(String(sliderValue(v)), (x0 + x1) / 2, b.y - 2);
+  g.restore();
+}
+function drawSwitchControl(g, L, v){
+  const b = L.knobBox;
+  g.save();
+  g.fillStyle = C.bg;
+  g.strokeStyle = v.on ? C.yellow : C.gray;
+  g.lineWidth = 3;
+  g.beginPath(); g.rect(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+  g.fill(); g.stroke();
+  // 左边一个小圆点表示通断
+  const cx = b.x + 18, cy = b.y + b.h / 2;
+  g.beginPath(); g.arc(cx, cy, 6, 0, Math.PI * 2);
+  g.fillStyle = v.on ? C.yellow : C.dim; g.fill();
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = v.on ? C.yellow : C.gray;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.fillText(v.on ? '已接通' : '已断开', cx + 14, cy + 1);
+  g.restore();
+}
 function drawVarNode(g, n, b, selected, hov){
   const v = normalizeVarDef(n.varDef);
   const L = varBoxes(n);
@@ -392,16 +453,19 @@ function drawVarNode(g, n, b, selected, hov){
   const startY = b.y + 8 + n.lh / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
   g.restore();
-  // 两个输入框
-  drawField(g, L.nameBox, v.name, C.yellow);
-  drawField(g, L.valBox, v.value, v.type === 'number' ? C.white : C.gray);
-  // 作用域
-  const scopeTxt = VAR_SCOPE_LABEL[v.scope] + ' · ' + VAR_TYPE_LABEL[v.type];
+  if (v.control === 'check')       drawCheckControl(g, L, v);
+  else if (v.control === 'slider') drawSliderControl(g, L, v);
+  else if (v.control === 'switch') drawSwitchControl(g, L, v);
+  else {
+    drawField(g, L.nameBox, v.name, C.yellow);
+    drawField(g, L.valBox, controlValue(v), v.type === 'number' ? C.white : C.gray);
+  }
+  // 作用域 + 控件类型
   setFont(g, FS, 'normal', FONT);
   g.fillStyle = C.gray;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(scopeTxt, L.scopeBox.x, L.scopeBox.y + L.scopeBox.h / 2);
+  g.fillText(varScopeText(v), L.scopeBox.x, L.scopeBox.y + L.scopeBox.h / 2);
   // 外框
   g.save();
   g.lineWidth = 3; g.strokeStyle = stroke;
@@ -581,7 +645,7 @@ function drawGroup(g, grp){
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   const ttl = (isFunctionGroup(grp) ? 'ƒ ' : '') + (grp.title || '分组');
-  g.fillText(fitText(g, ttl, tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
+  g.fillText(fitText(g, displayTitleOf(grp) ? (isFunctionGroup(grp) ? 'ƒ ' : '') + displayTitleOf(grp) : ttl, tb.w - 12), tb.x + 6, tb.y + tb.h / 2 + 1);
   // 折叠角标：折叠时画（显示藏了多少），鼠标悬在标题栏上也画（提示这里能点）
   if (grp.collapsed || hoverGrp === grp){
     const bb = groupBadgeRect(grp);
@@ -694,7 +758,8 @@ function drawEdge(g, e){
     }
   }
   g.restore();
-  if (e.label){
+  const elabel = displayLabelOf(e);
+  if (elabel){
     const m = geom.mid;
     g.save();
     setFont(g, FS, 'normal');
@@ -703,7 +768,7 @@ function drawEdge(g, e){
     g.fillStyle = C.bg; g.strokeStyle = stroke; g.lineWidth = 2.5;
     g.beginPath(); g.rect(Math.round(m.x - w / 2), Math.round(m.y - h / 2), Math.round(w), h); g.fill(); g.stroke();
     g.fillStyle = stroke; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(e.label, m.x, m.y + 1);
+    g.fillText(elabel, m.x, m.y + 1);
     g.restore();
   }
 }

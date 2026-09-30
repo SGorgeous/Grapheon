@@ -78,7 +78,11 @@ function demoDoc(){
       '三种作用域：全局 / 局内（仅下游）/ 组内',
       '运算节点：+ - * / 可以叠加',
       '函数分组：组内算完把结果吐出来',
-      '输出节点：声明本作用域的输出值'
+      '输出节点：声明本作用域的输出值',
+      '★ 任何文字都能引用：正文 / 描述 / 连线标签 / 分组标题',
+      '★ 勾选节点：随便加选项，输出一串列表',
+      '★ 滑条节点：上下限 + 步长，拖一下实时生效',
+      '★ 开关节点：关掉后这条连接逻辑上断开'
     ]],
     ['媒体与其它', '#3b7dff', [
       '图片节点：拖进来 / 粘贴 / 右键插入',
@@ -132,13 +136,34 @@ function demoDoc(){
   const docOut = N('本图输出', 700, demoY + 320, { kind:'out', outDef:{ name:'summary' } });
   E(total, docOut);
 
+  // 三种特殊变量控件
+  const ck = N('配料', -1180, demoY + 400, {
+    kind:'var', varDef:{ name:'配料', type:'string', scope:'global', control:'check',
+      options:['牛肉', '香菜', '辣椒'], picked:[0, 2] } });
+  const ckOut = N('已选：{配料}', -700, demoY + 400, { shape:'round' });
+  E(ck, ckOut);
+
+  const sl = N('音量', -1180, demoY + 620, {
+    kind:'var', varDef:{ name:'音量', type:'number', scope:'global', control:'slider',
+      value:'60', min:0, max:100, step:10 } });
+  const slOut = N('当前 {音量}', -700, demoY + 620, { shape:'round' });
+  E(sl, slOut);
+
+  // 开关：关着的时候值过不去，右边会变成 [未定义]
+  const gate = N('闸门', -1180, demoY + 840, {
+    kind:'var', varDef:{ name:'闸门', type:'string', scope:'global', control:'switch', on:false } });
+  const gateOut = N('过闸：{单价}', -700, demoY + 840, { shape:'round' });
+  const gateSrc = N('过闸源', -1180, demoY + 960, { kind:'var', varDef:{ name:'过闸源', value:'7', type:'number', scope:'global' } });
+  E(gateSrc, gate); E(gate, gateOut);
+  gateOut.text = '过闸：{过闸源}';
+
   /* ---------- 一些小提示 ---------- */
   const tips = column([
     '提示：按住 Shift 框选可以一次选中一片',
     '提示：拖空白处平移，滚轮缩放',
     '提示：右上角 ? 是完整操作指南',
     '提示：这份示例可以直接改，不会影响别的'
-  ], 1200, demoY - 60);
+  ], bandX + 3 * (COLW + GAPX), bandY + 20);   // 挪到功能带右边，别和分组撞上
 
   return { v:2, nid, nodes, edges, groups };
 }
@@ -150,6 +175,9 @@ function loadDemo(which){
     layoutMind();          // 经典示例的节点坐标都是 0，得按树形摆一次
   } else {
     deserialize(demoDoc());   // 新示例自带坐标
+    // 示例里有不少长句会折成两行，行距是按单行留的 —— 直接用防覆盖把叠住的推开。
+    // 这既省得手算行距，也顺带当了防覆盖的活广告。
+    resolveOverlaps([], true);
     refitAllGroups();         // 分组框按成员贴合一次
   }
 }

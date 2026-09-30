@@ -36,6 +36,23 @@ function hitVarPart(n, p){
   if (inRect(L.scopeBox, p)) return 'varScope';
   return 'text';
 }
+/* 变量节点上的三个控件命中。返回 null 或 { kind, index }。
+   和 hitVarPart 分开：那一套返回字符串，已经被断言钉住了，不动它。 */
+function hitVarControl(n, p){
+  if (!n || n.kind !== 'var') return null;
+  const v = normalizeVarDef(n.varDef);
+  if (v.control === 'plain') return null;
+  const L = varBoxes(n);
+  if (v.control === 'check'){
+    if (!L.listBox || !inRect(L.listBox, p)) return null;
+    const i = Math.floor((p.y - L.listBox.y) / CHECK_ROW_H);
+    if (i < 0 || i >= Math.max(1, v.options.length)) return null;
+    return { kind:'check', index:i };
+  }
+  if (v.control === 'slider') return (L.trackBox && inRect(L.trackBox, p)) ? { kind:'slider' } : null;
+  if (v.control === 'switch') return (L.knobBox && inRect(L.knobBox, p)) ? { kind:'switch' } : null;
+  return null;
+}
 function hitOpPart(n, p){
   if (!n || n.kind !== 'op') return null;
   const L = opBoxes(n);

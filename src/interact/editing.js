@@ -22,6 +22,7 @@ const editValue = (kind, t) => {
   if (kind === 'varName') return normalizeVarDef(t.varDef).name;
   if (kind === 'varValue') return normalizeVarDef(t.varDef).value;
   if (kind === 'outName') return normalizeOutDef(t.outDef).name;
+  if (kind === 'checkOpts') return normalizeVarDef(t.varDef).options.join(', ');
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
   if (/^opVal[0-9]+$/.test(kind)) return normalizeOpDef(t.opDef).operands[+kind.slice(5)] || '';
   return t.text;
@@ -33,6 +34,7 @@ function editSetValue(kind, t, v){
   else if (kind === 'varName') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { name:v }));
   else if (kind === 'varValue') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { value:v.trim() }));
   else if (kind === 'outName') t.outDef = normalizeOutDef({ name:v });
+  else if (kind === 'checkOpts') setCheckOptions(t, v);
   else if (kind === 'opVal' || /^opVal[0-9]+$/.test(kind)){
     const i = kind === 'opVal' ? 0 : +kind.slice(5);
     const args = normalizeOpDef(t.opDef).operands.slice();
@@ -79,7 +81,7 @@ function positionEditor(){
     x = s.x; y = s.y;
     editor.style.textAlign = 'left';
   } else if (editing.kind === 'varName' || editing.kind === 'varValue'
-             || editing.kind === 'outName'
+             || editing.kind === 'outName' || editing.kind === 'checkOpts'
              || editing.kind === 'opOp' || /^opVal[0-9]?$/.test(editing.kind)){
     // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
     const n = byId(editing.id);
@@ -88,6 +90,7 @@ function positionEditor(){
     if (editing.kind === 'varName') box = varBoxes(n).nameBox;
     else if (editing.kind === 'varValue') box = varBoxes(n).valBox;
     else if (editing.kind === 'outName') box = outBoxes(n).nameBox;
+    else if (editing.kind === 'checkOpts') box = varBoxes(n).listBox || outBoxes(n).nameBox;
     else if (editing.kind === 'opOp') box = opBoxes(n).opBox;
     else box = opBoxes(n).valBoxes[editing.kind === 'opVal' ? 0 : +editing.kind.slice(5)] || opBoxes(n).valBox;
     const s = w2s({ x:box.x, y:box.y });
