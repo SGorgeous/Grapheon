@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/settings.js
    设置面板：主题 / 背景 / 默认节点外观 / 新连线样式 / 快捷键。
@@ -49,6 +49,7 @@ function openSettings(){
   if (typeof closeEdgeBox === 'function') closeEdgeBox();
   if (typeof closeEndBox === 'function') closeEndBox();
   if (typeof closeExport === 'function') closeExport();
+  if (typeof closeLib === 'function') closeLib();      // 素材库面板别和设置叠在一起
   renderSettings();
   setEl.style.display = 'block';
   syncDlgBox();
@@ -147,6 +148,34 @@ setFontForgetEl.onclick = () => {
   renderSettings();
   setFontNoteEl.textContent = '已清空（页面重新加载后本来也会清空）';
 };
+
+/* ---------------- 素材库（用户文件夹） ---------------- */
+const setUserDirEl = document.getElementById('setUserDir');
+const setUserNoteEl = document.getElementById('setUserNote');
+setUserDirEl.value = Store.dirName;
+setUserDirEl.onchange = () => {
+  Store.setDirName(setUserDirEl.value);
+  setUserDirEl.value = Store.dirName;
+  renderUserNote();
+};
+document.getElementById('setUserOpen').onclick = () => { closeSettings(); openLib(); };
+document.getElementById('setUserConnect').onclick = async () => {
+  try {
+    await Store.connectFolder();
+    await renderUserNote();
+    say('* 接上了磁盘文件夹（' + Store.dirName + '/）。');
+  } catch(e){
+    say('* ' + (e && e.name === 'AbortError' ? '取消了。' : '连不上：' + e.message));
+  }
+};
+async function renderUserNote(){
+  const b = await Store.init();
+  setUserNoteEl.textContent = '当前存放位置：' + b.label +
+    '　·　文件夹名 ' + Store.dirName + '/' +
+    (b.id === 'fs' ? '' : '　·　（没连磁盘时存在浏览器里，手机上也能用）') +
+    (hasFsAccess() ? '' : '　·　这个浏览器不支持直接读写文件夹');
+}
+renderUserNote();
 
 document.getElementById('setClose').onclick = () => closeSettings();
 document.getElementById('setKeysReset').onclick = () => {

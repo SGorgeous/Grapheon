@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -44,6 +44,17 @@
 <textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
 <div id="ctx" class="ud"></div>
 
+<div id="lib" class="ud">
+  <h2>素材库</h2>
+  <div class="sub" id="libSub">加载中…</div>
+  <div class="row">
+    <button class="ud-btn" id="libConnect">连接文件夹</button>
+    <button class="ud-btn" id="libImport">一键导入素材</button>
+    <button class="ud-btn" id="libRefresh">刷新</button>
+    <button class="ud-btn" id="libClose">关闭</button>
+  </div>
+  <div id="libList" class="liblist"></div>
+</div>
 <div id="set" class="ud">
   <h2><span class="star">* </span>设置</h2>
   <div class="sub">改完立刻生效，存在浏览器里</div>
@@ -68,6 +79,17 @@
   </div>
   <div class="row"><div class="sub" id="setFontNote">支持 .ttf / .otf / .woff / .woff2；加载后出现在上面的字体列表里</div></div>
   <div class="row"><span class="lab">新连线</span><div id="setEdge" class="opts"></div></div>
+
+  <div class="sec">素材库（用户文件夹）</div>
+  <div class="row">
+    <span class="lab">文件夹名</span>
+    <input type="text" id="setUserDir" class="nbnum" style="width:160px">
+    <button class="ud-btn" id="setUserConnect">连接磁盘文件夹…</button>
+  </div>
+  <div class="row"><div class="sub" id="setUserNote">默认 user/，和程序分开；没连接时素材存在浏览器里（手机上也能用）</div></div>
+  <div class="row">
+    <button class="ud-btn" id="setUserOpen">打开素材库</button>
+  </div>
 
   <div class="sec">快捷键</div>
   <div class="row"><div id="setKeys" class="keylist"></div></div>
@@ -339,6 +361,7 @@
 <input type="file" id="file" accept=".json,application/json" hidden style="display:none">
 <input type="file" id="imgfile" accept="image/*" hidden style="display:none">
 <input type="file" id="gpkfile" accept=".json,application/json" hidden style="display:none">
+<input type="file" id="libfile" multiple hidden style="display:none">
 <input type="file" id="fontfile" accept=".ttf,.otf,.woff,.woff2,font/*" multiple hidden style="display:none">
 <!-- 红心光标：颜色由 CSS 的 --r 决定（见 styles/theme-undertale.css），换主题会自动跟着变 -->
 <svg id="heart" viewBox="0 0 7 6" width="18" height="15" preserveAspectRatio="none" shape-rendering="crispEdges">
@@ -347,6 +370,15 @@
   <rect x="1" y="3" width="5" height="1"/>
   <rect x="2" y="4" width="3" height="1"/>
   <rect x="3" y="5" width="1" height="1"/>
+</svg>
+<svg id="cross" viewBox="0 0 17 17" width="17" height="17" shape-rendering="crispEdges">
+  <!-- 十字准心：四个缺口 + 中心留空 -->
+  <rect x="8" y="0" width="1" height="6"/>
+  <rect x="8" y="11" width="1" height="6"/>
+  <rect x="0" y="8" width="6" height="1"/>
+  <rect x="11" y="8" width="6" height="1"/>
+  <!-- 按住鼠标任意键时，中心出现一个实心圆点 -->
+  <circle class="dot" cx="8.5" cy="8.5" r="2.5"/>
 </svg>
 
 <!-- 模块按依赖顺序加载：core → view → interact → 界面组件 → 文档层 → 装配层。
@@ -357,6 +389,7 @@
 <script src="src/core/theme.js"></script>
 <script src="src/view/stage.js"></script>
 <script src="src/core/text.js"></script>
+<script src="src/core/store.js"></script>
 <script src="src/core/vars.js"></script>
 <script src="src/core/state.js"></script>
 <script src="src/core/history.js"></script>
@@ -380,6 +413,7 @@
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>
 <script src="src/ui/settings.js"></script>
+<script src="src/ui/library.js"></script>
 <script src="src/ui/toolbar.js"></script>
 <script src="src/app/main.js"></script>
 </body>

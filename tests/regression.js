@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    GRAPHEON · tests/regression.js
    在真实浏览器里跑的断言套件。用 node tests/run.mjs 执行。
    直接操作全局的模块函数（它们都是普通脚本，共享同一个全局作用域）。
@@ -4173,6 +4173,135 @@
     setEl.style.display = 'none';
   });
 
+
+  /* ==================== 素材库 / 存储适配层 ==================== */
+  const helpOpenNow = () => helpEl.style.display === 'block';
+  T('S20 素材按扩展名自动归类', () => {
+    ok('S20 png 是图片', kindOfFile('a.png') === 'assets', kindOfFile('a.png'));
+    ok('S20b jpg 大小写都认', kindOfFile('A.JPG') === 'assets' && kindOfFile('b.jpeg') === 'assets');
+    ok('S20c json 算作品', kindOfFile('作品.json') === 'docs');
+    ok('S20d css 算主题', kindOfFile('暗色.css') === 'themes');
+    ok('S20e 字体三种都认',
+      kindOfFile('a.ttf') === 'fonts' && kindOfFile('b.otf') === 'fonts'
+      && kindOfFile('c.woff2') === 'fonts',
+      [kindOfFile('a.ttf'), kindOfFile('b.otf'), kindOfFile('c.woff2')].join(','));
+    ok('S20f 认不出来的一律当图片', kindOfFile('怪东西.xyz') === 'assets', kindOfFile('怪东西.xyz'));
+    ok('S20g 没有扩展名也不炸', kindOfFile('README') === 'assets');
+    ok('S20h 带调色板的 json 是主题，别的 json 是作品',
+      kindOfJson({ canvas:{ bg:'#000', white:'#fff' } }) === 'themes'
+      && kindOfJson({ v:2, nodes:[] }) === 'docs');
+  });
+  await TA('S21 内存后端：增删查改', async () => {
+    const m = makeMemStore();
+    ok('S21 一开始是空的', (await m.list()).length === 0);
+    const id = await m.put('assets', 'a.png', new Blob(['xx'], { type:'image/png' }));
+    const rows = await m.list();
+    ok('S21b 放下去了', rows.length === 1 && rows[0].name === 'a.png' && rows[0].kind === 'assets',
+      JSON.stringify(rows));
+    ok('S21c 取得回来', (await m.get(id)).size === 2, (await m.get(id)).size);
+    await m.del(id);
+    ok('S21d 删得掉', (await m.list()).length === 0);
+    ok('S21e 取一个不存在的返回 null', (await m.get('nope')) === null);
+  });
+  await TA('S22 IndexedDB 后端：能开、能存、能读、能删', async () => {
+    const d = makeIdbStore();
+    const can = await d.ready();
+    ok('S22 IndexedDB 可用（headless 里也应该可用）', can, String(can));
+    if (!can){ return; }
+    await d.clear();
+    const id = await d.put('fonts', 'my.ttf', new Blob([new Uint8Array([1, 2, 3])]));
+    const rows = await d.list();
+    ok('S22b 列表里有了', rows.length === 1 && rows[0].name === 'my.ttf' && rows[0].size === 3,
+      JSON.stringify(rows));
+    const back = await d.get(id);
+    ok('S22c 读回来字节数对', back && back.size === 3, back && back.size);
+    await d.del(id);
+    ok('S22d 删干净了', (await d.list()).length === 0);
+  });
+  await TA('S23 一键导入：按扩展名分流', async () => {
+    const d = makeIdbStore();
+    if (!(await d.ready())){ ok('S23 跳过（没有 IndexedDB）', true); return; }
+    await d.clear();
+    const old = Store.backend;
+    Store.backend = d;                          // 临时把后端换成干净的那个
+    try {
+      const files = [
+        new File([new Uint8Array([1])], '图.png', { type:'image/png' }),
+        new File([new Uint8Array([1])], '图2.jpg', { type:'image/jpeg' }),
+        new File(['{"canvas":{"bg":"#000","white":"#fff"}}'], '主题.json', { type:'application/json' }),
+        new File(['{"v":2,"nodes":[],"edges":[]}'], '作品.json', { type:'application/json' }),
+        new File([new Uint8Array([1])], '字.ttf', { type:'font/ttf' }),
+        new File([new Uint8Array([1])], '怪.xyz', {})
+      ];
+      const r = await Store.importFiles(files);
+      ok('S23 六个都进去了', r.ok === 6 && r.fail === 0, JSON.stringify(r));
+      ok('S23b 图片三个（含认不出来的那个）', r.byKind.assets === 3, JSON.stringify(r.byKind));
+      ok('S23c 字体一个', r.byKind.fonts === 1, JSON.stringify(r.byKind));
+      ok('S23d 主题 json 被认出来', r.byKind.themes === 1, JSON.stringify(r.byKind));
+      ok('S23e 作品 json 被认出来', r.byKind.docs === 1, JSON.stringify(r.byKind));
+      const rows = await d.list();
+      ok('S23f 存下来的类型对', rows.find(x => x.name === '主题.json').kind === 'themes'
+        && rows.find(x => x.name === '作品.json').kind === 'docs',
+        rows.map(x => x.name + ':' + x.kind).join(' '));
+    } finally {
+      await d.clear();
+      Store.backend = old;
+    }
+  });
+  await TA('S24 后端会自动挑，挑不到也能降级', async () => {
+    Store.backend = null;
+    const b = await Store.init();
+    ok('S24 挑到了一个后端', !!b && !!b.id, b && b.id);
+    ok('S24b 是三个之一', ['fs', 'idb', 'mem'].indexOf(b.id) >= 0, b.id);
+    ok('S24c 有给人看的名字', typeof b.label === 'string' && b.label.length > 0, b.label);
+    ok('S24d 有能力探测函数', typeof hasFsAccess === 'function', typeof hasFsAccess);
+    // file:// 下 Edge 是 secure context，所以这个应该是 true；不是也不该炸
+    ok('S24e file:// 下探测到 FS Access（Edge）', hasFsAccess() === true, String(hasFsAccess()));
+  });
+  T('S25 用户文件夹名：默认 user，能改，能落盘', () => {
+    Store.setDirName('');
+    ok('S25 空字符串退回默认', Store.dirName === 'user', Store.dirName);
+    Store.setDirName('我的素材');
+    ok('S25b 能改成中文名', Store.dirName === '我的素材', Store.dirName);
+    ok('S25c 落盘了', localStorage.getItem('grapheon.userdir.v1') === '我的素材',
+      localStorage.getItem('grapheon.userdir.v1'));
+    Store.setDirName('user');
+    localStorage.removeItem('grapheon.userdir.v1');
+    ok('S25d 改回默认', Store.dirName === 'user');
+  });
+  await TA('S26 素材库面板：开合 / 空状态 / 设置里那行', async () => {
+    fresh();
+    ok('S26 一开始是关的', !libOpen());
+    openLib();
+    ok('S26b 打开了', libOpen());
+    await sleep(80);
+    ok('S26c 报了存放位置', /存放位置/.test(libSubEl.textContent), libSubEl.textContent.slice(0, 40));
+    ok('S26d 空的时候有提示（或有卡片）', !!libListEl.querySelector('.libempty')
+      || libListEl.querySelectorAll('.libcard').length > 0,
+      libListEl.textContent.slice(0, 30));
+    keyRaw('Escape');
+    ok('S26e Esc 能关掉', !libOpen());
+    // 设置里那行
+    toggleSettings();
+    const note = document.getElementById('setUserNote');
+    await sleep(80);
+    ok('S26f 设置里有存放位置说明', /存放位置/.test(note.textContent), note.textContent.slice(0, 40));
+    ok('S26g 有连接磁盘的按钮', !!document.getElementById('setUserConnect'));
+    ok('S26h 文件夹名输入框有值', document.getElementById('setUserDir').value === Store.dirName,
+      document.getElementById('setUserDir').value);
+    closeSettings();
+  });
+  T('S27 素材库不会和别的面板叠在一起', () => {
+    fresh();
+    openHelp();
+    openLib();
+    ok('S27 开素材库会关掉帮助', !helpOpenNow(), helpEl.style.display);
+    toggleSettings();
+    ok('S27b 开设置会关掉素材库', !libOpen(), libEl.style.display);
+    closeSettings();
+    closeLib();
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
@@ -4182,6 +4311,7 @@
     ok('X01c draw 正常', true);
   });
   T('X02 红心光标：编辑器打开时画布上仍跟随', () => {
+    applyTheme('undertale');            // 这条测的是红心光标，别被别的用例留下的主题影响
     fresh(); fitView();
     const n = nodeByText('节点');
     selectOnly(n.id); startEdit('node', n.id);
@@ -4192,6 +4322,50 @@
       clientX:Math.round(r.left + r.width / 2), clientY:Math.round(r.top + r.height / 2), bubbles:true }));
     ok('X02b 编辑器上红心让位', heartEl.style.display === 'none');
     cancelEdit();
+  });
+  T('X02c 棋盘主题：光标换成小十字准心', () => {
+    applyTheme('board');
+    fresh(); fitView();
+    ok('X02c 主题说的是 cross', themeCursor() === 'cross', themeCursor());
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX:300, clientY:400, bubbles:true }));
+    ok('X02c2 十字准心显示出来了', crossEl.style.display === 'block', crossEl.style.display);
+    ok('X02c3 红心让位了', heartEl.style.display === 'none', heartEl.style.display);
+    ok('X02c4 十字的线是白色的', getComputedStyle(crossEl).fill === 'rgb(255, 255, 255)',
+      getComputedStyle(crossEl).fill);
+    const tf = crossEl.style.transform;
+    ok('X02c5 位置跟着鼠标（且按 17×17 对中）', tf.indexOf('translate(292px, 392px)') >= 0, tf);
+  });
+  T('X02d 按下鼠标：十字准心中心出现实心圆点', () => {
+    applyTheme('board');
+    fresh();
+    const dot = crossEl.querySelector('.dot');
+    ok('X02d 松开时圆点是透明的', getComputedStyle(dot).opacity === '0', getComputedStyle(dot).opacity);
+    window.dispatchEvent(new PointerEvent('pointerdown', { bubbles:true }));
+    ok('X02d2 按下去 body 上有 pressed', document.body.classList.contains('pressed'));
+    ok('X02d3 圆点显出来了', getComputedStyle(dot).opacity === '1', getComputedStyle(dot).opacity);
+    ok('X02d4 圆点用的是强调色', getComputedStyle(dot).fill === 'rgb(255, 216, 0)',
+      getComputedStyle(dot).fill);
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles:true }));
+    ok('X02d5 松开又没了', !document.body.classList.contains('pressed')
+      && getComputedStyle(dot).opacity === '0');
+  });
+  T('X02e 两个光标不会同时出现 / 也不会都没了', () => {
+    const seen = [];
+    for (const th of ['board', 'undertale']){
+      applyTheme(th);
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX:200, clientY:200, bubbles:true }));
+      const on = [heartEl, crossEl].filter(e => e.style.display === 'block');
+      seen.push(on.length);
+      if (on[0]) on[0].style.display = 'none';
+    }
+    ok('X02e 每个主题下都正好有一个光标（这是之前丢光标的那个坑）',
+      seen.every(n => n === 1), JSON.stringify(seen));
+    ok('X02e2 两个主题用的是不同元素', themeCursor() === 'heart');
+    applyTheme('board');
+    ok('X02e3 换主题后光标立刻跟着换', (() => {
+      const on = [heartEl, crossEl].filter(e => e.style.display === 'block');
+      return on.length === 1 && on[0] === crossEl;
+    })());
   });
   T('X03 恢复默认状态', () => {
     GP.keys.reset(); applyTheme('undertale'); fresh(); fitView();

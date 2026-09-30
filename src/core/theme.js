@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/theme.js
    主题注册表 —— 调色板只在这里定义一次，DOM（CSS 变量）和 canvas 共用同一份。
@@ -20,6 +20,7 @@ const THEMES = {
   board: {
     label: '棋盘',
     grid: 'checker',
+    cursor: 'cross',
     heart: false,
     star: false,
     canvas: {
@@ -35,6 +36,7 @@ const THEMES = {
   undertale: {
     label: 'Undertale',
     grid: 'lines',
+    cursor: 'heart',
     heart: true,
     star: true,
     canvas: {
@@ -60,6 +62,8 @@ const currentTheme = () => THEMES[themeId] || THEMES[DEFAULT_THEME];
 const themeGrid  = () => currentTheme().grid  || 'lines';
 const themeHeart = () => currentTheme().heart !== false;
 const themeStar  = () => currentTheme().star  !== false;
+/* 光标外观：heart（红心）/ cross（十字准心） */
+const themeCursor = () => currentTheme().cursor || 'heart';
 
 /* 背景样式：用户选过就用用户的，没选过跟随主题 */
 const GRID_STYLES = ['theme', 'lines', 'checker', 'dots', 'none'];
@@ -92,6 +96,7 @@ function applyTheme(id){
   document.body.classList.toggle('no-star', !themeStar());
   document.body.classList.toggle('no-heart', !themeHeart());
   try { localStorage.setItem(THEME_KEY, themeId); } catch (e) {}
+  if (typeof refreshCursorDom === 'function') refreshCursorDom();   // 换主题立刻换光标
   if (typeof mark === 'function') mark();
   return themeId;
 }

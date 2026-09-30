@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    GRAPHEON · 主题：Undertale
    全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
    加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
@@ -113,6 +113,10 @@ body.dsh-ready{cursor:none}
 #help .foot{margin-top:14px;color:var(--g);font-size:16px}
 
 #heart{position:fixed;left:0;top:0;z-index:200;pointer-events:none;display:none;fill:var(--r)}
+/* 十字准心：白线，中心那个圆点按下去才出来 */
+#cross{position:fixed;left:0;top:0;z-index:200;pointer-events:none;display:none;fill:var(--w)}
+#cross .dot{opacity:0}
+body.pressed #cross .dot{opacity:1;fill:var(--y)}
 
 /* ---------- 导出面板 ---------- */
 #exp{
@@ -281,3 +285,29 @@ body.no-heart .ud-btn::before{ content:none; }
 #set .numread{
   color:var(--y); min-width:64px; text-align:right;
 }
+
+/* ---------------- 素材库面板 ---------------- */
+#lib{
+  position:fixed; z-index:75; pointer-events:auto; display:none;
+  left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(860px, calc(100vw - 80px));
+  max-height:calc(100vh - 200px); overflow:auto;
+}
+#lib .libsec{ margin:14px 0 6px; color:var(--y); border-bottom:2px solid var(--d); padding-bottom:3px; }
+#lib .libgrid{ display:flex; flex-wrap:wrap; gap:10px; }
+#lib .libcard{
+  width:150px; border:2px solid var(--d); padding:6px;
+  display:flex; flex-direction:column; gap:4px;
+}
+#lib .libthumb{
+  height:80px; display:flex; align-items:center; justify-content:center;
+  gap:3px; background:#000; color:var(--g); font-size:16px; overflow:hidden;
+}
+#lib .libthumb img{ max-width:100%; max-height:100%; }
+#lib .libthumb i{ width:16px; height:34px; display:block; }
+#lib .libfont{ font-size:20px; color:var(--w); }
+#lib .libname{ font-size:14px; color:var(--w); word-break:break-all; }
+#lib .libmeta{ font-size:13px; color:var(--g); }
+#lib .libacts{ display:flex; gap:4px; }
+#lib .libacts .ud-btn{ font-size:14px; padding:1px 6px; }
+#lib .libempty{ color:var(--g); padding:20px 0; }
