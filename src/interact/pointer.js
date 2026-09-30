@@ -98,7 +98,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     if (ev.shiftKey && lastClickNode && lastClickNode !== n.id && byId(lastClickNode)){
       const a = lastClickNode, b = n.id;
       if (!doc.edges.some(e => e.s === a && e.t === b)){
-        linkNodes(a, b); reindex(); pushHist();
+        linkNodes(a, b, dragPortId, null); reindex(); pushHist();
         say('* 已建立连线。');
       }
       lastClickNode = n.id;
@@ -298,7 +298,7 @@ window.addEventListener('pointerup', (ev) => {
   } else if (drag.mode === 'link'){
     const t = linkTargetAt(p);
     if (t && t.id !== drag.from.node){
-      linkNodes(drag.from.node, t.id);
+      linkNodes(drag.from.node, t.id, drag.from.portId, null);
       reindex(); sizeAll();
       pushHist();
       say('* 已连接。');

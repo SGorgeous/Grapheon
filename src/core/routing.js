@@ -8,12 +8,21 @@
    几何：连线
    ========================================================================= */
 function anchorsFor(n){
-  return {
+  const A = {
     r:{ x:n.x + n.w,     y:n.y + n.h / 2, d:[1, 0] },
     l:{ x:n.x,           y:n.y + n.h / 2, d:[-1, 0] },
     t:{ x:n.x + n.w / 2, y:n.y,           d:[0, -1] },
     b:{ x:n.x + n.w / 2, y:n.y + n.h,     d:[0, 1] }
   };
+  /* ★ 钉死在某个端点上：四个槽全换成那个点。
+     这样不管后面是自动挑边、还是 aSide/bSide 指定了哪条边，
+     出来的都是同一个端点的真实位置。
+     光靠「哪条边」表达不了同一条边上的两个端点 —— 必须靠端点 id。 */
+  if (n && n.__forced){
+    const f = { x:n.__forced.x, y:n.__forced.y, d:n.__forced.d || [1, 0] };
+    return { r:f, l:f, t:f, b:f };
+  }
+  return A;
 }
 /* ka / kb 是「钉死」的端点边（'r'|'l'|'t'|'b'），传 null 表示按相对位置自动挑 —— 默认就是自动。 */
 function bezierGeom(a, b, ka, kb){
@@ -101,11 +110,24 @@ function waypointGeom(e){
   pts.push({ x:B.x, y:B.y });
   return { type: e.route === 'curve' ? 'w' : 'p', pts, mid: pts[Math.floor(pts.length / 2)] };
 }
+/* 某一端的强制锚点：这条边记了端点 id 的话，就用它的真实位置 */
+function forcedAnchorOf(nodeId, portId){
+  if (portId == null) return null;
+  const n = idx.byId.get(nodeId);
+  if (!n || typeof portById !== 'function') return null;
+  const p = portById(n, portId);
+  if (!p) return null;
+  const pt = portPoint(n, p);
+  return { x:pt.x, y:pt.y, d:(typeof PORT_OUT === 'object' && PORT_OUT[p.side]) || [1, 0] };
+}
 function edgeGeomFor(e){
   const wg = waypointGeom(e);
   if (wg) return wg;
   const a = anchorOf(e.s), b = anchorOf(e.t);
   if (!a || !b) return null;
+  // 端点钉死的位置优先 —— 端点在哪儿，线就从哪儿出来
+  const fa = forcedAnchorOf(e.s, e.aPort); if (fa) a.__forced = fa;
+  const fb = forcedAnchorOf(e.t, e.bPort); if (fb) b.__forced = fb;
   if (e.route === 'curve') return bezierGeom(a, b, e.aSide, e.bSide);
   // 正交折线：按 id 哈希给每条线一点走廊偏移，避免平行线完全重叠
   return orthoGeom(a, b, ((hashId(e.id) % 7) - 3) * 9, e.aSide, e.bSide);

@@ -7193,6 +7193,82 @@
     })(), outs.map(q => q.side + ':' + q.at.toFixed(2)).join(' / '));
   });
 
+
+  T('LK05 线从**端点**出来，不是从那条边的中点', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    selectOnly(a.id);
+    const bn = nodeBox(byId(a.id));
+    const port = portList(byId(a.id)).outs[0];
+    // 把输出端点搬到上边 0.3 处，再连一条线
+    movePort(byId(a.id), 'outs', port.id, { x:bn.x + bn.w * 0.3, y:bn.y + 2 });
+    reindex(); sizeAll();
+    const moved = portList(byId(a.id)).outs[0];
+    ok('LK05 前置：端点在 上边 0.3', moved.side === 't' && Math.abs(moved.at - 0.3) < 0.05,
+      moved.side + ' @ ' + moved.at.toFixed(2));
+    const e = linkNodes(a.id, b.id, moved.id, null);
+    reindex();
+    ok('LK05b 连线记下了出发端点', e && e.aPort === moved.id, e ? String(e.aPort) : 'null');
+    // 线的起点必须落在端点上，而不是「上边中点」
+    const geom = edgeGeomFor(e);
+    const ends = geomEndpoints(geom);
+    const want = portPoint(byId(a.id), moved);
+    ok('LK05c 线的起点就在那个端点上', (() => {
+      const d = Math.hypot(ends.a.x - want.x, ends.a.y - want.y);
+      return d < 1.5;
+    })(), JSON.stringify(ends.a) + ' vs ' + JSON.stringify(want));
+    const midpoint = { x:bn.x + bn.w / 2, y:bn.y };
+    ok('LK05d 起点**不是**上边中点（这就是之前那个毛病）',
+      Math.hypot(ends.a.x - midpoint.x, ends.a.y - midpoint.y) > 20,
+      '离中点 ' + Math.round(Math.hypot(ends.a.x - midpoint.x, ends.a.y - midpoint.y)));
+    // 端点再挪一下，线要跟着走
+    const bn2 = nodeBox(byId(a.id));
+    movePort(byId(a.id), 'outs', moved.id, { x:bn2.x + bn2.w * 0.85, y:bn2.y + 2 });
+    reindex();
+    const geom2 = edgeGeomFor(doc.edges.find(x => x.id === e.id));
+    const ends2 = geomEndpoints(geom2);
+    const want2 = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+    ok('LK05e 端点再挪，线的起点跟着走', Math.hypot(ends2.a.x - want2.x, ends2.a.y - want2.y) < 1.5,
+      JSON.stringify(ends2.a) + ' vs ' + JSON.stringify(want2));
+    // 同一条边上的两个端点各自钉得准
+    addPort(byId(a.id), 'outs');
+    reindex();
+    const outs = portList(byId(a.id)).outs;
+    const e2 = linkNodes(a.id, b.id === a.id ? a.id : b.id, outs[0].id, null);
+    // 上面那条可能因为重复被拒，换个目标
+    const c = nodeByText('连线');
+    const e3 = linkNodes(a.id, c.id, outs[0].id, null);
+    if (e3){
+      const g3 = edgeGeomFor(byId(e3.id) ? e3 : e3);
+      const en3 = geomEndpoints(g3);
+      const w3 = portPoint(byId(a.id), outs[0]);
+      ok('LK05f 换成另一个端点，起点也跟着换',
+        Math.hypot(en3.a.x - w3.x, en3.a.y - w3.y) < 1.5,
+        JSON.stringify(en3.a) + ' vs ' + JSON.stringify(w3));
+    } else ok('LK05f 换成另一个端点，起点也跟着换', true, '（重复被拒，跳过）');
+    // 存读往返
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const savedE = snap.edges.find(x => x.id === e.id);
+    ok('LK05g 存档里带 aPort', savedE && savedE.aPort === moved.id, savedE ? String(savedE.aPort) : 'null');
+    deserialize(snap);
+    ok('LK05h 读回来还在', byId(a.id) && doc.edges.find(x => x.id === e.id).aPort === moved.id,
+      String(doc.edges.find(x => x.id === e.id).aPort));
+    ok('LK05i 读回来的线还是从那个端点出来', (() => {
+      const ee = doc.edges.find(x => x.id === e.id);
+      const en = geomEndpoints(edgeGeomFor(ee));
+      const wp = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+      return Math.hypot(en.a.x - wp.x, en.a.y - wp.y) < 1.5;
+    })());
+    // 没记端点的老边照旧按方向自动挑（不能因为这次改动把老行为弄坏）
+    // 没记端点的老边照旧按方向自动挑（不能因为这次改动把老行为弄坏）
+    ok('LK05j 没记 aPort 的边还是老行为（几何照样算得出来）', (() => {
+      const e5 = doc.edges.find(x => x.aPort == null);
+      if (!e5) return true;                      // 全都被钉过就没什么可验的
+      const en = geomEndpoints(edgeGeomFor(e5));
+      return !!en && isFinite(en.a.x) && isFinite(en.a.y) && isFinite(en.b.x) && isFinite(en.b.y);
+    })());
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

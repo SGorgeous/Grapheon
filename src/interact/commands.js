@@ -14,12 +14,16 @@ function addNodeAt(text, x, y, shape){
   sizeNode(n);
   return n;
 }
-function linkNodes(s, t){
+/* aPort / bPort 是端点 id：给了就把这条边钉死在那个端点上。
+   不给就照旧按方向自动挑 —— 老调用点一行都不用改。 */
+function linkNodes(s, t, aPort, bPort){
   // ⚠ 每一条拒绝都要有话说 —— 静默失败会让人以为是「拉不动」
   if (s === t){ say('* 不能连到自己身上。'); return null; }
   if (isEmbed(byId(s)) || isEmbed(byId(t))){ say('* 嵌入节点是封闭的，连不了线。'); return null; }
   if (doc.edges.some(e => e.s === s && e.t === t)){ say('* 这两个之间已经有连线了。'); return null; }
   const e = makeEdge(s, t);
+  if (aPort != null) e.aPort = Math.round(+aPort) || null;
+  if (bPort != null) e.bPort = Math.round(+bPort) || null;
   doc.edges.push(e);
   return e;
 }

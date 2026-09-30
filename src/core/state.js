@@ -24,6 +24,9 @@ function normalizeEdge(e){
   e.label = e.label == null ? '' : String(e.label);
   e.aSide = normSide(e.aSide);
   e.bSide = normSide(e.bSide);
+  // 钉死在哪个端点上（纯数字 id）。没记就用方向，再没有就自动挑。
+  e.aPort = (e.aPort == null || e.aPort === '') ? null : (Math.round(+e.aPort) || null);
+  e.bPort = (e.bPort == null || e.bPort === '') ? null : (Math.round(+e.bPort) || null);
   if (e.waypoints && !Array.isArray(e.waypoints)) e.waypoints = null;
   return e;
 }
@@ -590,6 +593,7 @@ function serialize(){
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
+      aPort:e.aPort, bPort:e.bPort,
       components:normalizeComponents(e.components),
       waypoints:(e.waypoints && e.waypoints.length)
         ? e.waypoints.map(p => ({ x:Math.round(p.x), y:Math.round(p.y) })) : null
@@ -662,6 +666,7 @@ function deserialize(d){
     doc.edges.push(normalizeEdge({
       id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute, aSide:e.aSide, bSide:e.bSide,
+      aPort:e.aPort, bPort:e.bPort,
       components:normalizeComponents(e.components),
       waypoints:Array.isArray(e.waypoints) ? e.waypoints.map(p => ({ x:+p.x || 0, y:+p.y || 0 })) : null
     }));
