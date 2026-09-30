@@ -33,7 +33,7 @@ const nbOprTypeEl  = document.getElementById('nbOprType');
 const nbPrioEl     = document.getElementById('nbPrio');
 const SCOPE_OPTS = VAR_SCOPES.map(s => [s, VAR_SCOPE_LABEL[s]]);
 const VTYPE_OPTS = VAR_TYPES.map(x => [x, VAR_TYPE_LABEL[x]]);
-const OPR_OPTS   = OP_KINDS.map(x => [x, x]);
+const OPR_OPTS   = OPERATORS.map(o => [o.id, o.label]);   // 走注册表，以后加算符这里自动跟上
 const PRIO_OPTS  = [[1000, '最高 1000'], [100, '100'], [10, '10'], [0, '默认']];
 let nbNodeId = null;
 

@@ -87,7 +87,8 @@ function sizeVarNode(n){
 function sizeOpNode(n){
   setFont(mctx, FS, 'normal', FONT);
   const desc = displayTextOf(n);
-  const inner = VAR_PAD * 2 + OP_OP_W + 10 + OP_VAL_W;
+  const arity = opArity(normalizeOpDef(n.opDef).op);
+  const inner = VAR_PAD * 2 + OP_OP_W + 10 + arity * OP_VAL_W + (arity - 1) * 8;
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
@@ -96,8 +97,21 @@ function sizeOpNode(n){
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
   n.h = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
 }
+/* 输出节点：左上角描述 + 一个变量名框 */
+function sizeOutNode(n){
+  setFont(mctx, FS, 'normal', FONT);
+  const desc = displayTextOf(n);
+  let w = Math.max(MINW, VAR_PAD * 2 + OUT_NAME_W);
+  if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
+  n.w = Math.round(w);
+  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  n.h = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
+}
 function sizeNode(n){
   if (n.kind === 'image'){ sizeImageNode(n); return; }
+  if (n.kind === 'out'){ sizeOutNode(n); return; }
   if (n.kind === 'embed'){ sizeEmbedNode(n); return; }
   if (n.kind === 'var'){ sizeVarNode(n); return; }
   if (n.kind === 'op'){ sizeOpNode(n); return; }

@@ -766,10 +766,8 @@ function setOpDef(n, patch){
 function cycleOpOperator(n){
   if (!isOpNode(n)) return;
   const cur = normalizeOpDef(n.opDef).op;
-  const next = OP_KINDS[(OP_KINDS.indexOf(cur) + 1) % OP_KINDS.length];
-  setOpDef(n, { op:next });
-  pushHist();
-  say('* 算符改成 ' + next + ' 了。');
+  const next = OP_IDS[(OP_IDS.indexOf(cur) + 1) % OP_IDS.length];
+  setOpOperator(n, next);
 }
 /* 分组 → 函数分组 */
 function toggleFunctionGroup(grp){
@@ -787,4 +785,27 @@ function setPriority(n, v){
   n.priority = (isNaN(num) || num === 0) ? null : num;
   reindex(); sizeAll(); pushHist(); mark();
   say('* 「' + (n.text || n.id) + '」的优先级设成 ' + priorityOf(n) + '。');
+}
+
+/* ---------------- 输出节点 ----------------
+   每个作用域（顶层文档 / 某个函数分组 / 某个嵌入文档）只有一个生效。
+   值有入边就从入边推，没入边就按名字找同作用域的变量。 */
+function addOutNode(name, x, y){
+  const n = addNodeAt('', x, y, 'rect');
+  n.kind = 'out';
+  n.outDef = normalizeOutDef({ name:name || 'output' });
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+function setOutDef(n, patch){
+  if (!isOutNode(n)) return;
+  n.outDef = normalizeOutDef(Object.assign({}, n.outDef, patch));
+  reindex(); sizeAll(); mark();
+}
+function setOpOperator(n, id){
+  if (!isOpNode(n) || !OP_BY_ID.has(id)) return;
+  setOpDef(n, { op:id });          // normalizeOpDef 会把 operands 补齐到新算符的 arity
+  pushHist();
+  say('* 算符改成 ' + opDefOf(id).label + '（' + opDefOf(id).hint + '）。');
 }

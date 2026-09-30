@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -190,6 +190,12 @@ window.addEventListener('pointerup', (ev) => {
     // 顺序要紧：先按中心位置同步成员关系（拖出去的就不算成员了），
     // 再让框长大到装得下剩下的成员。反过来的话，刚被移出的节点会把框撑大。
     if (settleGroups(drag.snap.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
+    // 防重叠：被拖的那批不让路，把压到的别人弹开。弹完再同步一次成员关系。
+    const pushed = resolveOverlaps(drag.snap.map(s => s.id));
+    if (pushed.size){
+      settleGroups([...pushed]);
+      say('* ' + pushed.size + ' 个节点被弹开了（右键可以关掉「防止节点重叠」）。');
+    }
     pushHist();
   } else if (drag.mode === 'resize' && drag.moved){
     if (drag.isGroup){
@@ -197,7 +203,8 @@ window.addEventListener('pointerup', (ev) => {
       if (grp) say('* 分组框改成 ' + grp.w + ' × ' + grp.h + '。往框里拖节点就会自动收纳。');
     } else {
       const n = byId(drag.targetId);
-      settleGroups([drag.targetId]);           // 节点变大可能顶出分组框
+      resolveOverlaps([drag.targetId]);          // 变大之后可能压到别人
+      settleGroups([drag.targetId]);             // 也可能顶出分组框
       if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
     }
     pushHist();
@@ -277,7 +284,9 @@ canvas.addEventListener('dblclick', (ev) => {
     if (vp === 'varName' || vp === 'varValue'){ startEdit(vp, n.id); return; }
     const op = hitOpPart(n, p);
     if (op === 'opOp'){ cycleOpOperator(n); return; }
-    if (op === 'opVal'){ startEdit('opVal', n.id); return; }
+    if (op && /^opVal[0-9]*$/.test(op)){ startEdit(op, n.id); return; }
+    const op2 = hitOutPart(n, p);
+    if (op2 === 'outName'){ startEdit('outName', n.id); return; }
     // 图片节点分三块：点描述改描述，点名称带/图片改名称
     const part = hitImagePart(n, p);
     startEdit(part === 'desc' ? 'nodeDesc' : 'node', n.id);

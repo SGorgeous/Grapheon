@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · app/main.js
    启动引导与主循环。
@@ -10,6 +10,7 @@
 function boot(){
   loadTheme();          // 先定调色板，避免首帧闪一下
   loadBindings();       // 自定义快捷键
+  loadOverlapPref();    // 防止节点重叠，默认开
   loadExportPrefs();    // 上次用过的文件名 / 标题 / 导出范围
   resize();
   let loaded = false;
@@ -21,8 +22,7 @@ function boot(){
     }
   } catch(e){}
   if (!loaded){
-    deserialize(demoDoc());
-    layoutMind();       // 示例文档的节点都从原点开始，先按树形摆一次
+    loadDemo('all');    // 新示例：功能总览 + 活的变量演示
   }
   reindex(); sizeAll();
   initHist();

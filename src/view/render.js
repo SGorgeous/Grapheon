@@ -318,10 +318,21 @@ function opBoxes(n){
   const b = nodeBox(n);
   const textH = Math.max(1, n.lines.length) * n.lh + 8;
   const top = b.y + textH;
-  return {
-    opBox: { x:b.x + VAR_PAD, y:top, w:OP_OP_W, h:OP_BOX_H },
-    valBox:{ x:b.x + VAR_PAD + OP_OP_W + 10, y:top, w:OP_VAL_W, h:OP_BOX_H }
-  };
+  const arity = opArity(normalizeOpDef(n.opDef).op);
+  const opBox = { x:b.x + VAR_PAD, y:top, w:OP_OP_W, h:OP_BOX_H };
+  const valBoxes = [];
+  let x = opBox.x + OP_OP_W + 10;
+  for (let i = 0; i < arity; i++){
+    valBoxes.push({ x, y:top, w:OP_VAL_W, h:OP_BOX_H });
+    x += OP_VAL_W + 8;
+  }
+  return { opBox, valBoxes, valBox:valBoxes[0] };     // valBox 是第一格，兼容老用法
+}
+/* 输出节点：左上角描述 + 一个变量名框 */
+function outBoxes(n){
+  const b = nodeBox(n);
+  const textH = Math.max(1, n.lines.length) * n.lh + 8;
+  return { nameBox:{ x:b.x + VAR_PAD, y:b.y + textH, w:Math.min(OUT_NAME_W, b.w - VAR_PAD * 2), h:OUT_BOX_H } };
 }
 /* 一个小方框 + 居中的字 */
 function drawField(g, box, text, cur){
@@ -337,6 +348,33 @@ function drawField(g, box, text, cur){
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(fitText(g, text, box.w - 10), box.x + box.w / 2, box.y + box.h / 2 + 1);
+  g.restore();
+}
+function drawOutNode(g, n, b, selected, hov){
+  const od = normalizeOutDef(n.outDef);
+  const L = outBoxes(n);
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+  g.save();
+  g.fillStyle = C.bg;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  setFont(g, n.fs, n.fw, n.fam);
+  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  const startY = b.y + 8 + n.lh / 2;
+  for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
+  g.restore();
+  drawField(g, L.nameBox, od.name, C.yellow);
+  // 作用域提示：顶层 / 某个函数分组 / 嵌入内部
+  g.save();
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = C.gray;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.fillText(outScopeLabel(n.id), b.x + VAR_PAD, L.nameBox.y + L.nameBox.h + 12);
+  g.restore();
+  g.save();
+  g.lineWidth = 3; g.strokeStyle = stroke;
+  g.strokeRect(b.x, b.y, b.w, b.h);
   g.restore();
 }
 function drawVarNode(g, n, b, selected, hov){
@@ -384,8 +422,8 @@ function drawOpNode(g, n, b, selected, hov){
   const startY = b.y + 8 + n.lh / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
   g.restore();
-  drawField(g, L.opBox,  od.op,      C.yellow);
-  drawField(g, L.valBox, od.operand, C.white);
+  drawField(g, L.opBox, opDefOf(od.op).label, C.yellow);
+  L.valBoxes.forEach((bx, i) => drawField(g, bx, od.operands[i] || '', C.white));
   g.save();
   g.lineWidth = 3; g.strokeStyle = stroke;
   g.strokeRect(b.x, b.y, b.w, b.h);
@@ -451,6 +489,7 @@ function drawNode(g, n){
   else if (n.kind === 'embed') drawEmbedNode(g, n, b, selected, hov);
   else if (n.kind === 'var') drawVarNode(g, n, b, selected, hov);
   else if (n.kind === 'op')  drawOpNode(g, n, b, selected, hov);
+  else if (n.kind === 'out') drawOutNode(g, n, b, selected, hov);
   else {
   g.save();
   g.lineJoin = 'round';

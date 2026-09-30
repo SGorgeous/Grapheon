@@ -33,13 +33,15 @@ const NODE_COLORS = [
   ['#00ffff', '青'], ['#00ff00', '绿'], ['#3b7dff', '蓝'], ['#b967ff', '紫'], ['#8a8a8a', '灰']
 ];
 /* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
-const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op'];
+const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op', 'out'];
 /* ---------------- 变量定义节点 / 运算节点 ----------------
    两个都是「框里有框」：描述文字在左上角，下面一排输入框。 */
 const VAR_PAD = 12;
 const VAR_NAME_W = 118, VAR_VAL_W = 118, VAR_BOX_H = 30;
 const VAR_SCOPE_H = 22;
 const OP_OP_W = 54, OP_VAL_W = 116, OP_BOX_H = 32;
+/* 输出节点：左上角描述 + 一个变量名框 */
+const OUT_NAME_W = 190, OUT_BOX_H = 30;
 /* ---------------- 嵌入文档节点 ----------------
    把一整份 Grapheon 当成一个节点嵌进来。它是**封闭**的：不接受任何连线，
    双击进去编辑的是内部副本，外部那份原文件一个字节都不会动。 */

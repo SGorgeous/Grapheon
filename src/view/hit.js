@@ -40,8 +40,12 @@ function hitOpPart(n, p){
   if (!n || n.kind !== 'op') return null;
   const L = opBoxes(n);
   if (inRect(L.opBox, p)) return 'opOp';
-  if (inRect(L.valBox, p)) return 'opVal';
+  for (let i = 0; i < L.valBoxes.length; i++) if (inRect(L.valBoxes[i], p)) return 'opVal' + i;
   return 'text';
+}
+function hitOutPart(n, p){
+  if (!n || n.kind !== 'out') return null;
+  return inRect(outBoxes(n).nameBox, p) ? 'outName' : 'text';
 }
 /* 图片节点分三块：右上角名称带 / 图片本体 / 下面的描述。
    双击哪块就编辑哪块 —— 名称和描述是两个独立的文本字段。 */

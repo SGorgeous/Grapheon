@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -538,6 +538,7 @@ function serialize(){
       desc:(n.desc == null ? '' : String(n.desc)),
       varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
+      outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null })),
@@ -578,11 +579,25 @@ function deserialize(d){
       desc:(n.desc == null ? '' : String(n.desc)),
       varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
+      outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null });
   }
+  // 分组要先读：连线的端点可以是分组，`ok` 里必须已经有分组 id，
+  // 否则「节点 → 分组」的连线会在存读往返时被静默丢掉。
+  const grpIds = new Set();
+  for (const g of (d.groups || [])){
+    let id = g.id;
+    if (!id || seen.has(id)) id = mkId('g', seen); else seen.add(id);
+    grpIds.add(id);
+    doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
+      members:(g.members || []).slice(), color:g.color || null,
+      x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
+      collapsed:!!g.collapsed, isFunction:!!g.isFunction });
+  }
   const ok = new Set(doc.nodes.map(n => n.id));
+  for (const id of grpIds) ok.add(id);
   for (const e of (d.edges || [])){
     if (!ok.has(e.s) || !ok.has(e.t)) continue;
     let id = e.id;
@@ -594,14 +609,6 @@ function deserialize(d){
       arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute, aSide:e.aSide, bSide:e.bSide,
       waypoints:Array.isArray(e.waypoints) ? e.waypoints.map(p => ({ x:+p.x || 0, y:+p.y || 0 })) : null
     }));
-  }
-  for (const g of (d.groups || [])){
-    let id = g.id;
-    if (!id || seen.has(id)) id = mkId('g', seen); else seen.add(id);
-    doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
-      members:(g.members || []).slice(), color:g.color || null,
-      x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
-      collapsed:!!g.collapsed, isFunction:!!g.isFunction });
   }
   sel.clear(); selEdgeId = null; selGroups.clear(); editing = null; hideEditor();
   reindex(); sizeAll();

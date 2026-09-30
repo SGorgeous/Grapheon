@@ -122,6 +122,21 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
+    if (isVarNode(n)){
+      const v = normalizeVarDef(n.varDef);
+      items.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
+        VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
+          () => { setVarDef(n, { scope:s }); pushHist(); say('* 作用域改成「' + VAR_SCOPE_LABEL[s] + '」：' + VAR_SCOPE_HINT[s] + '。'); }])]);
+      items.push(['值类型：' + VAR_TYPE_LABEL[v.type], '▶', null,
+        VAR_TYPES.map(x => [(v.type === x ? '● ' : '   ') + VAR_TYPE_LABEL[x], '', () => { setVarDef(n, { type:x }); pushHist(); }])]);
+      items.push('hr');
+    }
+    if (isOpNode(n)){
+      const od = normalizeOpDef(n.opDef);
+      items.push(['运算符：' + opDefOf(od.op).label, '▶', null,
+        OPERATORS.map(o => [(od.op === o.id ? '● ' : '   ') + o.label, o.hint, () => { setOpOperator(n, o.id); }])]);
+      items.push('hr');
+    }
     if (isEmbed(n)){
       items.push(['进入编辑', '双击', () => enterEmbed(n)]);
       items.push(['换个文档…', '', () => pickEmbedFile()]);
@@ -211,6 +226,12 @@ function showCtx(x, y, n, e, info){
         selectOnly(nn.id); pushHist(); mark();
         say('* 建了一个变量定义节点。双击左边的框改名，右边的框改值；别的节点文本里用 {名字} 引用它。');
       }],
+      ['输出节点', '本作用域的输出值', () => {
+        const p = s2w(x, y);
+        const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 建了一个输出节点。把值连进来，或者双击名字框填一个同作用域的变量名。');
+      }],
       ['运算节点', '给变量加运算', () => {
         const p = s2w(x, y);
         const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
@@ -239,7 +260,15 @@ function showNewMenu(anchor){
   const r = anchor.getBoundingClientRect();
   showMenu(r.left, r.bottom + 8, [
     ['空白文件', '一个中心节点', () => newDocument('blank')],
-    ['示例文档', '', () => newDocument('demo')],
+    ['示例：全部功能', '带活的变量演示', () => newDocument('demo')],
+    ['示例：经典', '最早那份最简的树', () => newDocument('classic')],
+    'hr',
+    [(overlapOn() ? '● ' : '   ') + '防止节点重叠', '拖过去的会把别人弹开', () => setOverlapGuard(!overlapOn())],
+    ['弹开所有重叠的节点', '手动清一次', () => {
+      const pushed = resolveOverlaps([], true);
+      pushHist();
+      say(pushed.size ? '* 弹开了 ' + pushed.size + ' 个节点。' : '* 没有重叠的节点。');
+    }],
     'hr',
     ['取消', 'Esc', null]
   ]);

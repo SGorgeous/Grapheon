@@ -9,9 +9,9 @@
 function newDocument(kind){
   clearDocStack();          // 新建文档 = 回到最外层
 
-  if (kind === 'demo'){
-    deserialize(demoDoc());
-    layoutMind();          // 示例文档的节点都从原点开始，先按树形摆一次
+  if (kind === 'demo' || kind === 'classic'){
+    // 两份示例都自带坐标，不用 layoutMind；分组框由 loadDemo 贴合成员
+    loadDemo(kind === 'classic' ? 'classic' : 'all');
   } else {
     doc = { v:2, nodes:[], edges:[] };
     const n = { id:uid('n'), text:'中心主题', x:0, y:0, w:0, h:0, shape:'rect', collapsed:false, lines:[''] };

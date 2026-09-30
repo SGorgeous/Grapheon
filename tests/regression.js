@@ -61,9 +61,18 @@
     const all = [...doc.nodes.map(n => n.id), ...doc.edges.map(e => e.id)];
     return all.filter((v, i) => all.indexOf(v) !== i);
   };
+  /* 测试的固定基线：经典示例（12 节点 / 11 连线 / 单根）。
+     刻意不用「当前的默认示例」—— 默认示例是给用户看的展品，会随功能增删而变，
+     拿它当基线的话每动一次示例就要改几百条断言。 */
   function fresh(){
-    deserialize(demoDoc());
+    deserialize(classicDoc());
     reindex(); sizeAll(); layoutMind(); initHist(); fitView();
+    sel.clear(); selEdgeId = null; mark();
+  }
+  /* 想测新示例本身的时候用这个 */
+  function freshAll(){
+    loadDemo('all');
+    reindex(); sizeAll(); initHist(); fitView();
     sel.clear(); selEdgeId = null; mark();
   }
   function litPixels(canvas, x0, y0, x1, y1){
@@ -774,8 +783,10 @@
     $('#b-new').click();
     ok('N01 菜单显示', ctxEl.style.display === 'block');
     const items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
-    ok('N01b 有「空白文件」和「示例文档」',
-      items.some(t => t.indexOf('空白文件') === 0) && items.some(t => t.indexOf('示例文档') === 0), items.join(' / '));
+    ok('N01b 有「空白文件」和两种示例',
+      items.some(t => t.indexOf('空白文件') === 0)
+      && items.some(t => t.indexOf('示例：全部功能') === 0)
+      && items.some(t => t.indexOf('示例：经典') === 0), items.join(' / '));
   });
   T('N02 新建空白文件', () => {
     fresh();
@@ -793,12 +804,37 @@
     })());
     ok('N02e 新连线带默认样式', doc.edges[0].arrow === 'end' && doc.edges[0].route === 'ortho');
   });
-  T('N03 新建示例文档', () => {
+  T('N03 新建经典示例文档', () => {
     fresh();
     $('#b-new').click();
-    [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('示例文档') === 0).click();
+    [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('示例：经典') === 0).click();
     ok('N03 恢复成 12 节点', doc.nodes.length === 12, doc.nodes.length);
     ok('N03b 已排版（不是全叠在原点）', new Set(doc.nodes.map(n => Math.round(n.x))).size > 1);
+  });
+  T('N03c 新建「全部功能」示例：内容齐、框贴好、变量是活的', () => {
+    fresh();
+    $('#b-new').click();
+    [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('示例：全部功能') === 0).click();
+    ok('N03c 节点够多', doc.nodes.length >= 40, doc.nodes.length);
+    ok('N03d 有分组', (doc.groups || []).length >= 7, (doc.groups || []).length);
+    ok('N03e 有函数分组', (doc.groups || []).some(g => g.isFunction));
+    ok('N03f 有变量定义 / 运算 / 输出节点',
+      doc.nodes.some(n => n.kind === 'var') && doc.nodes.some(n => n.kind === 'op')
+      && doc.nodes.some(n => n.kind === 'out'),
+      NODE_KINDS.map(k => k + ':' + doc.nodes.filter(n => n.kind === k).length).join(' '));
+    ok('N03g 分组框真的贴住了成员（不是虚的）', (doc.groups || []).every(g => {
+      if (!g.members.length) return true;
+      const b = groupMemberBounds(g);
+      return g.x <= b.minX + 1 && g.y <= b.minY + 1
+          && g.x + g.w >= b.maxX - 1 && g.y + g.h >= b.maxY - 1;
+    }));
+    const total = doc.nodes.find(n => n.text === '合计 {单价} 元');
+    ok('N03h 示例里有那个引用变量的节点', !!total);
+    ok('N03i 变量是活的：12 × 4 = 48', displayTextOf(total) === '合计 48 元', displayTextOf(total));
+    const shown = doc.nodes.find(n => n.text === '折后 {折扣价} 元');
+    ok('N03j 函数分组也是活的：100 - 15 = 85', displayTextOf(shown) === '折后 85 元',
+      displayTextOf(shown));
+    ok('N03k 有文档输出节点', !!documentOutputNode(), documentOutputNode() && documentOutputNode().text);
   });
   T('N04 菜单会被「点击别处」收起', () => {
     fresh();
@@ -1473,6 +1509,80 @@
       JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
     closeEndBox();
   });
+  T('V20 防止节点重叠：默认开，压到了就弹开', () => {
+    fresh(); setOverlapGuard(true);
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    // 手工把 b 挪到和 a 完全重合
+    const ab = nodeBox(a);
+    b.x = ab.x; b.y = ab.y;
+    reindex(); sizeAll();
+    ok('V20 前置：现在确实叠着', rectsHit(nodeBox(a), nodeBox(b), 0));
+    const pushed = resolveOverlaps([a.id]);
+    ok('V20b 有人被弹开了', pushed.size >= 1, pushed.size);
+    ok('V20c 弹开之后不再重叠', !rectsHit(nodeBox(a), nodeBox(b), 0),
+      JSON.stringify([nodeBox(a), nodeBox(b)]));
+    ok('V20d 被拖的那个没动', nodeBox(a).x === ab.x && nodeBox(a).y === ab.y,
+      nodeBox(a).x + ',' + nodeBox(a).y + ' vs ' + ab.x + ',' + ab.y);
+    ok('V20e 弹开之后留了缝', (() => {
+      const ra = nodeBox(a), rb = nodeBox(b);
+      const gapX = Math.max(rb.x - (ra.x + ra.w), ra.x - (rb.x + rb.w));
+      const gapY = Math.max(rb.y - (ra.y + ra.h), ra.y - (rb.y + rb.h));
+      return Math.max(gapX, gapY) >= OVERLAP_GAP - 0.01;
+    })());
+  });
+  T('V20f 关掉之后可以随便叠', () => {
+    fresh(); setOverlapGuard(false);
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    const ab = nodeBox(a);
+    b.x = ab.x; b.y = ab.y;
+    reindex(); sizeAll();
+    const pushed = resolveOverlaps([a.id]);
+    ok('V20f 关掉时一个都不弹', pushed.size === 0, pushed.size);
+    ok('V20g 还是叠着', rectsHit(nodeBox(a), nodeBox(b), 0));
+    // 手动弹开是 force，跟开关无关
+    const forced = resolveOverlaps([], true);
+    ok('V20h 手动弹开无视开关', forced.size >= 1, forced.size);
+    ok('V20i 弹完不叠了', !rectsHit(nodeBox(a), nodeBox(b), 0));
+    setOverlapGuard(true);
+  });
+  T('V20j 弹开不会把节点弹出画面外，也不会吃掉节点', () => {
+    fresh(); setOverlapGuard(true);
+    const before = doc.nodes.length;
+    const all = doc.nodes.map(n => ({ x:n.x, y:n.y }));
+    // 把所有节点堆到同一格，看它能不能全部拆开
+    for (const n of doc.nodes){ n.x = 0; n.y = 0; }
+    reindex(); sizeAll();
+    for (let i = 0; i < 3; i++) resolveOverlaps([], true);
+    ok('V20j 节点一个没少', doc.nodes.length === before, doc.nodes.length);
+    let overlap = 0;
+    const vis = doc.nodes.filter(n => !isHidden(n.id));
+    for (let i = 0; i < vis.length; i++)
+      for (let j = i + 1; j < vis.length; j++)
+        if (rectsHit(nodeBox(vis[i]), nodeBox(vis[j]), 0)) overlap++;
+    ok('V20k 全堆在一起也能拆干净', overlap === 0, overlap + ' 对还叠着');
+    ok('V20l 位置真的变了', doc.nodes.some((n, i) => n.x !== all[i].x || n.y !== all[i].y));
+    // 隐藏的节点不参与（拿一个来验）
+    ok('V20m 只对可见节点动手', vis.length <= doc.nodes.length);
+  });
+  T('U19b 连到分组的线能存读往返', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const e = linkNodes(c.id, grp.id);          // 节点 → 分组
+    const e2 = linkNodes(grp.id, c.id);         // 分组 → 节点
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('U19b 存档里两条都在', snap.edges.filter(x => x.s === grp.id || x.t === grp.id).length === 2,
+      snap.edges.filter(x => x.s === grp.id || x.t === grp.id).length);
+    deserialize(snap);
+    const back = doc.edges.filter(x => x.s === grp.id || x.t === grp.id);
+    // 以前 deserialize 的 ok 集合只有节点 id，指向分组的线会被静默丢掉
+    ok('U19c 读回来也还在', back.length === 2, back.length);
+    ok('U19d 方向没串', back.some(x => x.s === c.id && x.t === grp.id)
+      && back.some(x => x.s === grp.id && x.t === c.id),
+      back.map(x => x.s + '>' + x.t).join(' '));
+  });
   T('U20 导出时指向分组的连线不会被丢掉', () => {
     fresh(); layoutMind();
     const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
@@ -1809,8 +1919,8 @@
   T('M06 空的「新建」菜单也没问题', () => {
     document.getElementById('b-new').click();
     ok('M06 顶上「新建」菜单打开', ctxEl.style.display === 'block');
-    ok('M06b 里面有空白文件 / 示例文档',
-      [...ctxEl.querySelectorAll('.item')].length === 3, ctxEl.querySelectorAll('.item').length);
+    ok('M06b 里面有空白文件 / 两种示例',
+      [...ctxEl.querySelectorAll('.item')].length === 6, ctxEl.querySelectorAll('.item').length);
     hideCtx();
   });
   T('M07 大面板贴在提示框正上方、右下角对齐', () => {
@@ -3265,15 +3375,16 @@
       return s ? 'ok' : 'no var';
     })());
   });
-  T('J10 函数分组：值变成组内算出来的', () => {
+  T('J10 函数分组：值变成组内算出来的（细节见 L05）', () => {
     fresh(); layoutMind();
     const fg = newEmptyGroup(0, 0);
     renameGroup(fg, '面积');
     fg.isFunction = true;
     const w  = mkVar('w', '6');
     const op = addOpNode('乘七', 0, 0, { op:'*', operand:'7' });
-    linkNodes(w.id, op.id);
-    fg.members = [w.id, op.id];
+    const out = addOutNode('farea', 0, 0);          // 函数分组要有输出节点才有值
+    linkNodes(w.id, op.id); linkNodes(op.id, out.id);
+    fg.members = [w.id, op.id, out.id];
     const area = mkVar('area', '0');
     linkNodes(area.id, fg.id);
     const c = addNodeAt('面积 = {area}', 0, 0, 'rect');
@@ -3288,16 +3399,15 @@
     fresh(); layoutMind();
     const fg = newEmptyGroup(0, 0);
     fg.isFunction = true;
-    const w  = mkVar('w', '5');
-    const op = addOpNode('', 0, 0, { op:'+', operand:'100' });   // 这个在组外
-    linkNodes(w.id, op.id);
-    fg.members = [w.id];
-    const area = mkVar('area', '0');
-    linkNodes(area.id, fg.id);
+    const w   = mkVar('w', '5');
+    const op  = addOpNode('', 0, 0, { op:'+', operand:'100' });   // 这个在组外
+    const out = addOutNode('r', 0, 0);
+    linkNodes(w.id, op.id); linkNodes(op.id, out.id);
+    fg.members = [w.id, out.id];
     reindex();
-    ok('J11 组外的运算节点不参与', functionResult(fg) === '5', functionResult(fg));
-    // 把运算节点收进组里，它才参与
-    fg.members.push(op.id);
+    ok('J11 组外的运算节点不参与（组内没有来源就是空）', functionResult(fg) === null,
+      String(functionResult(fg)));
+    fg.members.push(op.id);            // 收进组里，它才参与
     reindex();
     ok('J11b 收进组里就参与了', functionResult(fg) === 105, functionResult(fg));
   });
@@ -3379,7 +3489,8 @@
     const o = addOpNode('', 0, 0, {});
     const O = opBoxes(o);
     ok('J16f 命中算符框', hitOpPart(o, { x:O.opBox.x + 4, y:O.opBox.y + 4 }) === 'opOp');
-    ok('J16g 命中运算值框', hitOpPart(o, { x:O.valBox.x + 4, y:O.valBox.y + 4 }) === 'opVal');
+    ok('J16g 命中运算值框', hitOpPart(o, { x:O.valBox.x + 4, y:O.valBox.y + 4 }) === 'opVal0',
+      hitOpPart(o, { x:O.valBox.x + 4, y:O.valBox.y + 4 }));
     ok('J16h 双击算符框会轮换', (() => {
       const before = normalizeOpDef(o.opDef).op;
       cycleOpOperator(o);
@@ -3399,6 +3510,232 @@
     const g = createGroup();
     ok('J17c 能进分组', groupAllNodes(g.id).indexOf(v.id) >= 0);
     ok('J17d 能连线', !!linkNodes(t.id, v.id));
+  });
+
+
+  /* ==================== 输出节点 / 函数分组 / 运算符注册表 ==================== */
+  const mkFnGroup = (title) => {
+    const g = newEmptyGroup(0, 0);
+    renameGroup(g, title || 'ƒ');
+    g.isFunction = true;
+    return g;
+  };
+  const mkOut = (name) => addOutNode(name, 0, 0);
+
+  T('L01 建一个输出节点', () => {
+    fresh(); layoutMind();
+    const o = mkOut('result');
+    ok('L01 kind 是 out', o.kind === 'out' && isOutNode(o));
+    ok('L01b 名字存下来了', normalizeOutDef(o.outDef).name === 'result', JSON.stringify(o.outDef));
+    ok('L01c 有尺寸', o.w > 0 && o.h > 0, o.w + 'x' + o.h);
+    ok('L01d 画得出来', (dirty = true, draw(), true));
+  });
+  T('L02 有入边：值从线上来', () => {
+    fresh(); layoutMind();
+    const v = mkVar('x', '7');
+    const op = addOpNode('加三', 0, 0, { op:'+', operand:'3' });
+    const o = mkOut('result');
+    linkNodes(v.id, op.id); linkNodes(op.id, o.id);
+    reindex(); sizeAll();
+    ok('L02 输出值是 10', outputValueIn(liveCtx(), byId(o.id)) === 10,
+      outputValueIn(liveCtx(), byId(o.id)));
+  });
+  T('L03 没入边：按名字找同作用域的变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('payload', '你好');
+    const o = mkOut('payload');
+    reindex(); sizeAll();
+    ok('L03 靠名字取到值', outputValueIn(liveCtx(), byId(o.id)) === '你好',
+      outputValueIn(liveCtx(), byId(o.id)));
+    setVarDef(byId(v.id), { value:'再见' });
+    reindex(); sizeAll();
+    ok('L03b 变量改了它跟着变', outputValueIn(liveCtx(), byId(o.id)) === '再见');
+    // 名字对不上就是空
+    setOutDef(byId(o.id), { name:'nope' });
+    reindex();
+    ok('L03c 名字对不上是空', outputValueIn(liveCtx(), byId(o.id)) === null);
+  });
+  T('L04 顶层输出节点代表整份文档的输出', () => {
+    fresh(); layoutMind();
+    const v = mkVar('x', '3');
+    const o = mkOut('docOut');
+    linkNodes(v.id, o.id);
+    reindex(); sizeAll();
+    ok('L04 找得到顶层输出节点', documentOutputNode() && documentOutputNode().id === o.id);
+    ok('L04b 值是 3', outputValueIn(liveCtx(), byId(o.id)) === '3',
+      outputValueIn(liveCtx(), byId(o.id)));
+  });
+  T('L05 函数分组的输出由输出节点决定', () => {
+    fresh(); layoutMind();
+    const fg = mkFnGroup('面积');
+    const w  = mkVar('w', '6');
+    const op = addOpNode('乘七', 0, 0, { op:'*', operand:'7' });
+    const out = mkOut('farea');
+    linkNodes(w.id, op.id); linkNodes(op.id, out.id);
+    fg.members = [w.id, op.id, out.id];
+    const area = mkVar('area', '0');
+    linkNodes(area.id, fg.id);
+    const c = addNodeAt('面积 = {area}', 0, 0, 'rect');
+    linkNodes(area.id, c.id);
+    reindex(); sizeAll();
+    ok('L05 函数分组算出 42', functionResult(fg) === 42, functionResult(fg));
+    ok('L05b 指向它的变量节点拿到 42', defValue(area) === 42, defValue(area));
+    ok('L05c 消费者看到 42', resolveVar('area', c.id) === 42, resolveVar('area', c.id));
+    ok('L05d 文字里也是 42', displayTextOf(c) === '面积 = 42', displayTextOf(c));
+    ok('L05e 这个输出节点是生效的', outputEffective(out.id));
+    ok('L05f 它自己标着函数作用域', /函数输出/.test(outScopeLabel(out.id)), outScopeLabel(out.id));
+  });
+  T('L06 函数分组没有输出节点就是空', () => {
+    fresh(); layoutMind();
+    const fg = mkFnGroup('空函数');
+    const w = mkVar('w', '5', { scope:'global' });
+    fg.members = [w.id];
+    const v = mkVar('r', '0');
+    linkNodes(v.id, fg.id);
+    const c = addNodeAt('{r}', 0, 0, 'rect');
+    linkNodes(v.id, c.id);
+    reindex(); sizeAll();
+    ok('L06 functionResult 是 null', functionResult(fg) === null, String(functionResult(fg)));
+    ok('L06b 消费者显示 [未定义]', displayTextOf(c) === '[未定义]', displayTextOf(c));
+  });
+  T('L07 每个作用域只有一个输出节点生效', () => {
+    fresh(); layoutMind();
+    const a = mkOut('first');
+    const b = mkOut('second');
+    reindex();
+    ok('L07 靠前的那个生效', outputEffective(a.id) && !outputEffective(b.id),
+      outputEffective(a.id) + '/' + outputEffective(b.id));
+    ok('L07b 没生效的会写明', /未生效/.test(outScopeLabel(b.id)), outScopeLabel(b.id));
+    // 删掉第一个，第二个就顶上
+    doc.nodes = doc.nodes.filter(n => n.id !== a.id);
+    reindex();
+    ok('L07c 删掉第一个后第二个生效', outputEffective(b.id));
+    // 不同函数分组各算各的
+    const fg1 = mkFnGroup('A'), fg2 = mkFnGroup('B');
+    const o1 = mkOut('r1'), o2 = mkOut('r2');
+    fg1.members = [o1.id]; fg2.members = [o2.id];
+    reindex();
+    ok('L07d 两个函数分组里各有一个生效', outputEffective(o1.id) && outputEffective(o2.id));
+  });
+  T('L08 函数分组内外完全隔离', () => {
+    fresh(); layoutMind();
+    const fg = mkFnGroup('隔离');
+    const inside  = mkVar('v', '内', { scope:'global' });
+    const outside = mkVar('v', '外', { scope:'global' });
+    const out = mkOut('r');
+    linkNodes(inside.id, out.id);
+    fg.members = [inside.id, out.id];
+    const consumerInside  = addNodeAt('{v}', 0, 0, 'rect');
+    const consumerOutside = addNodeAt('{v}', 0, 0, 'rect');
+    fg.members.push(consumerInside.id);
+    reindex(); sizeAll();
+    ok('L08 组内的「全局」只在组内可见（组内看到「内」）',
+      resolveVar('v', consumerInside.id) === '内', resolveVar('v', consumerInside.id));
+    ok('L08b 组外看不到组内的变量', resolveVar('v', consumerOutside.id) === '外',
+      resolveVar('v', consumerOutside.id));
+    ok('L08c 组内的「全局」不会漏到外面', (() => {
+      doc.nodes = doc.nodes.filter(n => n.id !== outside.id);
+      reindex();
+      return resolveVar('v', consumerOutside.id) === null;
+    })());
+    // 局内：只有组内下游
+    const loc = mkVar('lv', '2', { scope:'local' });
+    const down = addNodeAt('{lv}', 0, 0, 'rect');
+    const side = addNodeAt('{lv}', 0, 0, 'rect');
+    linkNodes(loc.id, down.id);
+    fg.members.push(loc.id, down.id, side.id);
+    reindex();
+    ok('L08d 组内「局内」：下游能用', resolveVar('lv', down.id) === '2', resolveVar('lv', down.id));
+    ok('L08e 组内「局内」：非下游看不到', resolveVar('lv', side.id) === null, resolveVar('lv', side.id));
+  });
+  T('L09 跨层引用：{嵌入名.输出名}', () => {
+    fresh(); layoutMind();
+    // 造一份带输出节点的子文档
+    const sub = {
+      v:2, nid:0, groups:[],
+      nodes: [
+        { id:'a', text:'', x:0, y:0, kind:'var', varDef:{ name:'in', value:'9', type:'number', scope:'global' } },
+        { id:'b', text:'二号', x:0, y:0, kind:'op', opDef:{ op:'*', operand:'3' } },
+        { id:'c', text:'', x:0, y:0, kind:'out', outDef:{ name:'answer' } }
+      ],
+      edges: [ { id:'e1', s:'a', t:'b' }, { id:'e2', s:'b', t:'c' } ]
+    };
+    const before = doc.nodes.length;
+    const emb = addEmbedNode(sub, '子图', 0, 0);
+    const c = addNodeAt('答案 {子图.answer}', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('L09 取到嵌入文档的输出值', resolveEmbedOutput('子图', 'answer') === 27,
+      String(resolveEmbedOutput('子图', 'answer')));
+    ok('L09b 插值也对', displayTextOf(c) === '答案 27', displayTextOf(c));
+    ok('L09c 求值没有污染当前文档', doc.nodes.length === before + 2, doc.nodes.length + ' / ' + before);
+    ok('L09d 名字对不上就是空', resolveEmbedOutput('子图', 'nope') === null);
+    ok('L09e 嵌入节点名对不上也是空', resolveEmbedOutput('别的', 'answer') === null);
+    ok('L09f 缺这个字段时显示 [未定义]', interpolate('{子图.nope}', c.id) === '[未定义]');
+    ok('L09g 普通点号不会误伤（没有同名嵌入就是未定义）',
+      interpolate('{没有这个.n}', c.id) === '[未定义]');
+  });
+  T('L10 输出节点能存下来', () => {
+    fresh(); layoutMind();
+    const v = mkVar('x', '4');
+    const o = mkOut('result');
+    linkNodes(v.id, o.id);
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const raw = snap.nodes.find(n => n.id === o.id);
+    ok('L10 序列化带 outDef', raw.outDef && raw.outDef.name === 'result', JSON.stringify(raw.outDef));
+    deserialize(snap);
+    const o2 = byId(o.id);
+    ok('L10b 往返还是输出节点', o2.kind === 'out');
+    ok('L10c 名字还在', normalizeOutDef(o2.outDef).name === 'result');
+    ok('L10d 值还算得出来', outputValueIn(liveCtx(), o2) === '4',
+      outputValueIn(liveCtx(), o2));
+  });
+  T('L11 运算符走注册表，不写死', () => {
+    fresh(); layoutMind();
+    ok('L11 注册表里有四个算符', OPERATORS.length === 4 && OP_IDS.length === 4);
+    ok('L11b 每条都有 label / arity / apply',
+      OPERATORS.every(o => o.label && typeof o.arity === 'number' && typeof o.apply === 'function'));
+    ok('L11c 都是单输入', OPERATORS.every(o => o.arity === 1));
+    // 双输入：临时往注册表里塞一个 arity 2 的算符，布局和命中要自己跟上
+    const two = { id:'@', label:'@', arity:2, hint:'测试用双输入',
+      apply:(v, a) => (toNum(v) || 0) + (toNum(a[0]) || 0) * (toNum(a[1]) || 0) };
+    OPERATORS.push(two); OP_BY_ID.set('@', two); OP_IDS.push('@');
+    try {
+      const o = addOpNode('双输入', 0, 0, { op:'@', operands:['2', '3'] });
+      reindex(); sizeAll();
+      const L = opBoxes(o);
+      ok('L11d 布局按 arity 出两个运算值框', L.valBoxes.length === 2, L.valBoxes.length);
+      ok('L11e 节点也跟着变宽', o.w >= VAR_PAD * 2 + OP_OP_W + 10 + 2 * OP_VAL_W, o.w);
+      ok('L11f 命中第二格返回 opVal1',
+        hitOpPart(o, { x:L.valBoxes[1].x + 4, y:L.valBoxes[1].y + 4 }) === 'opVal1',
+        hitOpPart(o, { x:L.valBoxes[1].x + 4, y:L.valBoxes[1].y + 4 }));
+      const v = mkVar('x', '10');
+      const out = mkOut('r');
+      linkNodes(v.id, o.id); linkNodes(o.id, out.id);
+      reindex(); sizeAll();
+      ok('L11g 求值用得上两个操作数（10 + 2*3 = 16）',
+        outputValueIn(liveCtx(), byId(out.id)) === 16,
+        String(outputValueIn(liveCtx(), byId(out.id))));
+    } finally {
+      OPERATORS.pop(); OP_BY_ID.delete('@'); OP_IDS.pop();
+    }
+  });
+  T('L12 变量节点右键改作用域 / 值类型（命令层）', () => {
+    fresh(); layoutMind();
+    const v = mkVar('x', '1');
+    setVarDef(v, { scope:'local' });
+    ok('L12 作用域改掉了', normalizeVarDef(byId(v.id).varDef).scope === 'local');
+    setVarDef(byId(v.id), { type:'string' });
+    ok('L12b 值类型改掉了', normalizeVarDef(byId(v.id).varDef).type === 'string');
+    const o = addOpNode('', 0, 0, { op:'+', operand:'1' });
+    setOpOperator(o, '*');
+    ok('L12c 算符改掉了', normalizeOpDef(byId(o.id).opDef).op === '*');
+    ok('L12d 非法算符会被挡住', (() => {
+      setOpOperator(byId(o.id), '不存在的算符');
+      return normalizeOpDef(byId(o.id).opDef).op === '*';
+    })());
+    ok('L12e operands 长度跟着 arity 走',
+      normalizeOpDef(byId(o.id).opDef).operands.length === opArity('*'));
   });
 
   /* ==================== 收尾 ==================== */

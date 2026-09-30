@@ -99,3 +99,84 @@ function tidyLayout(){
   mark();
 }
 
+
+/* =========================================================================
+   防止节点重叠
+   -------------------------------------------------------------------------
+   默认开启：拖完一个节点，压到别人身上就把别人弹开（被拖的那个跟手，不让路）。
+   关掉之后随便叠。设置存在 localStorage 里。
+
+   ⚠ 只在**交互路径**（拖拽结束、缩放结束、手动弹开）里调用，不挂在 addNodeAt 上：
+     程序化铺文档时需要能精确指定坐标，自动弹开会把布局搞乱。
+   ========================================================================= */
+const OVERLAP_GAP = 16;          // 弹开之后留的缝
+const OVERLAP_MAX_PASS = 16;     // 迭代上限，防止两个节点来回推
+const OVERLAP_KEY = 'grapheon.overlap.v1';
+let overlapGuard = true;
+
+function loadOverlapPref(){
+  try { if (localStorage.getItem(OVERLAP_KEY) === '0') overlapGuard = false; } catch(e){}
+}
+function setOverlapGuard(on){
+  overlapGuard = !!on;
+  try { localStorage.setItem(OVERLAP_KEY, overlapGuard ? '1' : '0'); } catch(e){}
+  mark();
+  say(overlapGuard
+    ? '* 已开启「防止节点重叠」：拖过去的节点会把别人弹开。'
+    : '* 已关闭「防止节点重叠」：现在可以随便叠了。');
+}
+const overlapOn = () => overlapGuard;
+
+const rectsHit = (a, b, g) => a.x < b.x + b.w + g && b.x < a.x + a.w + g
+                            && a.y < b.y + b.h + g && b.y < a.y + a.h + g;
+/* 把 b 推离 a：沿重叠更小的那个轴推，位移最小 */
+function pushApart(a, b, gap){
+  const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  if (ox <= 0 || oy <= 0) return null;
+  if (ox <= oy){
+    const dir = (b.x + b.w / 2 >= a.x + a.w / 2) ? 1 : -1;
+    return { x:dir * (ox + gap), y:0 };
+  }
+  const dir = (b.y + b.h / 2 >= a.y + a.h / 2) ? 1 : -1;
+  return { x:0, y:dir * (oy + gap) };
+}
+/* 把压在一起的节点弹开。
+   seeds = 用户刚动过的节点，它们不让路（这样拖起来跟手）。
+   返回被迫移动过的节点 id 集合。 */
+function resolveOverlaps(seeds, force){
+  const pushed = new Set();
+  if (!overlapGuard && !force) return pushed;
+  const list = doc.nodes.filter(n => !isHidden(n.id));
+  if (list.length < 2) return pushed;
+  // 自己维护一份几何：nodeBox 有缓存，边动边读会读到旧的
+  const box = new Map(list.map(n => {
+    const b = nodeBox(n);
+    return [n.id, { x:b.x, y:b.y, w:b.w, h:b.h }];
+  }));
+  const actor = new Set(seeds || []);
+  for (let pass = 0; pass < OVERLAP_MAX_PASS; pass++){
+    let hit = false;
+    for (let i = 0; i < list.length; i++){
+      for (let j = i + 1; j < list.length; j++){
+        const A = list[i], B = list[j];
+        const ra = box.get(A.id), rb = box.get(B.id);
+        if (!rectsHit(ra, rb, OVERLAP_GAP)) continue;
+        // 谁让路：被拖的那个不让
+        const victim = (actor.has(A.id) && !actor.has(B.id)) ? B : A;
+        const other  = victim === A ? B : A;
+        const d = pushApart(box.get(other.id), box.get(victim.id), OVERLAP_GAP);
+        if (!d) continue;
+        victim.x += d.x; victim.y += d.y;
+        const vb = box.get(victim.id);
+        vb.x += d.x; vb.y += d.y;
+        actor.add(victim.id);
+        pushed.add(victim.id);
+        hit = true;
+      }
+    }
+    if (!hit) break;
+  }
+  if (pushed.size){ reindex(); sizeAll(); }
+  return pushed;
+}
