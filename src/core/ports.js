@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/ports.js
    端点模型 —— 每个程序节点的输入 / 输出端点。
@@ -251,24 +251,47 @@ function portHitAt(p, node){
   }
   return best;
 }
-/* ★ 拖端点的把手 = **标签那一小块**，不是圆点。
+/* ★ 拖端点的把手 = 端点旁边一个**实心小方块**，不是圆点。
    圆点留给「从这里拉一条线出去」—— 那个手势不能抢，
    抢了就没法从选中的节点连线了（I04 断言盯着这条）。
-   标签只在悬停/选中时出现，所以不选中的时候压根没有把手，互不干扰。 */
-const PORT_HANDLE_NEAR = 6, PORT_HANDLE_FAR = 76, PORT_HANDLE_WIDE = 14;
+   方块只在节点**被选中 / 悬停**时画出来，所以平时那块地方是空的。
+
+   ⚠ 命中必须**按几何算**，不能靠 hover 变量 —— 方块画在盒子**外面**，
+    鼠标移上去时 hitNode 落空、hover 会被清成 null，把手就没了。
+     这正是「端点拖不动」的原因。 */
+const PORT_SQ = 9;                      // 方块的边长（世界单位）
+const PORT_SQ_GAP = 7;                  // 方块离圆点多远
+const PORT_OUT = { l:{ x:-1, y:0 }, r:{ x:1, y:0 }, t:{ x:0, y:-1 }, b:{ x:0, y:1 } };
+/* 把手方块的矩形 —— 画和命中用同一份，保证所见即所得 */
+function portHandleBox(n, port){
+  const pt = portPoint(n, port);
+  const o = PORT_OUT[port.side] || PORT_OUT.r;
+  const cx = pt.x + o.x * (PORT_DOT_R + PORT_SQ_GAP + PORT_SQ / 2);
+  const cy = pt.y + o.y * (PORT_DOT_R + PORT_SQ_GAP + PORT_SQ / 2);
+  return { x:cx - PORT_SQ / 2, y:cy - PORT_SQ / 2, w:PORT_SQ, h:PORT_SQ };
+}
+/* 标签画在方块再往外一点 */
+function portLabelPoint(n, port){
+  const pt = portPoint(n, port);
+  const o = PORT_OUT[port.side] || PORT_OUT.r;
+  const d = PORT_DOT_R + PORT_SQ_GAP + PORT_SQ + 6;
+  return { x:pt.x + o.x * d, y:pt.y + o.y * d, side:port.side };
+}
+/* 鼠标底下的把手。候选 = 显式给的那个 + 选中的那些 + 悬停的那个。
+   ⚠ 只在「方块确实画出来了」的节点上找 —— 无差别扫所有节点的话，
+     连线中间的点会被误抓成把手，建拐点那个手势就废了（V01 断言盯着）。 */
 function portHandleAt(p, node){
-  if (!node || !portsShowLabel(node)) return null;
-  const L = portList(node);
-  const OUT = { l:{ x:-1, y:0 }, r:{ x:1, y:0 }, t:{ x:0, y:-1 }, b:{ x:0, y:1 } };
-  for (const dir of ['ins', 'outs']){
-    for (const q of L[dir]){
-      const pt = portPoint(node, q);
-      const o = OUT[q.side] || OUT.r;
-      const dx = p.x - pt.x, dy = p.y - pt.y;
-      const along = dx * o.x + dy * o.y;                 // 朝外多远
-      const across = Math.abs(dx * -o.y + dy * o.x);     // 侧向偏多少
-      if (along >= PORT_HANDLE_NEAR && along <= PORT_HANDLE_FAR && across <= PORT_HANDLE_WIDE){
-        return { node, dir, port:q };
+  const cands = [];
+  const push = (n) => { if (n && cands.indexOf(n) < 0) cands.push(n); };
+  if (node) push(node);
+  if (typeof sel !== 'undefined' && sel && sel.forEach) sel.forEach(id => push(byId(id)));
+  if (typeof hover !== 'undefined') push(hover);
+  for (const n of cands){
+    if (!n || isHidden(n.id) || isEmbed(n)) continue;
+    if (!portsShowLabel(n)) continue;
+    for (const dir of ['ins', 'outs']){
+      for (const q of portList(n)[dir]){
+        if (inBox(portHandleBox(n, q), p)) return { node:n, dir, port:q };
       }
     }
   }
@@ -313,16 +336,24 @@ function drawPorts(g, n, showLabel){
       g.strokeStyle = C.bg;
       g.stroke();
       if (showLabel){
+        // 拖拽把手：端点旁边一个实心方块。用户看到的就是能拖的那个东西。
+        const hb = portHandleBox(n, p);
+        g.fillStyle = on ? C.yellow : (dir === 'ins' ? C.gray : C.yellow);
+        g.globalAlpha = on ? 1 : 0.75;
+        g.fillRect(hb.x, hb.y, hb.w, hb.h);
+        g.globalAlpha = 1;
+        g.lineWidth = 2;
+        g.strokeStyle = C.bg;
+        g.strokeRect(hb.x, hb.y, hb.w, hb.h);
+        // 标签再往外一点
+        const lp = portLabelPoint(n, p);
         const txt = p.label || ('#' + p.id);
         setFont(g, Math.max(11, FS - 4), 'normal', FONT);
         g.fillStyle = on ? C.yellow : C.gray;
-        g.textBaseline = 'middle';
-        let lx = pt.x, ly = pt.y;
-        if (p.side === 'l'){ g.textAlign = 'right'; lx = pt.x - PORT_LABEL_GAP; }
-        else if (p.side === 'r'){ g.textAlign = 'left'; lx = pt.x + PORT_LABEL_GAP; }
-        else { g.textAlign = 'center'; ly = pt.y + (p.side === 't' ? -PORT_LABEL_GAP : PORT_LABEL_GAP); }
-        if (p.side === 't' || p.side === 'b') g.textBaseline = (p.side === 't') ? 'bottom' : 'top';
-        g.fillText(txt, lx, ly);
+        if (lp.side === 'l'){ g.textAlign = 'right'; g.textBaseline = 'middle'; }
+        else if (lp.side === 'r'){ g.textAlign = 'left'; g.textBaseline = 'middle'; }
+        else { g.textAlign = 'center'; g.textBaseline = (lp.side === 't') ? 'bottom' : 'top'; }
+        g.fillText(txt, lp.x, lp.y);
       }
     }
   }

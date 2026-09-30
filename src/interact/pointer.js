@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -65,7 +65,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   }
   // 端点把手（标签那一块）：按住它可以拖端点换边。
   // 圆点不归这里管 —— 那是「拉线」的起点，不能抢。
-  const ph = (typeof portHandleAt === 'function') ? portHandleAt(p, hover) : null;
+  const ph = (typeof portHandleAt === 'function') ? portHandleAt(p, null) : null;
   if (ph){
     drag = { mode:'port', node:ph.node, dir:ph.dir, portId:ph.port.id, moved:false };
     mark();

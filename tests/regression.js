@@ -6900,21 +6900,28 @@
     const n = nodeByText('节点');
     const b = nodeBox(n);
     const pt = portPoint(byId(n.id), portList(n).ins[0]);   // 左边中点
-    ok('PD03 没选中时没有把手', portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)) === null);
+    const hb0 = portHandleBox(byId(n.id), portList(n).ins[0]);
+    const hcentre = { x:hb0.x + hb0.w / 2, y:hb0.y + hb0.h / 2 };
+    ok('PD03 没选中时没有把手', portHandleAt(hcentre, byId(n.id)) === null);
     selectOnly(n.id);
-    ok('PD03b 选中后标签那一块是把手',
-      !!portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)),
-      JSON.stringify(portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)) && '有'));
+    ok('PD03b 选中后那个实心方块就是把手',
+      !!portHandleAt(hcentre, byId(n.id)),
+      JSON.stringify(portHandleAt(hcentre, byId(n.id)) && '有'));
     ok('PD03c 圆点本身**不是**把手（那是拉线的起点）',
       portHandleAt(pt, byId(n.id)) === null);
     ok('PD03d 圆点旁边一点点也还是拉线区',
       portHandleAt({ x:pt.x - 2, y:pt.y }, byId(n.id)) === null);
     ok('PD03e 太远就不算了',
       portHandleAt({ x:pt.x - 400, y:pt.y }, byId(n.id)) === null);
-    ok('PD03f 侧向偏太多也不算',
-      portHandleAt({ x:pt.x - 20, y:pt.y + 60 }, byId(n.id)) === null);
+    ok('PD03h 方块必须是实心的（有尺寸，不是画条线）', hb0.w > 0 && hb0.h > 0 && hb0.w === hb0.h,
+      hb0.w + '×' + hb0.h);
+    ok('PD03i 方块在点子外面，不压住拉线区',
+      (portList(byId(n.id)).ins[0].side === 'l') ? hb0.x + hb0.w < pt.x : true,
+      hb0.x.toFixed(1) + ' < ' + pt.x.toFixed(1));
+    ok('PD03f 方块外面就不算了',
+      portHandleAt({ x:hb0.x - 60, y:hb0.y - 60 }, byId(n.id)) === null);
     ok('PD03g 把手认得对端点和方向', (() => {
-      const h = portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id));
+      const h = portHandleAt(hcentre, byId(n.id));
       return h && h.dir === 'ins' && h.port.id === portList(byId(n.id)).ins[0].id;
     })());
   });
@@ -6992,6 +6999,54 @@
     ok('PD06c 读回来还是上边', portList(byId(n.id)).ins[0].side === 't');
     ok('PD06d 位置也读回来了', Math.abs(portList(byId(n.id)).ins[0].at - 0.7) < 0.05,
       portList(byId(n.id)).ins[0].at.toFixed(2));
+  });
+
+
+  T('PD07 完整的拖动事件流：按下方块 → 挪 → 松手，端点真的换边', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);                     // 「点击节点后」——方块这时才出现
+    const before = portList(byId(n.id)).ins[0];
+    ok('PD07 前置：原本挂在左边', before.side === 'l', before.side);
+    // 方块中心 → 屏幕坐标（别忘了乘 view.z）
+    const hb = portHandleBox(byId(n.id), before);
+    const hx = Math.round((hb.x + hb.w / 2) * view.z + view.x);
+    const hy = Math.round((hb.y + hb.h / 2) * view.z + view.y);
+    pe('pointerdown', hx, hy);
+    ok('PD07b 按下方块进入了「拖端点」状态',
+      typeof drag !== 'undefined' && drag && drag.mode === 'port',
+      drag ? drag.mode : 'null');
+    ok('PD07c 拖的是对的那个端点', drag && drag.portId === before.id, drag && drag.portId);
+    // 挪到节点上边靠右 30% 的位置
+    const b = nodeBox(byId(n.id));
+    const tx = Math.round((b.x + b.w * 0.7) * view.z + view.x);
+    const ty = Math.round((b.y + 3) * view.z + view.y);
+    pe('pointermove', tx, ty);
+    ok('PD07d 拖的过程中方向已经变了', portList(byId(n.id)).ins[0].side === 't',
+      portList(byId(n.id)).ins[0].side);
+    ok('PD07e 位置也跟着走了', Math.abs(portList(byId(n.id)).ins[0].at - 0.7) < 0.1,
+      portList(byId(n.id)).ins[0].at.toFixed(2));
+    pe('pointerup', tx, ty);
+    skipDlg();
+    ok('PD07f 松手之后拖拽状态清掉了', !drag);
+    ok('PD07g 结果留下来了（上边、0.7）', (() => {
+      const p = portList(byId(n.id)).ins[0];
+      return p.side === 't' && Math.abs(p.at - 0.7) < 0.1;
+    })(), JSON.stringify(portList(byId(n.id)).ins[0]));
+    ok('PD07h 有提示说挪到哪了', /挪到了上边/.test(dlgText.textContent), dlgText.textContent.slice(0, 40));
+    ok('PD07i 能撤销', (() => {
+      undo();
+      return portList(byId(n.id)).ins[0].side === 'l';
+    })(), portList(byId(n.id)).ins[0].side);
+    // 圆点仍然归拉线：从圆点按下不该进 port 模式
+    selectOnly(n.id);
+    const pt = portPoint(byId(n.id), portList(n).ins[0]);
+    pe('pointerdown', Math.round(pt.x * view.z + view.x), Math.round(pt.y * view.z + view.y));
+    ok('PD07j 从圆点按下是拉线，不是拖端点',
+      typeof drag !== 'undefined' && drag && drag.mode !== 'port',
+      drag ? drag.mode : 'null');
+    pe('pointerup', Math.round(pt.x * view.z + view.x), Math.round(pt.y * view.z + view.y));
+    skipDlg();
   });
 
   /* ==================== 收尾 ==================== */
