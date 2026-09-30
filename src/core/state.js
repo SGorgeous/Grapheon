@@ -27,8 +27,13 @@ function normalizeEdge(e){
   if (e.waypoints && !Array.isArray(e.waypoints)) e.waypoints = null;
   return e;
 }
+/* 新建连线的默认类型。
+   以前这里永远是 EDGE_DEFAULTS —— 设置面板里那个「新建连线的默认类型」
+   存了却没人读，等于摆设。现在改成优先问设置。 */
 function makeEdge(s, t){
-  return normalizeEdge({ id:uid('e'), s, t, label:'', aSide:null, bSide:null });
+  const d = (typeof newEdgeDefaults === 'function') ? newEdgeDefaults() : EDGE_DEFAULTS;
+  return normalizeEdge({ id:uid('e'), s, t, label:'', aSide:null, bSide:null,
+    arrow:d.arrow, dash:!!d.dash, route:d.route });
 }
 let nid = 1;
 /* id 分配：节点用 n* 前缀、边用 e* 前缀，共用同一个自增计数器。

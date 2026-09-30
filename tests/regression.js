@@ -6258,6 +6258,39 @@
     say('* RN01 明细：' + rows.join(' | '));
   });
 
+
+  T('ED01 设置里的「新建连线的默认类型」真的生效', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    const plain = makeEdge(a.id, b.id);
+    ok('ED01 默认就是单向箭头 + 实线', plain.arrow === 'end' && plain.dash === false,
+      plain.arrow + '/' + plain.dash);
+    ok('ED01b 默认路由是正交折线', plain.route === 'ortho', plain.route);
+    // 改设置
+    defaults.edge.arrow = 'both';
+    defaults.edge.dash = true;
+    const dashed = makeEdge(a.id, c.id);
+    ok('ED01c 改完之后新建的边跟着变（以前这里是死的）',
+      dashed.arrow === 'both' && dashed.dash === true, dashed.arrow + '/' + dashed.dash);
+    ok('ED01d 走 linkNodes 那条路也一样', (() => {
+      const e = linkNodes(a.id, c.id);
+      return !e || (e.arrow === 'both' && e.dash === true);
+    })());
+    // 改回去，别影响后面的断言
+    defaults.edge.arrow = 'end';
+    defaults.edge.dash = false;
+    const back = makeEdge(a.id, b.id);
+    ok('ED01e 改回来又是实线单向', back.arrow === 'end' && back.dash === false);
+    ok('ED01f 存读过一次设置也还在', (() => {
+      defaults.edge.arrow = 'none';
+      saveDefaults();
+      defaults.edge.arrow = 'end';       // 弄脏内存里的值
+      loadDefaults();                     // 从存储读回来
+      const okv = defaults.edge.arrow === 'none';
+      defaults.edge.arrow = 'end'; saveDefaults();
+      return okv;
+    })());
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

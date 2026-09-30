@@ -40,6 +40,8 @@ function loadDefaults(){
     }
   } catch(e){}
 }
+/* 新建连线时问这个 —— 让设置里那一项真的生效 */
+const newEdgeDefaults = () => ({ arrow:defaults.edge.arrow, dash:!!defaults.edge.dash, route:defaults.edge.route });
 function saveDefaults(){
   try { localStorage.setItem(DEFAULT_KEY, JSON.stringify(defaults)); } catch(e){}
 }
