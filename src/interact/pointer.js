@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -60,6 +60,14 @@ canvas.addEventListener('pointerdown', (ev) => {
     else if (!selGroups.has(gt.id)) selectGroup(gt.id);
     lastClickNode = null;
     drag = { mode:'group', grpId:gt.id, p0:p, snap:selectionSnapshot(), moved:false };
+    mark();
+    return;
+  }
+  // 端点把手（标签那一块）：按住它可以拖端点换边。
+  // 圆点不归这里管 —— 那是「拉线」的起点，不能抢。
+  const ph = (typeof portHandleAt === 'function') ? portHandleAt(p, hover) : null;
+  if (ph){
+    drag = { mode:'port', node:ph.node, dir:ph.dir, portId:ph.port.id, moved:false };
     mark();
     return;
   }
@@ -169,6 +177,10 @@ window.addEventListener('pointermove', (ev) => {
       mark();
     } else if (drag.mode === 'marquee'){
       marquee.b = p; mark();
+    } else if (drag.mode === 'port'){
+      // 拖着端点走：往哪条边靠就挂到哪条边，沿边滑动改位置
+      movePort(drag.node, drag.dir, drag.portId, p);
+      drag.moved = true;
     } else if (drag.mode === 'link'){
       linking.to = p;
       hover = linkTargetAt(p);
@@ -216,6 +228,18 @@ window.addEventListener('pointerup', (ev) => {
       say('* ' + pushed.size + ' 个节点被弹开了（右键可以关掉「防止节点重叠」）。');
     }
     pushHist();
+  } else if (drag.mode === 'port'){
+    if (drag.moved){
+      const p2 = portById(drag.node, drag.portId);
+      pushHist();
+      reindex(); sizeAll();
+      say('* 端点 #' + drag.portId + ' 挪到了'
+        + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r']
+        + '。双击它可以改 ID 和标签。');
+    }
+    drag = null;
+    mark();
+    return;
   } else if (drag.mode === 'slider'){
     const sn = byId(drag.targetId);
     if (sn) say('* 「' + normalizeVarDef(sn.varDef).name + '」= ' + controlValue(sn.varDef) + '。');
@@ -307,6 +331,11 @@ canvas.addEventListener('dblclick', (ev) => {
   if (n){
     selectOnly(n.id);
     if (isEmbed(n)){ enterEmbed(n); return; }        // 双击嵌入节点 = 进去编辑
+    // 双击端点 = 改 ID / 标签（一个小框两样都管）
+    if (typeof portHitAt === 'function'){
+      const ph = portHitAt(p, n);
+      if (ph){ selectOnly(n.id); editPort(n, ph.dir, ph.port.id); return; }
+    }
     // 表格节点：双击哪个格子就编辑哪个格子
     if (isTableNode(n)){
       const cell = tableCellAt(n, p);

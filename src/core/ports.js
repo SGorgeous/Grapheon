@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/ports.js
    端点模型 —— 每个程序节点的输入 / 输出端点。
@@ -192,6 +192,104 @@ function resetPorts(n){
   n.ports = null;
   reindex(); sizeAll(); mark();
   say('* 端点恢复默认。');
+}
+
+/* ---------------- 拖动改方向 ---------------- */
+
+/* 按住一个端点往哪条边走。用「离哪条边最近」判断，比算角度稳。 */
+function sideFromPoint(n, p){
+  const b = nodeBox(n);
+  const d = {
+    l: Math.abs(p.x - b.x),
+    r: Math.abs(p.x - (b.x + b.w)),
+    t: Math.abs(p.y - b.y),
+    b: Math.abs(p.y - (b.y + b.h))
+  };
+  let best = 'r';
+  for (const s of PORT_SIDES) if (d[s] < d[best]) best = s;
+  return best;
+}
+/* 落在那条边上的什么位置（0..1），夹住别跑到角外面 */
+function atFromPoint(n, side, p){
+  const b = nodeBox(n);
+  let at;
+  if (side === 'l' || side === 'r') at = (p.y - b.y) / Math.max(1, b.h);
+  else at = (p.x - b.x) / Math.max(1, b.w);
+  return Math.max(0.08, Math.min(0.92, at));
+}
+/* 拖动中：改方向 + 改位置 */
+function movePort(n, dir, id, p){
+  const L = normalizePorts(n.ports) || defaultPorts(n);
+  let hit = null;
+  for (const q of L[dir]) if (q.id === id) hit = q;
+  if (!hit) return false;
+  const side = sideFromPoint(n, p);
+  hit.side = side;
+  hit.at = atFromPoint(n, side, p);
+  n.ports = L;
+  mark();
+  return true;
+}
+/* 找鼠标底下的端点。只在**节点被选中或悬停**时才算命中 ——
+   平时要留出那些位置给「从端点拉线」。 */
+function portHitAt(p, node){
+  const tol = Math.max(6, PORT_HIT_R / Math.max(0.2, view.z));
+  const list = node ? [node] : doc.nodes;
+  let best = null, bestD = Infinity;
+  for (const n of list){
+    if (!n || isHidden(n.id) || isEmbed(n)) continue;
+    // 只在「全局找」时才要求它已经显示；显式指定了节点就直接算（双击就是这个用法）
+    if (!node && !portsShowLabel(n)) continue;
+    const L = portList(n);
+    for (const dir of ['ins', 'outs']){
+      for (const q of L[dir]){
+        const pt = portPoint(n, q);
+        const d = Math.hypot(pt.x - p.x, pt.y - p.y);
+        if (d <= tol && d < bestD){ bestD = d; best = { node:n, dir, port:q }; }
+      }
+    }
+  }
+  return best;
+}
+/* ★ 拖端点的把手 = **标签那一小块**，不是圆点。
+   圆点留给「从这里拉一条线出去」—— 那个手势不能抢，
+   抢了就没法从选中的节点连线了（I04 断言盯着这条）。
+   标签只在悬停/选中时出现，所以不选中的时候压根没有把手，互不干扰。 */
+const PORT_HANDLE_NEAR = 6, PORT_HANDLE_FAR = 76, PORT_HANDLE_WIDE = 14;
+function portHandleAt(p, node){
+  if (!node || !portsShowLabel(node)) return null;
+  const L = portList(node);
+  const OUT = { l:{ x:-1, y:0 }, r:{ x:1, y:0 }, t:{ x:0, y:-1 }, b:{ x:0, y:1 } };
+  for (const dir of ['ins', 'outs']){
+    for (const q of L[dir]){
+      const pt = portPoint(node, q);
+      const o = OUT[q.side] || OUT.r;
+      const dx = p.x - pt.x, dy = p.y - pt.y;
+      const along = dx * o.x + dy * o.y;                 // 朝外多远
+      const across = Math.abs(dx * -o.y + dy * o.x);     // 侧向偏多少
+      if (along >= PORT_HANDLE_NEAR && along <= PORT_HANDLE_FAR && across <= PORT_HANDLE_WIDE){
+        return { node, dir, port:q };
+      }
+    }
+  }
+  return null;
+}
+/* 端点编辑框里那句话怎么理解。
+   「5」      → 只改 ID
+   「5 系数」 → 改 ID + 标签
+   「系数」   → 只改标签
+   这样一个小框同时管两样，不用再开一个面板。 */
+function parsePortEdit(text){
+  const s = String(text == null ? '' : text).trim();
+  const m = s.match(/^#?(\d+)(?:\s+(.*))?$/);
+  if (!m) return { id:null, label:s };
+  return { id:Math.round(+m[1]), label:(m[2] == null ? null : m[2].trim()) };
+}
+/* 双击端点的入口 */
+function editPort(n, dir, id){
+  const p = portById(n, id);
+  if (!p) return;
+  startEdit('port', n.id, '#' + p.id + (p.label ? ' ' + p.label : ''), { dir, portId:id });
 }
 
 /* ---------------- 绘制 ---------------- */

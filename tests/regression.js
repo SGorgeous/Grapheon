@@ -6864,6 +6864,136 @@
     })());
   });
 
+
+  /* ==================== B 期补：拖动改方向 + 双击改 ID/标签 ==================== */
+  T('PD01 端点往哪条边靠就挂哪条边', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const b = nodeBox(n);
+    ok('PD01 靠左边就是 l', sideFromPoint(byId(n.id), { x:b.x + 3, y:b.y + b.h/2 }) === 'l');
+    ok('PD01b 靠右边就是 r', sideFromPoint(byId(n.id), { x:b.x + b.w - 3, y:b.y + b.h/2 }) === 'r');
+    ok('PD01c 靠上边就是 t', sideFromPoint(byId(n.id), { x:b.x + b.w/2, y:b.y + 3 }) === 't');
+    ok('PD01d 靠下边就是 b', sideFromPoint(byId(n.id), { x:b.x + b.w/2, y:b.y + b.h - 3 }) === 'b');
+    // 沿边的位置
+    ok('PD01e 上边靠左 at 就小', atFromPoint(byId(n.id), 't', { x:b.x + b.w * 0.2, y:b.y }) < 0.35,
+      atFromPoint(byId(n.id), 't', { x:b.x + b.w * 0.2, y:b.y }).toFixed(2));
+    ok('PD01f at 夹在 0.08..0.92，不会跑到角外面', (() => {
+      const a = atFromPoint(byId(n.id), 't', { x:b.x - 999, y:b.y });
+      const z = atFromPoint(byId(n.id), 't', { x:b.x + 9999, y:b.y });
+      return a >= 0.08 && z <= 0.92;
+    })(), atFromPoint(byId(n.id), 't', { x:b.x - 999, y:b.y }).toFixed(2));
+  });
+  T('PD02 拖一下：方向变了、位置也变了', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const b = nodeBox(n);
+    ok('PD02 原来在左边', portList(byId(n.id)).ins[0].side === 'l');
+    ok('PD02b 拖到上边', movePort(byId(n.id), 'ins', 1, { x:b.x + b.w * 0.3, y:b.y + 2 }) === true);
+    const p = portList(byId(n.id)).ins[0];
+    ok('PD02c 真的挂到上边了', p.side === 't', p.side);
+    ok('PD02d 位置跟着走', Math.abs(p.at - 0.3) < 0.05, p.at.toFixed(2));
+    ok('PD02e 输出端点没被动', portList(byId(n.id)).outs[0].side === 'r');
+    ok('PD02f 拖到不存在的端点返回 false', movePort(byId(n.id), 'ins', 999, { x:b.x, y:b.y }) === false);
+  });
+  T('PD03 把手只认标签那一块，圆点留给拉线', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const b = nodeBox(n);
+    const pt = portPoint(byId(n.id), portList(n).ins[0]);   // 左边中点
+    ok('PD03 没选中时没有把手', portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)) === null);
+    selectOnly(n.id);
+    ok('PD03b 选中后标签那一块是把手',
+      !!portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)),
+      JSON.stringify(portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id)) && '有'));
+    ok('PD03c 圆点本身**不是**把手（那是拉线的起点）',
+      portHandleAt(pt, byId(n.id)) === null);
+    ok('PD03d 圆点旁边一点点也还是拉线区',
+      portHandleAt({ x:pt.x - 2, y:pt.y }, byId(n.id)) === null);
+    ok('PD03e 太远就不算了',
+      portHandleAt({ x:pt.x - 400, y:pt.y }, byId(n.id)) === null);
+    ok('PD03f 侧向偏太多也不算',
+      portHandleAt({ x:pt.x - 20, y:pt.y + 60 }, byId(n.id)) === null);
+    ok('PD03g 把手认得对端点和方向', (() => {
+      const h = portHandleAt({ x:pt.x - 20, y:pt.y }, byId(n.id));
+      return h && h.dir === 'ins' && h.port.id === portList(byId(n.id)).ins[0].id;
+    })());
+  });
+  T('PD04 双击端点的编辑框：一句话同时管 ID 和标签', () => {
+    ok('PD04 「5」只改 ID', (() => { const r = parsePortEdit('5'); return r.id === 5 && r.label === null; })());
+    ok('PD04b 「5 系数」两样都改', (() => {
+      const r = parsePortEdit('5 系数'); return r.id === 5 && r.label === '系数';
+    })());
+    ok('PD04c 「系数」只改标签', (() => {
+      const r = parsePortEdit('系数'); return r.id === null && r.label === '系数';
+    })());
+    ok('PD04d 「#7 名」井号可写可不写', (() => {
+      const r = parsePortEdit('#7 名'); return r.id === 7 && r.label === '名';
+    })());
+    ok('PD04e 空字符串 = 清掉标签', (() => {
+      const r = parsePortEdit('   '); return r.id === null && r.label === '';
+    })());
+    ok('PD04f 标签里带数字不会误判成 ID',
+      (() => { const r = parsePortEdit('第 3 档'); return r.id === null && r.label === '第 3 档'; })(),
+      JSON.stringify(parsePortEdit('第 3 档')));
+    // 真操作一遍
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);
+    // ⚠ 用右边缘**略往内**的点：左边缘那个点可能同时落在左边邻居的盒子里，
+    //   hitNode 就会返回邻居，于是查的是别人的端点。
+    const pb = nodeBox(byId(n.id));
+    const pt = { x: pb.x + pb.w - 2, y: pb.y + pb.h / 2 };
+    cv.dispatchEvent(new MouseEvent('dblclick', { bubbles:true, cancelable:true, detail:2,
+      clientX:Math.round(pt.x * view.z + view.x), clientY:Math.round(pt.y * view.z + view.y) }));
+    ok('PD04g 双击端点打开的是 port 编辑器',
+      !!editing && editing.kind === 'port', editing ? editing.kind : '没开');
+    ok('PD04h 框里先填好当前的 #id', /^#?\d/.test(editor.value), editor.value);
+    editor.value = '9 系数';
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    ok('PD04i ID 和标签一起改上了（右边缘 = 输出端点）', (() => {
+      const p = portList(byId(n.id)).outs[0];
+      return p.id === 9 && p.label === '系数';
+    })(), JSON.stringify(portList(byId(n.id)).outs[0]));
+  });
+  T('PD05 双击改 ID 撞车时，整条不生效（不许改一半）', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    selectOnly(n.id);
+    const cur = portList(byId(n.id)).outs[0];      // 右边缘 = 输出端点
+    const inId = portList(byId(n.id)).ins[0].id;
+    const pb2 = nodeBox(byId(n.id));
+    const pt = { x: pb2.x + pb2.w - 2, y: pb2.y + pb2.h / 2 };
+    cv.dispatchEvent(new MouseEvent('dblclick', { bubbles:true, cancelable:true, detail:2,
+      clientX:Math.round(pt.x * view.z + view.x), clientY:Math.round(pt.y * view.z + view.y) }));
+    ok('PD05 前置：编辑器开着', !!editing && editing.kind === 'port');
+    editor.value = inId + ' 会被挡下的标签';       // ID 撞输入端点
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    skipDlg();
+    ok('PD05b ID 没被改', portList(byId(n.id)).outs[0].id === cur.id,
+      portList(byId(n.id)).outs[0].id);
+    ok('PD05c 标签也没被改（不许改一半）', portList(byId(n.id)).outs[0].label === cur.label,
+      '「' + portList(byId(n.id)).outs[0].label + '」');
+    ok('PD05d 有提示说 ID 用过了', /已经用过/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+  });
+  T('PD06 拖动之后能存读，且不改变节点几何', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const b0 = nodeBox(n);
+    const bb = nodeBox(n);
+    movePort(byId(n.id), 'ins', 1, { x:bb.x + bb.w * 0.7, y:bb.y + 2 });
+    ok('PD06 拖完盒子没变',
+      nodeBox(byId(n.id)).x === b0.x && nodeBox(byId(n.id)).w === b0.w);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('PD06b 存下来了 ', snap.nodes.find(x => x.id === n.id).ports.ins[0].side === 't',
+      JSON.stringify(snap.nodes.find(x => x.id === n.id).ports.ins[0]));
+    deserialize(snap);
+    ok('PD06c 读回来还是上边', portList(byId(n.id)).ins[0].side === 't');
+    ok('PD06d 位置也读回来了', Math.abs(portList(byId(n.id)).ins[0].at - 0.7) < 0.05,
+      portList(byId(n.id)).ins[0].at.toFixed(2));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -24,6 +24,7 @@ const editValue = (kind, t) => {
   if (kind === 'outName') return normalizeOutDef(t.outDef).name;
   if (kind === 'checkOpts') return normalizeVarDef(t.varDef).options.join(', ');
   if (kind === 'cell') return (tableOf(t).cells[editing.row] || [])[editing.col] || '';
+  if (kind === 'port'){ const p = portById(t, editing.portId); return p ? ('#' + p.id + (p.label ? ' ' + p.label : '')) : ''; }
   if (kind === 'portLabel') return (portById(t, editing.portId) || {}).label || '';
   if (kind === 'portId') return String(editing.portId);
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
@@ -39,6 +40,14 @@ function editSetValue(kind, t, v){
   else if (kind === 'outName') t.outDef = normalizeOutDef({ name:v });
   else if (kind === 'checkOpts') setCheckOptions(t, v);
   else if (kind === 'cell') setTableCell(t, editing.row, editing.col, v.trim());
+  else if (kind === 'port'){
+    const r = parsePortEdit(v);
+    if (r.id != null && r.id !== editing.portId){
+      if (setPortId(t, editing.dir, editing.portId, r.id)) editing.portId = r.id;
+      else return;                       // ID 撞了就整条不生效，别改一半
+    }
+    if (r.label != null) setPortLabel(t, editing.dir, editing.portId, r.label);
+  }
   else if (kind === 'portLabel') setPortLabel(t, editing.dir, editing.portId, v.trim());
   else if (kind === 'portId'){
     if (setPortId(t, editing.dir, editing.portId, v.trim())) editing.portId = Math.round(+v.trim());
@@ -92,7 +101,7 @@ function positionEditor(){
     editor.style.textAlign = 'left';
   } else if (editing.kind === 'varName' || editing.kind === 'varValue'
              || editing.kind === 'outName' || editing.kind === 'checkOpts' || editing.kind === 'cell'
-             || editing.kind === 'portLabel' || editing.kind === 'portId'
+             || editing.kind === 'portLabel' || editing.kind === 'portId' || editing.kind === 'port'
              || editing.kind === 'opOp' || /^opVal[0-9]?$/.test(editing.kind)){
     // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
     const n = byId(editing.id);
