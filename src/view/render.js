@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -68,7 +68,7 @@ function drawGraph(g){
   // 选中节点的连接端口：鼠标悬停在该节点（或已悬停到它的端口）时才显示
   if (sel.size === 1 && !editing){
     const n = byId([...sel][0]);
-    const showPorts = n && (hover === n || (hoverPort && hoverPort.node === n.id));
+    const showPorts = n && !isEmbed(n) && (hover === n || (hoverPort && hoverPort.node === n.id));   // 封闭节点不画端口
     if (showPorts){
       const P = anchorsFor(n);
       for (const k of ['r', 'l', 't', 'b']){
@@ -224,6 +224,82 @@ function ensureImagesLoaded(){
     setTimeout(done, 4000);              // 兜底，别把导出卡死
   })));
 }
+/* 嵌入文档的缩略图范围。子文档里没存 w/h（那是派生的），所以按固定值估一个。 */
+const estNW = (m) => (+m.fixedW > 0) ? +m.fixedW : 148;
+const estNH = (m) => (+m.fixedH > 0) ? +m.fixedH : 48;
+function embedBounds(d2){
+  const ns = (d2 && d2.nodes) || [];
+  if (!ns.length) return null;
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const m of ns){
+    const x = +m.x || 0, y = +m.y || 0;
+    a = Math.min(a, x); b = Math.min(b, y);
+    c = Math.max(c, x + estNW(m)); d = Math.max(d, y + estNH(m));
+  }
+  return { minX:a, minY:b, maxX:c, maxY:d, w:Math.max(1, c - a), h:Math.max(1, d - b) };
+}
+function drawEmbedNode(g, n, b, selected, hov){
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+  const top = b.y + EMBED_NAME_H;
+  const ix = b.x + 7, iy = top + 7, iw = b.w - 14, ih = b.h - EMBED_NAME_H - 14;
+  g.save();
+  g.fillStyle = C.bg;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  // 缩略图
+  const d2 = n.embed && n.embed.doc;
+  const bb = embedBounds(d2);
+  if (bb && iw > 20 && ih > 20){
+    const pad = 16;
+    const z = Math.min((iw - pad * 2) / bb.w, (ih - pad * 2) / bb.h, 1);
+    const ox = ix + iw / 2 - ((bb.minX + bb.maxX) / 2) * z;
+    const oy = iy + ih / 2 - ((bb.minY + bb.maxY) / 2) * z;
+    g.save();
+    g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
+    // 连线：简化成中心到中心，缩略图不用那么较真
+    g.strokeStyle = C.dim; g.lineWidth = Math.max(0.6, 1.6 * z);
+    for (const e of (d2.edges || [])){
+      const a = d2.nodes.find(x => x.id === e.s), c2 = d2.nodes.find(x => x.id === e.t);
+      if (!a || !c2) continue;
+      g.beginPath();
+      g.moveTo(ox + ((+a.x||0) + estNW(a) / 2) * z, oy + ((+a.y||0) + estNH(a) / 2) * z);
+      g.lineTo(ox + ((+c2.x||0) + estNW(c2) / 2) * z, oy + ((+c2.y||0) + estNH(c2) / 2) * z);
+      g.stroke();
+    }
+    // 节点
+    g.strokeStyle = C.gray; g.lineWidth = Math.max(0.8, 2 * z);
+    for (const m of d2.nodes){
+      const mw = estNW(m) * z, mh = estNH(m) * z;
+      if (mw < 3 || mh < 3) continue;
+      const mx = ox + (+m.x||0) * z, my = oy + (+m.y||0) * z;
+      g.strokeRect(mx, my, mw, mh);
+      // 够大就塞一行字，缩略图才有信息量
+      if (mh >= 13 && mw >= 26 && m.text){
+        setFont(g, Math.max(7, Math.min(13, FS * z)), 'normal', FONT);
+        g.fillStyle = C.gray;
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(fitText(g, m.text, mw - 6), mx + mw / 2, my + mh / 2 + 1);
+      }
+    }
+    g.restore();
+  } else {
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = C.dim; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('空文档', ix + iw / 2, iy + ih / 2);
+  }
+  // 名称带：右边名称，左边一个「封闭」标记
+  g.strokeStyle = C.dim; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(b.x, top); g.lineTo(b.x + b.w, top); g.stroke();
+  setFont(g, FS, 'normal', FONT);
+  g.textBaseline = 'middle';
+  g.fillStyle = C.gray; g.textAlign = 'left';
+  g.fillText('封闭', b.x + 8, b.y + EMBED_NAME_H / 2 + 1);
+  g.fillStyle = n.color || C.white; g.textAlign = 'right';
+  g.fillText(fitText(g, n.text || '嵌入文档', b.w - 60), b.x + b.w - 8, b.y + EMBED_NAME_H / 2 + 1);
+  // 外框
+  g.lineWidth = 3; g.strokeStyle = stroke;
+  g.strokeRect(b.x, b.y, b.w, b.h);
+  g.restore();
+}
 /* 图片节点：右上角名称带 + 图片 + 下方描述 */
 function drawImageNode(g, n, b, selected, hov){
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
@@ -281,6 +357,7 @@ function drawNode(g, n){
   const b = nodeBox(n);
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
   if (n.kind === 'image') drawImageNode(g, n, b, selected, hov);
+  else if (n.kind === 'embed') drawEmbedNode(g, n, b, selected, hov);
   else {
   g.save();
   g.lineJoin = 'round';

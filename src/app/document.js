@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · app/document.js
    模式切换、JSON 存取、新建 / 打开 / 拖入文件。
@@ -7,6 +7,8 @@
 /* 新建：'blank' = 空白文件（一个中心节点），'demo' = 内置示例
    会覆盖当前内容与自动存档（历史会被重置，所以先弹菜单让用户确认）。 */
 function newDocument(kind){
+  clearDocStack();          // 新建文档 = 回到最外层
+
   if (kind === 'demo'){
     deserialize(demoDoc());
     layoutMind();          // 示例文档的节点都从原点开始，先按树形摆一次
@@ -44,6 +46,7 @@ function readFile(f){
   const r = new FileReader();
   r.onload = () => {
     try {
+      clearDocStack();     // 从外面打开文件也回到最外层
       deserialize(JSON.parse(String(r.result)));
       relayout(); fitView(); initHist(); updateMeta(); say('* 读取成功，共 ' + doc.nodes.length + ' 个节点。');
     } catch(err){ say('* 这个文件无法读取……也许它并不属于这里。'); }
@@ -74,6 +77,22 @@ imgFileEl.addEventListener('change', () => {
 const isImageFile = (f) => !!f && /^image\//.test(f.type || '');
 const dropPos = (ev) => s2w(ev.clientX || 0, ev.clientY || 0);
 
+
+/* ---------------- 嵌入文档：右键 / 拖拽 / 选择器 ----------------
+   「插入 Grapheon」= 把一整份文档当一个封闭节点塞进来。 */
+const gpkFileEl = document.getElementById('gpkfile');
+let gpkInsertAt = null;
+function pickEmbedFile(at){
+  gpkInsertAt = at || null;
+  gpkFileEl.value = '';
+  gpkFileEl.click();
+}
+gpkFileEl.addEventListener('change', () => {
+  const f = gpkFileEl.files && gpkFileEl.files[0];
+  if (f) insertEmbedFile(f, gpkInsertAt);
+  gpkInsertAt = null;
+  gpkFileEl.value = '';
+});
 window.addEventListener('dragover', (ev) => {
   ev.preventDefault();
   if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';

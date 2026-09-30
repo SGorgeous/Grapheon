@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -54,10 +54,13 @@ function updateMeta(){
   if (idx.hidden) for (const id of idx.hidden){ if (idx.byId.has(id)) hidN++; else hidG++; }
   const gN = (doc.groups || []).length;
   const hid = hidN ? '（隐藏 ' + hidN + (hidG ? ' + ' + hidG + ' 组' : '') + '）' : '';
-  dlgMeta.textContent = doc.nodes.length + ' 节点' + hid +
+  const crumb = insideEmbed() ? '⟨嵌入 ' + embedRootName() + '⟩ · ' : '';
+  dlgMeta.textContent = crumb + doc.nodes.length + ' 节点' + hid +
     ' / ' + doc.edges.length + ' 连线' + (gN ? ' / ' + gN + ' 分组' : '') + selTxt +
     ' · ' + Math.round(view.z * 100) + '%';
-  dlgHint.textContent = HINT;
+  dlgHint.textContent = insideEmbed() ? '正在编辑嵌入副本 · Esc 或顶栏「返回」回到外层 · 原文件不受影响' : HINT;
+  const back = document.getElementById('b-back');
+  if (back) back.style.display = insideEmbed() ? '' : 'none';
 }
 document.getElementById('dialogue').addEventListener('click', skipDlg);
 

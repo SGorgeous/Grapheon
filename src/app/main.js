@@ -39,6 +39,9 @@ function loop(){
 }
 
 window.addEventListener('resize', () => { resize(); });
-window.addEventListener('beforeunload', () => { try { localStorage.setItem(LS_KEY, JSON.stringify(serialize())); } catch(e){} });
+window.addEventListener('beforeunload', () => {
+  if (insideEmbed()) return;      // 同上：别让内层覆盖外层存档
+  try { localStorage.setItem(LS_KEY, JSON.stringify(serialize())); } catch(e){}
+});
 
 boot();

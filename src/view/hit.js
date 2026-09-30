@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/hit.js
    命中测试：节点 / 连接端口 / 连线 / 连线端点手柄 / 拐点手柄 / 缩放柄 / 折叠标记。
@@ -42,7 +42,7 @@ function hitPort(p){
   let box = null, id = null;
   if (sel.size === 1){
     const n = byId([...sel][0]);
-    if (n && !isHidden(n.id)){ box = n; id = n.id; }
+    if (n && !isHidden(n.id) && !isEmbed(n)){ box = n; id = n.id; }   // 封闭节点不给端点
   } else {
     const grp = soleGroup();          // 整个选择就是一个分组时才给端点
     if (grp){ box = groupBox(grp); id = grp.id; }
@@ -93,7 +93,11 @@ function hitGroupArea(p){
   return null;
 }
 /* 拖线时的落点：优先具体节点，其次它所在的分组框 */
-function linkTargetAt(p){ return hitNode(p) || hitGroupArea(p); }
+function linkTargetAt(p){
+  const n = hitNode(p);
+  if (n && isEmbed(n)) return null;         // 封闭节点不当落点
+  return n || hitGroupArea(p);
+}
 function hitEdge(p){
   const tol = 9 / view.z;
   let best = null, bd = 1e9;

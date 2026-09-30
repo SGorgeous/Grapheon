@@ -73,6 +73,7 @@ function defaultBindings(){
 const ACTIONS = {
   'ui.escape':        { label:'关闭浮层 / 取消选择', group:'界面', overlay:true, run(){
       if (nodeBoxEl.style.display === 'block'){ closeNodeBox(); return; }
+      if (insideEmbed()){ exitEmbed(); return; }   // 在嵌入文档里，Esc 先出来
       if (endBoxEl.style.display === 'block'){ closeEndBox(); return; }
       if (edgeBoxEl.style.display === 'block'){ closeEdgeBox(); return; }
       if (expEl.style.display === 'block'){ closeExport(); return; }

@@ -16,6 +16,7 @@ const TOPBAR = [
   ['b-new',   (ev) => { hideCtx(); showNewMenu(ev.currentTarget); }],
   ['b-open',  () => fileEl.click()],
   ['b-img',   () => pickImageFile()],
+  ['b-back',  () => exitEmbed()],
   ['b-save',  () => saveFile()],
   ['b-png',   () => openExport()],
   ['b-fit',   () => { fitView(); say('* 已居中。'); }],

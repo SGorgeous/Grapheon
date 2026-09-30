@@ -133,6 +133,7 @@ function reindex(){
     if (seen.has(e.id)) continue; seen.add(e.id);
     if (e.s === e.t) continue;
     if (!idx.byId.has(e.s) || !idx.byId.has(e.t)) continue;   // 端点可以是分组，那就不进树
+    if (isEmbed(idx.byId.get(e.s)) || isEmbed(idx.byId.get(e.t))) continue;   // 封闭节点不进树
     if (idx.parent.has(e.t)) continue;
     if (reachUp(e.s, e.t)) continue;               // 防环
     idx.parent.set(e.t, e.s);
@@ -161,8 +162,16 @@ function reindex(){
   refreshEffects();          // 程序节点的算符是派生的，索引建好后立刻算一遍
 }
 const isHidden = (id) => idx.hidden.has(id);
+/* 嵌入节点：封闭的，谁也不许连它 */
+const isEmbed = (n) => !!n && n.kind === 'embed';
+/* 这条线还能用吗。嵌入节点的两端都不接受连线，历史存档里万一有就直接作废。 */
+function edgeUsable(e){
+  const a = idx.byId.get(e.s), b = idx.byId.get(e.t);
+  if (!a || !b) return true;                 // 分组端点不在这张表里，一律放行
+  return !isEmbed(a) && !isEmbed(b);
+}
 /* 这条线整体可见吗（两端都没被折叠藏起来） */
-const edgeVisible = (e) => !idx.hidden.has(e.s) && !idx.hidden.has(e.t);
+const edgeVisible = (e) => edgeUsable(e) && !idx.hidden.has(e.s) && !idx.hidden.has(e.t);
 const byGroup = (id) => idx.groups.get(id);
 /* 端点可以是节点、也可以是分组。统一按「有 id/x/y/w/h 的东西」对待，路由就不用分情况了。 */
 function anchorOf(id){
@@ -525,7 +534,9 @@ function serialize(){
       program:(n.kind === 'program') ? normalizeProgram(n.program) : null,
       image:(n.kind === 'image' && typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
-      desc:(n.desc == null ? '' : String(n.desc)) })),
+      desc:(n.desc == null ? '' : String(n.desc)),
+      embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
+        ? { doc:n.embed.doc } : null })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
@@ -560,13 +571,17 @@ function deserialize(d){
       value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program),
       image:(typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
-      desc:(n.desc == null ? '' : String(n.desc)) });
+      desc:(n.desc == null ? '' : String(n.desc)),
+      embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
+        ? { doc:n.embed.doc } : null });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const e of (d.edges || [])){
     if (!ok.has(e.s) || !ok.has(e.t)) continue;
     let id = e.id;
     if (!id || seen.has(id)) id = mkId('e', seen); else seen.add(id);
+    const sa = doc.nodes.find(x => x.id === e.s), sb = doc.nodes.find(x => x.id === e.t);
+    if (isEmbed(sa) || isEmbed(sb)) continue;      // 嵌入节点是封闭的，历史存档里的边作废
     doc.edges.push(normalizeEdge({
       id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute, aSide:e.aSide, bSide:e.bSide,

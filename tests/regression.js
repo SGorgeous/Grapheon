@@ -576,7 +576,7 @@
     ok('D07b 连线选择已清空', selEdgeId === null);
     ok('D07c 两端节点都还在', !!byId(e.s) && !!byId(e.t));
   });
-  T('D08 孤立的节点变成根后不可删（保护根节点）', () => {
+  T('D08 自由节点（没有父节点）也能删掉', () => {
     fresh();
     const a = nodeByText('节点');
     selectEdge(edgeOf(rootNode(), a).id);
@@ -585,7 +585,36 @@
     const before = doc.nodes.length;
     selectOnly(a.id);
     deleteSelection();
-    ok('D08b 删除被拒绝', doc.nodes.length === before, before + ' -> ' + doc.nodes.length);
+    // 以前「没有入边 = 根节点 = 不许删」，但自由节点 / 图片节点 / 嵌入节点永远没有入边，
+    // 于是全都删不掉。现在只有「这一刀会删空整个画布」才拦。
+    ok('D08b 现在能删掉了', doc.nodes.length < before, before + ' -> ' + doc.nodes.length);
+    ok('D08c 没留下悬挂的连线', doc.edges.every(e => byId(e.s) && byId(e.t)));
+  });
+  T('D08d 删空整个画布会被拦下来', () => {
+    fresh();
+    const keep = rootNode();
+    doc.nodes = [keep];
+    doc.edges = []; doc.groups = [];
+    reindex(); sizeAll();
+    selectOnly(keep.id);
+    deleteSelection();
+    ok('D08d 最后一个节点删不掉', doc.nodes.length === 1, doc.nodes.length);
+    skipDlg();
+    ok('D08e 有说明为什么', /画布就空了/.test(dlgText.textContent), dlgText.textContent.slice(0, 40));
+  });
+  T('D08f 图片节点能删掉（这次报的那个 BUG）', () => {
+    fresh(); layoutMind();
+    const n = addNodeAt('', 0, 0, 'rect');
+    n.kind = 'image';
+    n.image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    n.imgW = 4; n.imgH = 4;
+    sizeNode(n);
+    reindex(); sizeAll();
+    const before = doc.nodes.length;
+    selectOnly(n.id);
+    deleteSelection();
+    ok('D08f 图片节点删得掉', !byId(n.id) && doc.nodes.length === before - 1,
+      doc.nodes.length + ' / ' + before);
   });
 
   /* ==================== 快捷键 ==================== */
@@ -2838,6 +2867,215 @@
     ok('Z16d 描述保留', n.desc === '说明', n.desc);
     ok('Z16e 尺寸按新图重算', n.imgDrawH === Math.round(20 * (n.w / 60)), n.imgDrawH);
   });
+
+  /* ==================== 嵌入文档（插入 Grapheon） ==================== */
+  /* 造一份小文档当素材 */
+  const mkSubDoc = (n) => {
+    const nodes = [], edges = [];
+    for (let i = 0; i < (n || 3); i++){
+      nodes.push({ id:'s' + i, text:'子' + i, x:i * 200, y:0, shape:'rect' });
+      if (i) edges.push({ id:'se' + i, s:'s0', t:'s' + i });
+    }
+    return { v:2, nid:n || 3, nodes, edges, groups:[] };
+  };
+  const mkEmbed = (x, y, opts) => {
+    const o = opts || {};
+    const n = addEmbedNode(o.doc || mkSubDoc(o.count || 3), o.name || '子文档',
+                          x == null ? 0 : x, y == null ? 0 : y);
+    reindex(); sizeAll();
+    return n;
+  };
+  T('O01 建一个嵌入节点', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, { count:4, name:'模块图' });
+    ok('O01 kind 是 embed', n.kind === 'embed' && isEmbed(n));
+    ok('O01b 内嵌文档存下来了', n.embed && n.embed.doc && n.embed.doc.nodes.length === 4,
+      n.embed && n.embed.doc && n.embed.doc.nodes.length);
+    ok('O01c 名称就是节点文字', n.text === '模块图');
+    ok('O01d 默认尺寸', n.w === EMBED_DEF_W && n.h === EMBED_DEF_H, n.w + 'x' + n.h);
+    const b = buildExportCanvas([n]);
+    ok('O01e 画得出来', b.width > 0);
+  });
+  T('O02 嵌入节点是封闭的：连不了线', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, {});
+    const tgt = nodeByText('操作');
+    const before = doc.edges.length;
+    ok('O02 linkNodes 直接拒绝', linkNodes(tgt.id, n.id) === null);
+    ok('O02b 反着连也拒绝', linkNodes(n.id, tgt.id) === null);
+    ok('O02c 没有多出连线', doc.edges.length === before, doc.edges.length);
+    reindex();
+    ok('O02d 落点不认嵌入节点', linkTargetAt({ x:n.x + n.w / 2, y:n.y + n.h / 2 }) === null);
+    selectOnly(n.id);
+    ok('O02e 选中它也不给连接端点', hitPort(anchorsFor(nodeBox(n)).r) === null);
+    ok('O02f 但它自己还能被选中', sel.has(n.id));
+  });
+  T('O03 历史存档里连到嵌入节点的边会被丢掉', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, {});
+    const tgt = nodeByText('操作');
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    snap.edges.push({ id:'bad', s:tgt.id, t:n.id, arrow:'end', dash:false, route:'ortho' });
+    snap.edges.push({ id:'bad2', s:n.id, t:tgt.id, arrow:'end', dash:false, route:'ortho' });
+    deserialize(snap);
+    ok('O03 连到嵌入节点的边被过滤掉了',
+      !doc.edges.some(e => e.id === 'bad' || e.id === 'bad2'), doc.edges.map(e => e.id).join(','));
+    ok('O03b 其它边没受影响', doc.edges.length === 11, doc.edges.length);
+    ok('O03c 嵌入节点还在', byId(n.id) && byId(n.id).kind === 'embed');
+  });
+  T('O04 进去编辑改的是副本，父文档结构不变', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, { count:3 });
+    const parentCount = doc.nodes.length;
+    const parentEdges = doc.edges.length;
+    enterEmbed(byId(n.id));
+    ok('O04 进去了', insideEmbed());
+    ok('O04b 当前文档变成子文档', doc.nodes.length === 3, doc.nodes.length);
+    ok('O04c 面包屑拿到了名字', embedRootName() === '子文档', embedRootName());
+    // 在里面加一个节点
+    const nn = addNodeAt('新加的', 500, 200, 'rect');
+    reindex(); sizeAll();
+    ok('O04d 里面加上了', doc.nodes.length === 4, doc.nodes.length);
+    exitEmbed();
+    ok('O04e 出来了', !insideEmbed());
+    ok('O04f 父文档节点数没变', doc.nodes.length === parentCount, doc.nodes.length);
+    ok('O04g 父文档连线数没变', doc.edges.length === parentEdges, doc.edges.length);
+    const back = byId(n.id);
+    ok('O04h 里面加的东西写回副本了', back.embed.doc.nodes.length === 4,
+      back.embed.doc.nodes.length);
+    ok('O04i 副本里能找到那个新节点',
+      back.embed.doc.nodes.some(x => x.text === '新加的'));
+    ok('O04j 出来之后选中还是那个嵌入节点', sel.has(n.id) || sel.has(back.id), [...sel].join(','));
+  });
+  T('O05 进出会恢复视图和历史栈', () => {
+    fresh(); layoutMind(); fitView();
+    const n = mkEmbed(0, 0, {});
+    const v0 = { x:view.x, y:view.y, z:view.z };
+    const hSize = hist.stack.length;
+    enterEmbed(byId(n.id));
+    view.x += 500; view.z = 2;
+    exitEmbed();
+    ok('O05 视图回到进去之前', Math.abs(view.x - v0.x) < 0.01 && Math.abs(view.z - v0.z) < 0.01,
+      JSON.stringify({ x:Math.round(view.x), z:view.z }));
+    // 退出时会把内层改动写回父文档并入一次历史，所以是 hSize+1；关键是要「外层的」历史
+    ok('O05b 历史栈是外层的（不是被内层顶掉）',
+      hist.stack.length >= hSize && hist.stack[hist.i].indexOf('子文档') >= 0,
+      hist.stack.length + ' vs ' + hSize + ' / ' + hist.stack[hist.i].slice(0, 40));
+    ok('O05c 出来之后外层的历史还能用', (() => {
+      const before = JSON.stringify(serialize());
+      const t = nodeByText('操作');
+      selectOnly(t.id);
+      toggleCollapseOf(t);                  // 自带 pushHist；fresh 之后只有一个快照，得先造个改动
+      const mid = JSON.stringify(serialize());
+      undo();
+      return before !== mid && JSON.stringify(serialize()) === before;
+    })());
+  });
+  T('O06 嵌套嵌入也能进出', () => {
+    fresh(); layoutMind();
+    const outer = mkEmbed(0, 0, { doc:mkSubDoc(2), name:'外层' });
+    // 在外层文档里再嵌一个
+    enterEmbed(byId(outer.id));
+    const inner = addEmbedNode(mkSubDoc(5), '内层', 0, 0);
+    reindex(); sizeAll();
+    exitEmbed();
+    const o2 = byId(outer.id);
+    ok('O06 外层副本里有了内层', o2.embed.doc.nodes.some(x => x.kind === 'embed'),
+      o2.embed.doc.nodes.map(x => x.kind).join(','));
+    // 再进去，进到内层，再出来
+    enterEmbed(byId(outer.id));
+    const inner2 = doc.nodes.find(x => x.kind === 'embed');
+    enterEmbed(inner2);
+    ok('O06b 进到第二层了', doc.nodes.length === 5, doc.nodes.length);
+    addNodeAt('最里面', 0, 300, 'rect');
+    reindex(); sizeAll();
+    exitEmbed();
+    ok('O06c 回到第一层', doc.nodes.length === 3, doc.nodes.length);
+    exitEmbed();
+    ok('O06d 回到最外层', !insideEmbed() && doc.nodes.length === 13, doc.nodes.length);
+    const o3 = byId(outer.id);
+    const innerData = o3.embed.doc.nodes.find(x => x.kind === 'embed');
+    ok('O06e 最里面的改动落到了内层副本', innerData.embed.doc.nodes.length === 6,
+      innerData.embed.doc.nodes.length);
+  });
+  await TA('O07 嵌入期间不写自动存档（别把外层存档冲掉）', async () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, {});
+    pushHist();
+    await sleep(500);                 // 把之前测试挂着的自动存档定时器放完
+    localStorage.removeItem(LS_KEY);
+    enterEmbed(byId(n.id));
+    pushHist();                       // 内部会调 autosave
+    await sleep(600);
+    ok('O07 嵌入期间没写自动存档', localStorage.getItem(LS_KEY) === null,
+      String(localStorage.getItem(LS_KEY)).slice(0, 30));
+    exitEmbed();
+    pushHist();
+    await sleep(600);
+    ok('O07b 出来之后又正常存档了', !!localStorage.getItem(LS_KEY));
+    localStorage.removeItem(LS_KEY);
+  });
+  T('O08 尺寸可以手动改，缩略图跟着铺满', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, {});
+    setNodeSize(n, 520, 360);
+    ok('O08 尺寸改掉了', n.w === 520 && n.h === 360, n.w + 'x' + n.h);
+    ok('O08b 有下限', (setNodeSize(n, 5, 5), n.w >= EMBED_MIN_W && n.h >= EMBED_MIN_H), n.w + 'x' + n.h);
+    dirty = true; draw();
+    ok('O08c 画得出来', true);
+  });
+  T('O09 嵌入字段能存下来', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, { count:5, name:'存档测试' });
+    setNodeSize(n, 400, 300);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const raw = snap.nodes.find(x => x.id === n.id);
+    ok('O09 序列化带 embed.doc', raw.embed && raw.embed.doc.nodes.length === 5,
+      raw.embed && raw.embed.doc && raw.embed.doc.nodes.length);
+    deserialize(snap);
+    const n2 = byId(n.id);
+    ok('O09b 往返还是嵌入节点', n2.kind === 'embed');
+    ok('O09c 内嵌文档完整', n2.embed.doc.nodes.length === 5 && n2.embed.doc.edges.length === 4,
+      n2.embed.doc.nodes.length + '/' + n2.embed.doc.edges.length);
+    ok('O09d 尺寸也保留了', n2.w === 400 && n2.h === 300, n2.w + 'x' + n2.h);
+  });
+  T('O10 空文档 / 坏数据不会崩', () => {
+    fresh(); layoutMind();
+    const empty = mkEmbed(0, 0, { doc:{ v:2, nid:1, nodes:[], edges:[], groups:[] } });
+    dirty = true; draw();
+    ok('O10 空文档画得出来', true);
+    enterEmbed(empty);
+    skipDlg();                       // enterEmbed 里又 say 了一次，得重新跳过打字机
+    ok('O10b 空文档进不去（有提示）', !insideEmbed());
+    ok('O10c 提示说里面没内容', /没有内容/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    // 手工塞一个残缺的 embed
+    const n = addNodeAt('x', 0, 0, 'rect');
+    n.kind = 'embed';
+    n.embed = { doc:{ nodes:[{ id:'z', text:'甲', x:0, y:0 }] } };    // 没有 edges
+    sizeNode(n); reindex(); sizeAll();
+    dirty = true; draw();
+    ok('O10d 缺 edges 也能画', true);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    ok('O10e 也能存读', byId(n.id).kind === 'embed');
+  });
+  T('O11 嵌入节点参与选中 / 分组 / 折叠，但就是不连线', () => {
+    fresh(); layoutMind();
+    const n = mkEmbed(0, 0, {});
+    ok('O11 能被选中', (selectOnly(n.id), sel.has(n.id)));
+    const t = nodeByText('操作');
+    selectGroup(null); sel.clear(); sel.add(n.id); sel.add(t.id);
+    const g = createGroup();
+    ok('O11b 能进分组', groupAllNodes(g.id).indexOf(n.id) >= 0);
+    ok('O11c 但进组之后还是连不了线', linkNodes(t.id, n.id) === null);
+    selectOnly(t.id); toggleCollapseOf(t);
+    ok('O11d 折叠能把它藏起来', isHidden(n.id) === (descendants(t.id).indexOf(n.id) >= 0));
+    const before = doc.nodes.length;
+    selectOnly(n.id);
+    deleteSelection();
+    ok('O11e 删得掉（顺手验一下这次的 BUG 修复）', doc.nodes.length === before - 1);
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

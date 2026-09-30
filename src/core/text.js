@@ -62,8 +62,17 @@ function sizeImageNode(n){
   n.w = w;
   n.h = IMG_NAME_H + imgH + descH;
 }
+/* 嵌入节点：尺寸完全手动（里面那张缩略图会等比铺满） */
+function sizeEmbedNode(n){
+  n.w = Math.round(Math.max(EMBED_MIN_W, +n.fixedW || EMBED_DEF_W));
+  n.h = Math.round(Math.max(EMBED_MIN_H, +n.fixedH || EMBED_DEF_H));
+  n.lines = [];
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+}
 function sizeNode(n){
   if (n.kind === 'image'){ sizeImageNode(n); return; }
+  if (n.kind === 'embed'){ sizeEmbedNode(n); return; }
   const size = nodeFontSize(n);
   const family = nodeFontFamily(n);
   const weight = 'normal';   // Unifont 无粗体；统一不用合成粗体

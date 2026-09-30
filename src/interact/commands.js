@@ -16,6 +16,7 @@ function addNodeAt(text, x, y, shape){
 }
 function linkNodes(s, t){
   if (s === t) return null;
+  if (isEmbed(byId(s)) || isEmbed(byId(t))){ say('* 嵌入节点是封闭的，连不了线。'); return null; }
   if (doc.edges.some(e => e.s === s && e.t === t)) return null;
   const e = makeEdge(s, t);
   doc.edges.push(e);
@@ -131,12 +132,14 @@ function deleteSelection(){
   }
   if (!sel.size){ say('* 没有选中的东西。'); return; }
   const roots = [...sel].filter(id => byId(id));
-  if (roots.some(id => isRoot(byId(id)))){
-    say('* 你不能删除根节点……它承载着决心。');
-    return;
-  }
   const kill = new Set();
   for (const id of roots) { kill.add(id); for (const d of descendants(id)) kill.add(d); }
+  // 只在「这一刀会删空整个画布」时才拦。以前用的是「没有入边就当根节点不许删」，
+  // 但自从有了自由节点（双击空白建的、图片节点、嵌入节点）之后，那个判断就不成立了。
+  if (kill.size >= doc.nodes.length){
+    say('* 全删掉画布就空了……至少留一个节点吧。');
+    return;
+  }
   doc.nodes  = doc.nodes.filter(n => !kill.has(n.id));
   doc.edges  = doc.edges.filter(e => !kill.has(e.s) && !kill.has(e.t));
   sel.clear();
@@ -642,3 +645,89 @@ function setNodeDesc(n, text){
   n.desc = String(text == null ? '' : text);
   sizeNode(n); mark();
 }
+
+/* =========================================================================
+   嵌入文档（插入 Grapheon）
+   -------------------------------------------------------------------------
+   把一整份文档当成一个节点塞进来。它是封闭的：
+     · 不接受任何连线（edgeUsable / linkTargetAt / linkNodes 三处都拦）
+     · 双击进去编辑的是**内部副本**，外面那份原文件一个字节都不会动
+   进出用的是一个文档栈，所以嵌套嵌入也没问题。
+   ========================================================================= */
+let docStack = [];
+const insideEmbed = () => docStack.length > 0;
+const embedRootName = () => insideEmbed() ? docStack[docStack.length - 1].title : '';
+
+function addEmbedNode(d2, name, x, y){
+  const n = addNodeAt(name || '嵌入文档', x, y, 'rect');
+  n.kind = 'embed';
+  n.embed = { doc: d2 };
+  n.fixedW = EMBED_DEF_W;
+  n.fixedH = EMBED_DEF_H;
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+/* 从文件插一份文档进来 */
+function insertEmbedFile(file, at){
+  if (!file) return;
+  const r = new FileReader();
+  r.onerror = () => say('* 这个文件读不出来。');
+  r.onload = () => {
+    let d2 = null;
+    try { d2 = JSON.parse(String(r.result)); } catch(e){ d2 = null; }
+    if (!d2 || !Array.isArray(d2.nodes)){
+      say('* 这不是一个 Grapheon 文档（要 .json）。');
+      return;
+    }
+    const p = at || viewCenter();
+    const n = addEmbedNode(d2, String(file.name || '嵌入文档').replace(/\.json$/i, ''),
+                           Math.round(p.x - EMBED_DEF_W / 2), Math.round(p.y - EMBED_DEF_H / 2));
+    selectOnly(n.id);
+    pushHist(); mark();
+    say('* 已把「' + n.text + '」整份嵌进来（' + d2.nodes.length + ' 个节点）。' +
+        '它是封闭的：连不了线；双击进去可以改，改的是副本，原文件不受影响。');
+  };
+  r.readAsText(file);
+}
+/* 进入嵌入文档 */
+function enterEmbed(n){
+  if (!isEmbed(n)) return;
+  if (!n.embed || !n.embed.doc || !n.embed.doc.nodes || !n.embed.doc.nodes.length){
+    say('* 这个嵌入节点里没有内容。');
+    return;
+  }
+  docStack.push({
+    doc, view:{ x:view.x, y:view.y, z:view.z },
+    sel:new Set(sel), selGroups:new Set(selGroups), selEdgeId,
+    nodeId:n.id, title:n.text,
+    histStack:hist.stack.slice(), histI:hist.i
+  });
+  deserialize(JSON.parse(JSON.stringify(n.embed.doc)));   // 编辑的是副本
+  fitView(); initHist(); mark();
+  say('* 进了「' + n.text + '」内部。这里改的是副本，原文件不会被动到；按 Esc 出来。');
+  updateMeta();
+}
+/* 退出嵌入文档，把里面改的东西写回父文档里那个节点 */
+function exitEmbed(){
+  const top = docStack.pop();
+  if (!top) return false;
+  const parentNode = top.doc.nodes.find(x => x.id === top.nodeId);
+  if (parentNode && parentNode.embed){
+    parentNode.embed.doc = JSON.parse(JSON.stringify(serialize()));
+  }
+  doc = top.doc;
+  view.x = top.view.x; view.y = top.view.y; view.z = top.view.z;
+  sel = new Set(top.sel);
+  selGroups = new Set(top.selGroups);
+  selEdgeId = top.selEdgeId;
+  hist.stack = top.histStack;
+  hist.i = top.histI;
+  reindex(); sizeAll(); mark();
+  selectOnly(top.nodeId);
+  pushHist();          // 内层改动写回了父文档，得进历史栈，否则栈顶和当前状态对不上
+  say('* 回到了「' + (parentNode ? parentNode.text : '上一层') + '」。里面改的东西已经存进副本了。');
+  updateMeta();
+  return true;
+}
+const clearDocStack = () => { docStack = []; };

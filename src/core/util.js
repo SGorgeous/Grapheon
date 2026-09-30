@@ -33,7 +33,13 @@ const NODE_COLORS = [
   ['#00ffff', '青'], ['#00ff00', '绿'], ['#3b7dff', '蓝'], ['#b967ff', '紫'], ['#8a8a8a', '灰']
 ];
 /* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
-const NODE_KINDS = ['node', 'program', 'image'];
+const NODE_KINDS = ['node', 'program', 'image', 'embed'];
+/* ---------------- 嵌入文档节点 ----------------
+   把一整份 Grapheon 当成一个节点嵌进来。它是**封闭**的：不接受任何连线，
+   双击进去编辑的是内部副本，外部那份原文件一个字节都不会动。 */
+const EMBED_NAME_H = 30;         // 顶部名称带
+const EMBED_DEF_W = 340, EMBED_DEF_H = 240;
+const EMBED_MIN_W = 180, EMBED_MIN_H = 130;
 /* ---------------- 图片节点 ----------------
    图片以 data URL 内嵌（存文件、存 localStorage 都靠它），导入时先等比缩到 IMG_SRC_MAX 以内，
    太大再转 JPEG 压一道。名称画在右上角那条带里，描述画在图片下面。 */

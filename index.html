@@ -15,6 +15,7 @@
   <div id="brand" class="ud">* GRAPHEON<small>NODES / CONNECTIONS</small></div>
 
   <div id="topbar">
+    <button class="ud-btn" id="b-back" style="display:none">返回</button>
     <button class="ud-btn" id="b-tidy">排版</button>
     <span id="sep"></span>
     <button class="ud-btn" id="b-undo">撤销</button>
@@ -196,6 +197,12 @@
     <tr><td>选中程序节点按 E</td><td>面板里选「作用 / 项目 / 方式 / 数值」</td></tr>
     <tr><td>被作用的目标</td><td>右上角出黄点；数值型的右下角显示累计结果</td></tr>
     <tr><td>删掉程序节点</td><td>目标立刻复原（算符从来没写回节点本身）</td></tr>
+    <tr><td class="sec" colspan="2">— 嵌入文档 —</td></tr>
+    <tr><td>右键「新建 ▶ 嵌入 Grapheon…」</td><td>把一整份 .json 当成一个封闭节点嵌进来</td></tr>
+    <tr><td>嵌入节点是封闭的</td><td>连不了线；选中它也不会出现连接端点</td></tr>
+    <tr><td>双击嵌入节点 / 右键「进入编辑」</td><td>进去编辑；改的是副本，原文件不受影响</td></tr>
+    <tr><td>在里面按 Esc / 点顶栏「返回」</td><td>回到外层，里面的改动写回这个节点的副本</td></tr>
+    <tr><td>嵌入里还能再嵌</td><td>进出用的是文档栈，嵌套没问题</td></tr>
     <tr><td class="sec" colspan="2">— 图片节点 —</td></tr>
     <tr><td>把图片文件拖进窗口</td><td>落在鼠标松开的位置</td></tr>
     <tr><td>右键空白处 →「新建 ▶ 图片…」</td><td>落在右键的位置</td></tr>
@@ -238,6 +245,7 @@
 
 <input type="file" id="file" accept=".json,application/json" hidden style="display:none">
 <input type="file" id="imgfile" accept="image/*" hidden style="display:none">
+<input type="file" id="gpkfile" accept=".json,application/json" hidden style="display:none">
 <!-- 红心光标：颜色由 CSS 的 --r 决定（见 styles/theme-undertale.css），换主题会自动跟着变 -->
 <svg id="heart" viewBox="0 0 7 6" width="18" height="15" preserveAspectRatio="none" shape-rendering="crispEdges">
   <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>

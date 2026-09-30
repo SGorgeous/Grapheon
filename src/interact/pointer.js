@@ -271,6 +271,7 @@ canvas.addEventListener('dblclick', (ev) => {
   const n = hitNode(p);
   if (n){
     selectOnly(n.id);
+    if (isEmbed(n)){ enterEmbed(n); return; }        // 双击嵌入节点 = 进去编辑
     // 图片节点分三块：点描述改描述，点名称带/图片改名称
     const part = hitImagePart(n, p);
     startEdit(part === 'desc' ? 'nodeDesc' : 'node', n.id);

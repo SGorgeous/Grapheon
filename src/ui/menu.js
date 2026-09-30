@@ -122,6 +122,11 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
+    if (isEmbed(n)){
+      items.push(['进入编辑', '双击', () => enterEmbed(n)]);
+      items.push(['换个文档…', '', () => pickEmbedFile()]);
+      items.push('hr');
+    }
     if (n.kind === 'image'){
       items.push(['换一张图片…', '', () => pickImageFile(null, n)]);
       items.push(['编辑描述…', '双击图下方', () => startEdit('nodeDesc', n.id)]);
@@ -196,6 +201,7 @@ function showCtx(x, y, n, e, info){
       }],
       ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
       ['图片…', '也可以直接拖进来', () => pickImageFile(s2w(x, y))],
+      ['嵌入 Grapheon…', '整份文档当一个节点', () => pickEmbedFile(s2w(x, y))],
       ['程序节点', '会改变目标', () => {
         const p = s2w(x, y);
         const nn = createProgramNode(p.x - 70, p.y - 24);
