@@ -123,8 +123,12 @@ function forcedAnchorOf(nodeId, portId){
 function edgeGeomFor(e){
   const wg = waypointGeom(e);
   if (wg) return wg;
-  const a = anchorOf(e.s), b = anchorOf(e.t);
-  if (!a || !b) return null;
+  const a0 = anchorOf(e.s), b0 = anchorOf(e.t);
+  if (!a0 || !b0) return null;
+  // ⚠ 一定要**复制**再打标记：anchorOf 对节点返回的是 idx 里的**缓存对象**，
+  //   直接往上写 __forced 会把它永久污染 —— 之后所有用到这个盒子的锚点
+  //   四条边全变成同一个点，几何退化，线就画不出来了。
+  const a = Object.assign({}, a0), b = Object.assign({}, b0);
   // 端点钉死的位置优先 —— 端点在哪儿，线就从哪儿出来
   const fa = forcedAnchorOf(e.s, e.aPort); if (fa) a.__forced = fa;
   const fb = forcedAnchorOf(e.t, e.bPort); if (fb) b.__forced = fb;

@@ -7269,6 +7269,60 @@
     })());
   });
 
+
+  T('LK06 算端点锚点时不能污染节点盒子的缓存（线画不出来的元凶）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作'), c = nodeByText('连线');
+    // 先建一条**钉了端点**的边
+    selectOnly(a.id);
+    const bn = nodeBox(byId(a.id));
+    const port = portList(byId(a.id)).outs[0];
+    movePort(byId(a.id), 'outs', port.id, { x:bn.x + bn.w * 0.3, y:bn.y + 2 });
+    reindex(); sizeAll();
+    const pinned = linkNodes(a.id, b.id, portList(byId(a.id)).outs[0].id, null);
+    reindex();
+    ok('LK06 前置：这条边钉了端点', pinned && pinned.aPort != null, pinned ? String(pinned.aPort) : 'null');
+    edgeGeomFor(pinned);                       // 算一次（这一步以前会污染缓存）
+    // ★ 关键：缓存盒子不该被写上 __forced
+    ok('LK06b 节点盒子的缓存没被污染', nodeBox(byId(a.id)).__forced === undefined,
+      JSON.stringify(nodeBox(byId(a.id)).__forced || null));
+    // 别的边（没钉端点）几何必须还是正常的、非退化的
+    const plain = linkNodes(a.id, c.id);
+    reindex();
+    if (plain){
+      const en = geomEndpoints(edgeGeomFor(plain));
+      const len = Math.hypot(en.b.x - en.a.x, en.b.y - en.a.y);
+      ok('LK06c 没钉端点的边长度正常（不是退化成一个点）', len > 40, Math.round(len));
+    } else ok('LK06c 没钉端点的边长度正常（不是退化成一个点）', true, '（重复被拒）');
+    // 同一个节点上，钉端点的边和没钉的边，起点应当**不同**
+    ok('LK06d 两条边起点不同（说明只有钉过的那条被改）', (() => {
+      const e1 = geomEndpoints(edgeGeomFor(doc.edges.find(x => x.id === pinned.id)));
+      const back = anchorOf(a.id);
+      const mid = { x:back.x + back.w / 2, y:back.y };
+      return Math.hypot(e1.a.x - mid.x, e1.a.y - mid.y) > 20;
+    })(), '钉过的那条仍在端点处');
+    // 反复算多次也要稳定（污染类 bug 往往第二遍才现形）
+    const g1 = JSON.stringify(geomEndpoints(edgeGeomFor(doc.edges.find(x => x.id === pinned.id))));
+    edgeGeomFor(pinned); edgeGeomFor(pinned);
+    const g2 = JSON.stringify(geomEndpoints(edgeGeomFor(doc.edges.find(x => x.id === pinned.id))));
+    ok('LK06e 反复算结果稳定', g1 === g2, g1 + ' vs ' + g2);
+    // 整张图画得出来（不抛异常）
+    ok('LK06f 整张图画得出来', (dirty = true, draw(), true));
+    // 所有边都画得出来：几何都不为空
+    ok('LK06g 每条边都算得出几何', doc.edges.every(e => {
+      const gg = edgeGeomFor(e);
+      return gg && geomEndpoints(gg);
+    }), doc.edges.filter(e => !edgeGeomFor(e)).length + ' 条算不出来');
+    // 矩形端点盒子也不能被污染（分组走的是另一条路）
+    const gp = doc.groups[0];
+    if (gp){
+      const before = JSON.stringify([groupBox(gp).x, groupBox(gp).y, groupBox(gp).w]);
+      edgeGeomFor(pinned);
+      const after = JSON.stringify([groupBox(gp).x, groupBox(gp).y, groupBox(gp).w]);
+      ok('LK06h 分组盒子也没被动过', before === after);
+    } else ok('LK06h 分组盒子也没被动过', true, '（没有分组）');
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
