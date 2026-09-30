@@ -243,7 +243,30 @@ function loadDemo(which){
     // 这既省得手算行距，也顺带当了防覆盖的活广告。
     resolveOverlaps([], true);
     refitAllGroups();         // 分组框按成员贴合一次
+    /* ★ 取景对着**第一个分区**，不是全图。
+       示例五十多个节点、分九个区，全塞进一屏要缩到 17%，节点就只剩细线。
+       打开时先给一块看清的；想看全貌按「居中」。 */
+    frameDemoSection(0);
   }
+}
+/* 把视角对到第 i 个分区上，留一圈边距。最多放到 100%。
+   ⚠ 从**成员节点**算，不要从分组框算 —— 框是 refitAllGroups 贴出来的，
+     成员被防覆盖推开之后框会涨得很大，照着框取景会缩到 20%，白搭。 */
+function frameDemoSection(i){
+  const g = (doc.groups || [])[i];
+  if (!g) return;
+  const ids = g.members || [];
+  const bs = ids.map(id => byId(id)).filter(Boolean).map(n => nodeBox(n));
+  if (!bs.length) return;
+  const xs = bs.map(b => b.x), xe = bs.map(b => b.x + b.w);
+  const ys = bs.map(b => b.y), ye = bs.map(b => b.y + b.h);
+  const x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xe);
+  const y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ye);
+  const m = 80;
+  view.z = Math.max(0.2, Math.min(VW / (x1 - x0 + m * 2), VH / (y1 - y0 + m * 2), 1));
+  view.x = -((x0 + x1) / 2) * view.z + VW / 2;
+  view.y = -((y0 + y1) / 2) * view.z + VH / 2;
+  mark();
 }
 
 /* =========================================================================
