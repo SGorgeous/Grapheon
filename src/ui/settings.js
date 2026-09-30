@@ -15,6 +15,8 @@ const setFontLoadEl = document.getElementById('setFontLoad');
 const setFontForgetEl = document.getElementById('setFontForget');
 const setFontNoteEl = document.getElementById('setFontNote');
 const fontFileEl   = document.getElementById('fontfile');
+const themeFileEl  = document.getElementById('themefile');
+const setThemeNoteEl = document.getElementById('setThemeNote');
 const setEdgeEl  = document.getElementById('setEdge');
 const setKeysEl  = document.getElementById('setKeys');
 
@@ -118,18 +120,46 @@ function loadFontFiles(files){
     const family = userFamilyOf(f, USER_FONTS.length + i);
     const url = URL.createObjectURL(f);
     const face = new FontFace(family, 'url(' + url + ')');
-    face.load().then(() => {
+    face.load().then(async () => {
       document.fonts.add(face);
       const label = String(f.name || family).replace(/\.[^.]+$/, '');
       // 塞进全局字体表，节点样式面板就能直接选它
       NODE_FONTS[family] = family;
       NODE_FONT_LABEL[family] = label;
       USER_FONTS.push({ family, label, source:f.name });
+      // 顺手存进素材库 —— 这就是「自定义字体持久化」：下次开页面再从库里捞回来
+      try { await Store.put('fonts', f.name, f); } catch(e){}
       done++;
       res();
     }).catch((e) => { URL.revokeObjectURL(url); res(); });
   }));
   return Promise.all(jobs).then(() => done);
+}
+/* 开页面时把素材库里的字体重新喂给浏览器。
+   失败 / 慢都不该挡住启动，所以是异步的、错了也不吭声。 */
+async function restoreUserFonts(){
+  let items = [];
+  try {
+    const b = await Store.init();
+    items = (await b.list()).filter(x => x.kind === 'fonts');
+  } catch(e){ return 0; }
+  let n = 0;
+  for (const it of items){
+    try {
+      const blob = await Store.get(it.id);
+      if (!blob) continue;
+      const family = 'GPLib-' + String(it.name).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (NODE_FONTS[family]) continue;                    // 已经在表里了
+      const url = URL.createObjectURL(blob);
+      const face = new FontFace(family, 'url(' + url + ')');
+      await face.load();
+      document.fonts.add(face);
+      NODE_FONTS[family] = family;
+      NODE_FONT_LABEL[family] = String(it.name).replace(/\.[^.]+$/, '');
+      n++;
+    } catch(e){ /* 坏字体跳过就行 */ }
+  }
+  return n;
 }
 setFontLoadEl.onclick = () => { fontFileEl.value = ''; fontFileEl.click(); };
 fontFileEl.addEventListener('change', async () => {
@@ -176,6 +206,33 @@ async function renderUserNote(){
     (hasFsAccess() ? '' : '　·　这个浏览器不支持直接读写文件夹');
 }
 renderUserNote();
+
+/* ---------------- 从文件加载主题 ---------------- */
+document.getElementById('setThemeLoad').onclick = () => { themeFileEl.value = ''; themeFileEl.click(); };
+document.getElementById('setThemeDel').onclick = () => {
+  const cur = currentTheme();
+  if (!cur || !cur.user){ setThemeNoteEl.textContent = '当前这个是内置主题，删不了。'; return; }
+  unregisterUserTheme(themeId);
+  renderSettings();
+  setThemeNoteEl.textContent = '删掉了，已切回默认主题。';
+};
+themeFileEl.addEventListener('change', async () => {
+  const f = themeFileEl.files && themeFileEl.files[0];
+  if (!f) return;
+  let obj = null;
+  try { obj = JSON.parse(await f.text()); } catch(e){ obj = null; }
+  // 也接受 { id, theme:{...} } 这种包了一层的写法
+  if (obj && obj.theme) obj = Object.assign({ id:obj.id }, obj.theme);
+  const id = registerUserTheme(obj);
+  if (!id){
+    setThemeNoteEl.textContent = '这个文件读不出主题（至少要有一个 canvas 调色板）。';
+    return;
+  }
+  applyTheme(id);
+  renderSettings();
+  setThemeNoteEl.textContent = '已套用「' + THEMES[id].label + '」。';
+  say((themeStar() ? '* ' : '') + '主题「' + THEMES[id].label + '」已套用，也记进库里了。');
+});
 
 document.getElementById('setClose').onclick = () => closeSettings();
 document.getElementById('setKeysReset').onclick = () => {

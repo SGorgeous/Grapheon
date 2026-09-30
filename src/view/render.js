@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -397,7 +397,7 @@ function drawOutNode(g, n, b, selected, hov){
   g.fillStyle = C.bg;
   g.fillRect(b.x, b.y, b.w, b.h);
   setFont(g, n.fs, n.fw, n.fam);
-  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.fillStyle = entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white);
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   const startY = b.y + 8 + n.lh / 2;
@@ -493,7 +493,7 @@ function drawVarNode(g, n, b, selected, hov){
   g.fillRect(b.x, b.y, b.w, b.h);
   // 左上角描述
   setFont(g, n.fs, n.fw, n.fam);
-  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.fillStyle = entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white);
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   const startY = b.y + 8 + n.lh / 2;
@@ -526,7 +526,7 @@ function drawOpNode(g, n, b, selected, hov){
   g.fillStyle = C.bg;
   g.fillRect(b.x, b.y, b.w, b.h);
   setFont(g, n.fs, n.fw, n.fam);
-  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.fillStyle = entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white);
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   const startY = b.y + 8 + n.lh / 2;
@@ -588,6 +588,9 @@ function drawImageNode(g, n, b, selected, hov){
   g.restore();
 }
 function drawNode(g, n){
+  const _alpha = entityAlpha(n, 'node');
+  if (_alpha < 1){ g.save(); g.globalAlpha *= _alpha; }
+  try {
   const selected = sel.has(n.id);
   const hov = hover && hover.id === n.id;
   const prog = isProgram(n);
@@ -627,7 +630,7 @@ function drawNode(g, n){
   setFont(g, n.fs, n.fw, n.fam);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  g.fillStyle = entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white);
   const startY = b.y + b.h / 2 - ((n.lines.length - 1) * n.lh) / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + b.w / 2, startY + i * n.lh);
   g.restore();
@@ -674,6 +677,7 @@ function drawNode(g, n){
     g.fillStyle = C.yellow;
     g.fillRect(Math.round(r.x + r.w - 8), Math.round(r.y + r.h - 8), 5, 5);
   }
+  } finally { if (_alpha < 1) g.restore(); }   // 组件「透明度」
 }
 /* 分组：虚线外框 + 左上角标题。外框几何完全由成员算出，永远包住成员。 */
 function drawGroup(g, grp){

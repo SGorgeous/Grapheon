@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/store.js
    素材库（用户文件夹）的存储适配层。
@@ -196,6 +196,11 @@ const Store = {
   async init(){
     if (this.backend) return this.backend;
     try { const v = localStorage.getItem(USERDIR_KEY); if (v) this.dirName = v; } catch(e){}
+    // 0) 原生宿主优先：能挂上就说明是 exe / 手机环境，那边比浏览器管用得多
+    if (hasNative()){
+      const ns = makeNativeStore(nativeHost());
+      if (await ns.ready()){ this.backend = ns; return ns; }
+    }
     // 先看有没有存过的目录句柄（FS Access）
     if (hasFsAccess()){
       const h = await loadDirHandle();
@@ -259,3 +264,66 @@ const Store = {
     return { ok, fail, byKind, total:list.length };
   }
 };
+
+/* ---------------- 后端 4：native（宿主提供的） ----------------
+   给「打包成 exe」和「移植到手机」准备的。
+
+   宿主（Electron 主进程 / Capacitor 插件 / RN 桥）只要往 window 上挂一个对象：
+
+     window.GrapheonNative = {
+       label: '本机文件夹',
+       ready()                    -> bool
+       list()                     -> [{ kind, name, size, id }]
+       get(id)                    -> base64 字符串（或 null）
+       put(kind, name, base64)    -> id
+       del(id)
+     }
+
+   二进制走 base64 过桥 —— 任何桥都能传字符串，不用为每种宿主单独写序列化。
+
+   ⚠ 这个后端**必须排在 fs 前面**：能挂上宿主就说明是原生环境，
+     那边对文件系统的控制比浏览器的 File System Access API 强得多
+     （没有授权弹窗、能读写任意路径、手机上也能用）。 */
+function nativeHost(){
+  if (typeof window === 'undefined') return null;
+  const h = window.GrapheonNative || window.grapheonNative;
+  return (h && typeof h.list === 'function') ? h : null;
+}
+const hasNative = () => !!nativeHost();
+
+function blobToBase64(blob){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result || '');
+      res(s.slice(s.indexOf(',') + 1));
+    };
+    r.onerror = () => rej(r.error || new Error('读不出来'));
+    r.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(b64, type){
+  const bin = atob(String(b64 || ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: type || 'application/octet-stream' });
+}
+function makeNativeStore(host){
+  return {
+    id:'native',
+    label:'本机（' + (host.label || '宿主提供') + '）',
+    host,
+    async ready(){ try { return !!(await host.ready()); } catch(e){ return true; } },
+    async list(){ return (await host.list()) || []; },
+    async get(id){
+      const r = await host.get(id);
+      if (r == null) return null;
+      if (r instanceof Blob) return r;
+      // 宿主可能回 { data, type }
+      if (r && typeof r === 'object') return base64ToBlob(r.data, r.type);
+      return base64ToBlob(r);
+    },
+    async put(kind, name, blob){ return await host.put(kind, name, await blobToBase64(blob)); },
+    async del(id){ return await host.del(id); }
+  };
+}

@@ -472,6 +472,18 @@ function displayTextOf(n){
 }
 const hasVarRefs = (n) => !!n && /\{[^}\n]*\}/.test(String(n.text || ''));
 
+/* 组件「染色」效果：把外框颜色换掉。绘制和命中都走这个，
+   免得同一个颜色在两处解析出不一样的结果。
+   放在这里而不是 render-components.js，是因为 vars.js 更早加载、谁都能调。 */
+function entityTint(entity, scope){
+  if (typeof compTintOf === 'function') return compTintOf(entity, scope) || '';
+  return '';
+}
+function entityAlpha(entity, scope){
+  if (typeof compOpacityOf === 'function') return compOpacityOf(entity, scope);
+  return 1;
+}
+
 /* reindex 末尾调用：把**所有可编辑文字**里的 {变量} 都算一遍。
    节点正文、图片描述、连线标签、分组标题 —— 都能引用变量。 */
 function refreshVarText(){

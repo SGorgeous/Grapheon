@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/library.js
    素材库面板：看用户文件夹里有什么，一键导入一大批素材。
@@ -170,8 +170,20 @@ async function insertAsset(it){
     return;
   }
   if (it.kind === 'themes'){
-    say('* 主题文件先放着 —— 从素材库直接加载主题还没做（见 README 路线图）。');
+    // 一键套用：注册进主题表再切过去。也接受 { id, theme:{...} } 这种包一层的写法。
+    let obj = null;
+    try { obj = JSON.parse(await blob.text()); } catch(e){ obj = null; }
+    if (obj && obj.theme) obj = Object.assign({ id:obj.id }, obj.theme);
+    const id = registerUserTheme(obj);
+    if (!id){ say('* 这个文件读不出主题（至少要有一个 canvas 调色板）。'); return; }
+    applyTheme(id);
+    say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。不想要了可以在设置里「删除当前主题」。');
   }
+}
+
+/* 套用主题后给个小反馈，顺便告诉他怎么删 */
+function btnApplyFeedback(it){
+  return '不想要了可以在设置里「删除当前主题」。';
 }
 
 /* ---------------- 导入 ---------------- */

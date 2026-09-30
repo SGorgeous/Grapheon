@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -528,7 +528,19 @@ function sizeAll(){ for (const n of doc.nodes) sizeNode(n); }
 
 /* ---------------- 序列化 ---------------- */
 function serialize(){
-  return {
+  // 自定义组件和用户主题的定义跟着文档走 —— 把这个 .json 发给别人，
+  // 他那边没有你的组件库/主题库也能正常显示。
+  const extra = {};
+  if (typeof userComponentDefs === 'function'){
+    const defs = userComponentDefs();
+    if (defs.length) extra.componentDefs = defs;
+  }
+  if (typeof userThemes === 'function'){
+    const ts = userThemes();
+    const ids = Object.keys(ts);
+    if (ids.length) extra.themes = ids.map(id => Object.assign({ id }, ts[id]));
+  }
+  return Object.assign(extra, {
     v:2, nid,
     nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape,
       collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null,
@@ -559,11 +571,15 @@ function serialize(){
       components:normalizeComponents(g.components),
       x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
     }))
-  };
+  });
 }
 function deserialize(d){
   if (!d || !Array.isArray(d.nodes)) throw new Error('bad file');
-  doc = { v:2, nodes:[], edges:[], groups:[] };
+  // 文档可以自带自定义组件和主题的定义 —— 必须**先**并进注册表，
+  // 否则下面 normalizeComponents 会因为「认不出这个类型」把它们丢掉。
+  if (typeof adoptDocComponents === 'function') adoptDocComponents(d.componentDefs);
+  if (typeof adoptDocThemes === 'function') adoptDocThemes(d.themes);
+  doc = { v:2, nodes:[], edges:[], groups:[], componentDefs:d.componentDefs || null, themes:d.themes || null };
   nid = d.nid || 1;
   // v1 的文件用 mode 决定走线：mind 是曲线、flow 是正交。
   // 现在没有模式了，就把旧的 mode 一次性翻译成每条线的 route，老存档打开后长相不变。

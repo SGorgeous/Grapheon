@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/theme.js
    主题注册表 —— 调色板只在这里定义一次，DOM（CSS 变量）和 canvas 共用同一份。
@@ -106,3 +106,87 @@ function loadTheme(){
   loadGridPref();
   return applyTheme(THEMES[saved] ? saved : DEFAULT_THEME);
 }
+
+/* =========================================================================
+   用户主题：从文件加载进来的
+   存 localStorage（跨文档记住），打开文档时也能从文档里带进来。
+   格式（宽松）：{ label, grid, cursor, heart, star, canvas:{bg,white,yellow,red,gray,dim,grid} }
+   ========================================================================= */
+const THEMES_KEY = 'grapheon.themes.v1';
+let USER_THEMES = {};
+
+function normalizeThemeObject(o, fallbackLabel){
+  if (!o || typeof o !== 'object') return null;
+  const pal = o.canvas || o.colors || o.palette || null;
+  if (!pal || typeof pal !== 'object') return null;
+  const canvas = {};
+  let any = false;
+  for (const k in THEME_VARS){
+    const v = pal[k];
+    if (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.trim())){ canvas[k] = v.trim(); any = true; }
+  }
+  if (!any) return null;
+  const out = { label: String(o.label || o.name || fallbackLabel || '自定义主题').slice(0, 24), canvas };
+  if (['lines', 'checker', 'dots', 'none'].indexOf(o.grid) >= 0) out.grid = o.grid;
+  if (['heart', 'cross'].indexOf(o.cursor) >= 0) out.cursor = o.cursor;
+  if (typeof o.heart === 'boolean') out.heart = o.heart;
+  if (typeof o.star === 'boolean') out.star = o.star;
+  return out;
+}
+/* 内置主题的 id，用户主题不许占用 */
+const BUILTIN_THEME_IDS = new Set(['board', 'undertale']);
+function makeUserThemeId(){
+  let id;
+  do { id = 'u_' + Math.random().toString(36).slice(2, 8); } while (THEMES[id]);
+  return id;
+}
+/* 注册一个用户主题（返回它的 id）；已经注册过的同 id 会覆盖 */
+function registerUserTheme(obj, keepId){
+  const n = normalizeThemeObject(obj);
+  if (!n) return null;
+  // 给了 keepId 又没被内置主题占用，就用它 —— 否则「文档里带的主题」每次打开
+  // 都会换一个新 id，引用它的地方全对不上。
+  const id = (keepId && !BUILTIN_THEME_IDS.has(keepId)) ? keepId : makeUserThemeId();
+  n.user = true;
+  THEMES[id] = n;
+  USER_THEMES[id] = n;
+  saveUserThemes();
+  return id;
+}
+function unregisterUserTheme(id){
+  if (!THEMES[id] || !THEMES[id].user) return false;
+  delete THEMES[id];
+  delete USER_THEMES[id];
+  if (themeId === id) applyTheme(DEFAULT_THEME);
+  saveUserThemes();
+  return true;
+}
+function saveUserThemes(){
+  try { localStorage.setItem(THEMES_KEY, JSON.stringify(USER_THEMES)); } catch(e){}
+}
+function loadUserThemes(){
+  let raw = null;
+  try { raw = localStorage.getItem(THEMES_KEY); } catch(e){}
+  if (!raw) return 0;
+  let obj = null;
+  try { obj = JSON.parse(raw); } catch(e){}
+  if (!obj || typeof obj !== 'object') return 0;
+  let n = 0;
+  for (const id in obj){
+    const def = normalizeThemeObject(obj[id], obj[id] && obj[id].label);
+    if (!def) continue;
+    def.user = true;
+    THEMES[id] = def; USER_THEMES[id] = def; n++;
+  }
+  return n;
+}
+/* 打开文档时把文档自带的主题并进来 */
+function adoptDocThemes(list){
+  let n = 0;
+  for (const t of (Array.isArray(list) ? list : [])){
+    const id = registerUserTheme(t, t && t.id);
+    if (id) n++;
+  }
+  return n;
+}
+const userThemes = () => USER_THEMES;

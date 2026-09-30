@@ -4304,21 +4304,33 @@
 
 
   /* ==================== 面向组件 ==================== */
-  T('CP01 注册表结构是完整的', () => {
-    ok('CP01 每个组件都有 id / label / scopes / props',
-      COMPONENTS.every(c => c.id && c.label && Array.isArray(c.scopes) && Array.isArray(c.props)),
-      COMPONENTS.map(c => c.id).join(','));
-    ok('CP01b 每个属性都有 key / label / type',
-      COMPONENTS.every(c => c.props.every(p => p.key && p.label && p.type)),
-      COMPONENTS.map(c => c.id + ':' + c.props.length).join(' '));
-    ok('CP01c 三种作用域都有组件可挂',
+  T('CP01 效果表 + 组件表的结构是完整的', () => {
+    ok('CP01 每个内置组件都有 id / label / scopes',
+      BUILTIN_COMPONENT_DEFS.every(c => c.id && c.label && Array.isArray(c.scopes)),
+      BUILTIN_COMPONENT_DEFS.map(c => c.id).join(','));
+    ok('CP01b 每个内置组件都指向一个存在的效果',
+      BUILTIN_COMPONENT_DEFS.every(c => !!effectDef(c.effect)),
+      BUILTIN_COMPONENT_DEFS.map(c => c.id + '->' + c.effect).join(' '));
+    ok('CP01c 每个效果都有 label / hint / scopes / props',
+      EFFECT_IDS.every(id => {
+        const e = EFFECTS[id];
+        return e.label && e.hint && Array.isArray(e.scopes) && Array.isArray(e.props);
+      }), EFFECT_IDS.join(','));
+    ok('CP01d 每个效果属性都有 key / label / type',
+      EFFECT_IDS.every(id => EFFECTS[id].props.every(p => p.key && p.label && p.type)),
+      EFFECT_IDS.map(id => id + ':' + EFFECTS[id].props.length).join(' '));
+    ok('CP01e 三种作用域都有组件可挂',
       COMPONENT_SCOPES.every(s => componentsFor(s).length > 0),
       COMPONENT_SCOPES.map(s => s + ':' + componentsFor(s).length).join(' '));
-    ok('CP01d 三种作用域都有内置能力清单',
+    ok('CP01f 三种作用域都有内置能力清单',
       COMPONENT_SCOPES.every(s => (BUILTIN_COMPONENTS[s] || []).length > 0));
-    ok('CP01e 内置清单里点明了优先级可引用变量',
-      BUILTIN_COMPONENTS.node.some(b => b.id === 'priority' && /\{变量\}/.test(b.hint)),
-      JSON.stringify(BUILTIN_COMPONENTS.node.find(b => b.id === 'priority')));
+    ok('CP01g 内置清单里点明了优先级可引用变量',
+      BUILTIN_COMPONENTS.node.some(b => b.id === 'priority' && /\{变量\}/.test(b.hint)));
+    ok('CP01h 效果分得清作用域（线宽只给连线、描边不给连线）',
+      EFFECTS.width.scopes.join(',') === 'edge' && EFFECTS.outline.scopes.indexOf('edge') < 0,
+      EFFECTS.width.scopes.join(',') + ' / ' + EFFECTS.outline.scopes.join(','));
+    ok('CP01i 每个作用域至少有一个效果能用',
+      COMPONENT_SCOPES.every(s => EFFECT_IDS.some(id => EFFECTS[id].scopes.indexOf(s) >= 0)));
   });
   T('CP02 加 / 改 / 删组件，一个类型只留一个', () => {
     fresh();
@@ -4579,6 +4591,287 @@
     ok('CP11f 连线没有「优先级」那一行（那是节点专属）',
       !/优先级/.test(compsListEl.textContent));
     closeComps();
+  });
+
+
+  /* ==================== 自定义组件 / 用户主题 / native 后端 ==================== */
+  const mkUserComp = (over) => Object.assign({
+    label:'打折标记', scopes:['node'],
+    parts:[{ effect:'badge', props:{ text:'打折', color:'#ffd800' } },
+           { effect:'outline', props:{ width:'3', color:'#ffd800' } }]
+  }, over || {});
+
+  T('CU01 自定义组件：声明 / 注册 / 注销', () => {
+    fresh();
+    const before = allComponents().length;
+    const def = registerUserComponent(mkUserComp());
+    ok('CU01 注册成功了', !!def && !!def.id, JSON.stringify(def && def.id));
+    ok('CU01b 打上了 user 标记', def.user === true);
+    ok('CU01c 进注册表了', allComponents().length === before + 1);
+    ok('CU01d 能查到', compDef(def.id) === def && isUserComponent(def.id));
+    ok('CU01e 作用域过滤也对',
+      componentsFor('node').some(c => c.id === def.id) && !componentsFor('edge').some(c => c.id === def.id));
+    ok('CU01f 落盘了', JSON.parse(localStorage.getItem('grapheon.comps.v1') || '[]')
+      .some(d => d.id === def.id));
+    ok('CU01g 注销掉', unregisterUserComponent(def.id) && !compDef(def.id));
+    ok('CU01h 注销不存在的返回 false', unregisterUserComponent('zzz') === false);
+    ok('CU01i 非法声明被挡住', (() => {
+      const n0 = allComponents().length;
+      registerUserComponent(null); registerUserComponent({});
+      registerUserComponent({ label:'x', scopes:[], parts:[{ effect:'badge' }] });
+      registerUserComponent({ label:'x', scopes:['node'], parts:[] });
+      registerUserComponent({ label:'x', scopes:['node'], parts:[{ effect:'外星效果' }] });
+      return allComponents().length === n0;
+    })(), allComponents().length);
+    ok('CU01j 作用域里的非法值会被过滤', (() => {
+      const d = registerUserComponent(mkUserComp({ scopes:['node', '外星', 'edge'] }));
+      const r = d && d.scopes.join(',') === 'node,edge';
+      if (d) unregisterUserComponent(d.id);
+      return r;
+    })());
+    localStorage.removeItem('grapheon.comps.v1');
+  });
+  T('CU02 自定义组件 = 多个效果的组合，实例按部件编号存', () => {
+    fresh(); layoutMind();
+    const def = registerUserComponent(mkUserComp());
+    const zhe = mkVar('折', '8');            // 顺便证明自定义组件的属性也过插值
+    const n = nodeByText('节点');
+    setComponent(n, def.id, { '0.text':'打 {折} 折', '1.width':'6' });
+    reindex(); sizeAll();
+    const parts = effectPartsOf(n, 'node').filter(p => p.compType === def.id);
+    ok('CU02 摊出来两个部件', parts.length === 2, parts.length);
+    ok('CU02b 部件顺序和声明一致',
+      parts[0].effect === 'badge' && parts[1].effect === 'outline',
+      parts.map(p => p.effect).join(','));
+    ok('CU02c 部件属性各读各的',
+      partValue(n, parts[0], 'text', 'node') === '打 8 折' &&
+      partNumber(n, parts[1], 'width', 'node', 0) === 6,
+      partValue(n, parts[0], 'text', 'node') + ' / ' + partNumber(n, parts[1], 'width', 'node', 0));
+    ok('CU02d 角标取得到（走的是同一个绘制入口）', badgeTextOf(n, 'node') === '打 8 折',
+      badgeTextOf(n, 'node'));
+    ok('CU02e 没填的部件用声明里的默认值', (() => {
+      const m = nodeByText('连线');
+      setComponent(m, def.id, {});
+      reindex();
+      const ps = effectPartsOf(m, 'node').filter(p => p.compType === def.id);
+      return partValue(m, ps[1], 'color', 'node') === '#ffd800';
+    })());
+    ok('CU02f 整个画布画得出来', (dirty = true, draw(), true));
+    ok('CU02g 效果不支持的作用域会被跳过', (() => {
+      const d2 = registerUserComponent({ label:'混合', scopes:['edge', 'node'], parts:[
+        { effect:'badge', props:{ text:'x' } }, { effect:'outline', props:{ width:'2' } }] });
+      const e = doc.edges[0];
+      setComponent(e, d2.id, {});
+      reindex();
+      const onEdge = effectPartsOf(e, 'edge').map(p => p.effect);
+      unregisterUserComponent(d2.id);
+      return onEdge.indexOf('badge') >= 0 && onEdge.indexOf('outline') < 0;
+    })());
+    unregisterUserComponent(def.id);
+    localStorage.removeItem('grapheon.comps.v1');
+  });
+  T('CU03 注销组件会把文档里的实例一起清掉', () => {
+    fresh(); layoutMind();
+    const def = registerUserComponent(mkUserComp());
+    const n = nodeByText('节点'), e = doc.edges[0];
+    setComponent(n, def.id, {}); setComponent(e, def.id, {});
+    a = null;
+    const grp = (() => { const x = nodeByText('连线'), y = nodeByText('操作');
+      sel.clear(); sel.add(x.id); sel.add(y.id); return createGroup(); })();
+    setComponent(grp, def.id, {});
+    reindex();
+    ok('CU03 三个地方都挂上了',
+      compsOf(n).length === 1 && compsOf(e).length === 1 && compsOf(grp).length === 1);
+    unregisterUserComponent(def.id);
+    ok('CU03b 注销后实例也没了（不留认不出来的孤儿）',
+      compsOf(n).length === 0 && compsOf(e).length === 0 && compsOf(grp).length === 0,
+      [compsOf(n).length, compsOf(e).length, compsOf(grp).length].join(','));
+    localStorage.removeItem('grapheon.comps.v1');
+  });
+  T('CU04 自定义组件跟着文档走（存读往返）', () => {
+    fresh(); layoutMind();
+    const def = registerUserComponent(mkUserComp({ label:'随文档走' }));
+    const n = nodeByText('节点');
+    setComponent(n, def.id, { '0.text':'文档里' });
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('CU04 存档里带了组件定义',
+      Array.isArray(snap.componentDefs) && snap.componentDefs.some(d => d.id === def.id),
+      JSON.stringify((snap.componentDefs || []).map(d => d.id)));
+    ok('CU04b 定义里带着部件', snap.componentDefs.find(d => d.id === def.id).parts.length === 2);
+    ok('CU04c 节点实例也带着', snap.nodes.find(x => x.id === n.id).components[0].type === def.id);
+    // 模拟「别人拿到这个文件、他本地没有这个组件」
+    unregisterUserComponent(def.id);
+    ok('CU04d 先确认本地真的没有了', !compDef(def.id));
+    deserialize(snap);
+    ok('CU04e 打开文档时自动把定义并进来了', !!compDef(def.id), String(compDef(def.id)));
+    ok('CU04f 实例也认出来了', compsOf(byId(n.id)).length === 1 && compOn(byId(n.id), def.id));
+    ok('CU04g 属性还在', compRaw(byId(n.id), def.id, '0.text') === '文档里',
+      compRaw(byId(n.id), def.id, '0.text'));
+    ok('CU04h 还能画', (dirty = true, draw(), true));
+    unregisterUserComponent(def.id);
+    localStorage.removeItem('grapheon.comps.v1');
+  });
+  T('CU05 组件面板：新建 / 编辑 / 删除自定义组件', () => {
+    fresh(); layoutMind();
+    selectOnly(nodeByText('节点').id);
+    openComps();
+    ok('CU05 列了「自定义组件」一节', /自定义组件/.test(compsListEl.textContent));
+    const newBtn = [...compsListEl.querySelectorAll('.ud-btn')].find(b => /新建组件/.test(b.textContent));
+    ok('CU05b 有新建按钮', !!newBtn);
+    newBtn.click();
+    ok('CU05c 进编辑器了', !!compEditor);
+    ok('CU05d 编辑器里列出全部效果',
+      compsListEl.querySelectorAll('.compeffect').length === EFFECT_IDS.length,
+      compsListEl.querySelectorAll('.compeffect').length);
+    // 填名字
+    const nameInp = [...compsListEl.querySelectorAll('.compinput')].find(i => /比如/.test(i.placeholder || ''));
+    nameInp.value = '测试组件'; nameInp.oninput();
+    ok('CU05e 名字记进草稿了', compEditor.label === '测试组件', compEditor.label);
+    // 勾上「染色」效果
+    const tintCard = [...compsListEl.querySelectorAll('.compeffect')].find(c => /染色/.test(c.textContent));
+    const cb = tintCard.querySelector('input[type=checkbox]');
+    cb.checked = true; cb.onchange();
+    ok('CU05f 效果加进草稿了', compEditor.parts.some(p => p.effect === 'tint'),
+      compEditor.parts.map(p => p.effect).join(','));
+    // 创建
+    const createBtn = [...compsListEl.querySelectorAll('.ud-btn')].find(b => b.textContent === '创建');
+    createBtn.click();
+    const made = USER_COMPONENTS.find(c => c.label === '测试组件');
+    ok('CU05g 创建出来了', !!made, USER_COMPONENTS.map(c => c.label).join(','));
+    ok('CU05h 编辑器关掉了', !compEditor);
+    ok('CU05i 列表里出现了', /测试组件/.test(compsListEl.textContent));
+    // 删掉
+    const delBtn = [...compsListEl.querySelectorAll('.compuserdef')]
+      .find(d => /测试组件/.test(d.textContent)).querySelector('.ud-btn:nth-of-type(2)')
+      || [...compsListEl.querySelectorAll('.compuserdef .ud-btn')].filter(b => b.textContent === '删除')[0];
+    delBtn.click();
+    ok('CU05j 删得掉', !USER_COMPONENTS.some(c => c.label === '测试组件'));
+    closeComps();
+    localStorage.removeItem('grapheon.comps.v1');
+  });
+  await TA('CU06 native 存储后端：宿主一挂上就被优先选中', async () => {
+    const files = new Map();
+    let seq = 0;
+    window.GrapheonNative = {
+      label:'测试宿主',
+      async ready(){ return true; },
+      async list(){ return [...files.values()].map(f => ({ kind:f.kind, name:f.name, size:f.size, id:f.id })); },
+      async get(id){ const f = files.get(id); return f ? f.data : null; },
+      async put(kind, name, b64){
+        const id = 'nat' + (++seq);
+        files.set(id, { id, kind, name, size:Math.floor(b64.length * 0.75), data:b64 });
+        return id;
+      },
+      async del(id){ files.delete(id); }
+    };
+    try {
+      ok('CU06 探测到了宿主', hasNative());
+      const ns = makeNativeStore(nativeHost());
+      ok('CU06b 名字里带上了宿主的名字', ns.label.indexOf('测试宿主') >= 0, ns.label);
+      ok('CU06c id 是 native', ns.id === 'native');
+      const id = await ns.put('assets', 'a.png', new Blob([new Uint8Array([1, 2, 3, 4])]));
+      const rows = await ns.list();
+      ok('CU06d 存进去了', rows.length === 1 && rows[0].name === 'a.png', JSON.stringify(rows));
+      const back = await ns.get(id);
+      ok('CU06e base64 过了桥还能还原成 Blob', back instanceof Blob && back.size === 4,
+        back && back.constructor.name + '/' + (back && back.size));
+      await ns.del(id);
+      ok('CU06f 删得掉', (await ns.list()).length === 0);
+      // Store.init 要优先挑它
+      Store.backend = null;
+      const picked = await Store.init();
+      ok('CU06g Store 优先挑 native（exe / 手机环境里这是对的）',
+        picked.id === 'native', picked.id);
+    } finally {
+      delete window.GrapheonNative;
+      Store.backend = null;
+    }
+    ok('CU06h 卸掉宿主之后就不认了', !hasNative());
+    const after = await Store.init();
+    ok('CU06i 会退回浏览器自带的后端', after.id !== 'native', after.id);
+  });
+  T('TH01 主题文件：解析 / 注册 / 套用 / 删除', () => {
+    localStorage.removeItem('grapheon.themes.v1');
+    const obj = { label:'暗夜', canvas:{ bg:'#101010', white:'#eeeeee', yellow:'#ffaa00' },
+                  grid:'dots', cursor:'cross', heart:false, star:false };
+    const id = registerUserTheme(obj);
+    ok('TH01 注册成功', !!id && !!THEMES[id], String(id));
+    ok('TH01b 打上了 user 标记', THEMES[id].user === true);
+    ok('TH01c 调色板收下了', THEMES[id].canvas.bg === '#101010' && THEMES[id].canvas.yellow === '#ffaa00');
+    ok('TH01d 性格也收下了',
+      THEMES[id].grid === 'dots' && THEMES[id].cursor === 'cross'
+      && THEMES[id].heart === false && THEMES[id].star === false,
+      JSON.stringify(THEMES[id]));
+    applyTheme(id);
+    ok('TH01e 套用之后 C 里就是它的颜色', C.bg === '#101010' && C.yellow === '#ffaa00',
+      C.bg + '/' + C.yellow);
+    ok('TH01f 背景和光标也跟着换了', gridStyle() === 'dots' && themeCursor() === 'cross',
+      gridStyle() + '/' + themeCursor());
+    ok('TH01g 落盘了', !!localStorage.getItem('grapheon.themes.v1'));
+    ok('TH01h 删得掉且会切回默认',
+      unregisterUserTheme(id) && themeId === DEFAULT_THEME && !THEMES[id],
+      themeId + '/' + String(THEMES[id]));
+    // 坏数据
+    ok('TH01i 没有 canvas 的挡下来', registerUserTheme({ label:'x' }) === null);
+    ok('TH01j 调色板里没有合法颜色也挡下来', registerUserTheme({ canvas:{ bg:'不是颜色' } }) === null);
+    ok('TH01k 非法颜色会被挑掉、合法的留下', (() => {
+      const i2 = registerUserTheme({ canvas:{ bg:'#000000', white:'不是颜色' } });
+      const r = THEMES[i2] && THEMES[i2].canvas.bg === '#000000' && THEMES[i2].canvas.white === undefined;
+      unregisterUserTheme(i2);
+      return r;
+    })());
+    applyTheme(DEFAULT_THEME);
+    localStorage.removeItem('grapheon.themes.v1');
+  });
+  T('TH02 用户主题跟着文档走，也能重新从本地库读回来', () => {
+    fresh(); layoutMind();
+    localStorage.removeItem('grapheon.themes.v1');
+    const id = registerUserTheme({ label:'随文档', canvas:{ bg:'#123456', white:'#ffffff' } });
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('TH02 存档里带了主题定义',
+      Array.isArray(snap.themes) && snap.themes.some(t => t.id === id),
+      JSON.stringify((snap.themes || []).map(t => t.id)));
+    unregisterUserTheme(id);
+    ok('TH02b 先确认本地没了', !THEMES[id]);
+    deserialize(snap);
+    ok('TH02c 打开文档时并进来了', !!THEMES[id] && THEMES[id].canvas.bg === '#123456',
+      JSON.stringify(THEMES[id] && THEMES[id].canvas));
+    // 本地库的存取
+    saveUserThemes();
+    const raw = localStorage.getItem('grapheon.themes.v1');
+    ok('TH02d 库里有它', !!raw && raw.indexOf(id) >= 0);
+    unregisterUserTheme(id);
+    localStorage.setItem('grapheon.themes.v1', raw);   // 模拟「库没删，只是重开页面」
+    const n = loadUserThemes();
+    ok('TH02e 能在重开时读回来', n >= 1 && !!THEMES[id], n + '/' + String(!!THEMES[id]));
+    unregisterUserTheme(id);
+    localStorage.removeItem('grapheon.themes.v1');
+    applyTheme(DEFAULT_THEME);
+  });
+  await TA('TH03 自定义字体持久化：存进素材库、重开能捞回来', async () => {
+    const d = makeIdbStore();
+    if (!(await d.ready())){ ok('TH03 跳过（没有 IndexedDB）', true); return; }
+    await d.clear();
+    const old = Store.backend;
+    Store.backend = d;
+    try {
+      // 造一个「能当字体用」的假字体是做不到的，所以这里验的是**存/取链路**：
+      // 素材库里有一份，restoreUserFonts 会去读它、坏数据安静跳过、不挡启动。
+      await Store.put('fonts', '假字体.ttf', new Blob([new Uint8Array([1, 2, 3])]));
+      const listed = (await d.list()).filter(x => x.kind === 'fonts');
+      ok('TH03 字体进了素材库', listed.length === 1 && listed[0].name === '假字体.ttf',
+        JSON.stringify(listed));
+      const before = Object.keys(NODE_FONTS).length;
+      const n = await restoreUserFonts();
+      ok('TH03b 坏字体不会污染字体表', Object.keys(NODE_FONTS).length === before,
+        Object.keys(NODE_FONTS).length + ' vs ' + before);
+      ok('TH03c 也不会把它算成成功', n === 0, n);
+      ok('TH03d 不会抛出去挡启动', true);
+    } finally {
+      await d.clear();
+      Store.backend = old;
+    }
   });
 
   /* ==================== 收尾 ==================== */

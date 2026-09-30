@@ -342,3 +342,15 @@ body.no-heart .ud-btn::before{ content:none; }
 #comps .compbuiltin{ display:flex; gap:10px; }
 #comps .compbuiltin b{ color:var(--g); min-width:88px; font-weight:normal; }
 #comps .compbuiltin span{ color:var(--d); }
+
+/* ---------------- 组件面板：自定义组件相关 ---------------- */
+#comps .compcard.user{ border-style:dashed; }
+#comps .comppart{ color:var(--y); font-size:14px; margin-top:8px; border-top:1px solid var(--d); padding-top:4px; }
+#comps .compeffect{ border:2px solid var(--d); padding:4px 8px; margin:6px 0; }
+#comps .compeffect.on{ border-color:var(--y); }
+#comps .compcheck{ display:inline-flex; align-items:center; gap:5px; color:var(--g); }
+#comps .compwarn{ color:var(--r); margin:8px 0; }
+#comps .compuserdef{ display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; margin-bottom:4px; }
+#comps .compuserdef b{ color:var(--w); min-width:88px; font-weight:normal; }
+#comps .compuserdef span{ color:var(--g); flex:1; font-size:14px; }
+#comps .compuserdef .ud-btn{ font-size:14px; padding:1px 6px; }
