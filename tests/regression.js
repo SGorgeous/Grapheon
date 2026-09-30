@@ -1057,13 +1057,30 @@
     ok('S03b aSide 变成 t', e.aSide === 't', e.aSide);
     const ep = edgeEndpoints(e);
     const want = anchorsFor(b).t;
-    ok('S03c 起点锚点就在上边中点',
-      Math.abs(ep.a.x - want.x) < 0.01 && Math.abs(ep.a.y - want.y) < 0.01,
-      JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
-    const opts2 = [...endListEl.querySelectorAll('.endrow')[0].querySelectorAll('.opt')];
-    opts2[0].click();                             // 回到自动
-    ok('S03d 可以恢复自动', e.aSide === null);
-    closeEndBox();
+    // ★ 落点必须是**真实端点**：老的「四条边中点」已经废掉了。
+    //   节点上正好有那条边的端点才钉得住，没有就退回「哪个端口朝着对方」。
+    const realPort = portList(byId(b.id)).outs.filter(q => q.side === 't')[0];
+    if (realPort){
+      const want = portPoint(byId(b.id), realPort);
+      ok('S03c 起点锚点就在那个上边端点上',
+        Math.abs(ep.a.x - want.x) < 1.5 && Math.abs(ep.a.y - want.y) < 1.5,
+        JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
+    } else {
+      const autoP = autoPortFor(b.id, nodeBox(byId(targetId)), 'a', 't') || autoPortFor(b.id, nodeBox(byId(targetId)), 'a');
+      const want = portPoint(byId(b.id), autoP);
+      ok('S03c 上边没有端点，退回朝向对方的那个端点',
+        Math.abs(ep.a.x - want.x) < 1.5 && Math.abs(ep.a.y - want.y) < 1.5,
+        JSON.stringify(ep.a) + ' vs ' + JSON.stringify(want));
+    }
+    // 给它加一个上边端点之后，aSide='t' 就该被采纳
+    const added = addPort(byId(b.id), 'outs');
+    movePort(byId(b.id), 'outs', added.id, { x:nodeBox(byId(b.id)).x + nodeBox(byId(b.id)).w * 0.5, y:nodeBox(byId(b.id)).y - 2 });
+    reindex();
+    const ep2 = edgeEndpoints(e);
+    const w2 = portPoint(byId(b.id), portList(byId(b.id)).outs.filter(q => q.side === 't')[0]);
+    ok('S03d ★ 边上真有端点时，aSide 就采纳它',
+      Math.abs(ep2.a.x - w2.x) < 1.5 && Math.abs(ep2.a.y - w2.y) < 1.5,
+      JSON.stringify(ep2.a) + ' vs ' + JSON.stringify(w2));
   });
   T('S04 钉死的端点不随相对位置改变', () => {
     fresh(); layoutMind();

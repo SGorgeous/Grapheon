@@ -126,6 +126,37 @@ function forcedAnchorOf(nodeId, portId){
   const o = (typeof PORT_OUT === 'object' && PORT_OUT[p.side]) || { x:1, y:0 };
   return { x:pt.x, y:pt.y, d:[o.x, o.y] };
 }
+/* 没记端点时该用哪个：挑「朝外方向最正对对方」的那个。
+   进来的是源头的 OUT 端点 / 落点的 IN 端点 —— 这也是它们该在的位置。 */
+function autoPortFor(nodeId, otherBox, end, side){
+  if (typeof portList !== 'function') return null;
+  const n = idx.byId.get(nodeId);
+  if (!n) return null;
+  const L = portList(n);
+  const list0 = (end === 'a')
+    ? (L.outs.length ? L.outs : L.ins)
+    : (L.ins.length ? L.ins : L.outs);
+  let list = list0.slice();
+  if (!list.length) return null;
+  // aSide / bSide 是「想钉在哪条边」—— 但落点必须是**真实端点**。
+  // 那条边上正好有端点就用它；没有就退回「哪个端口朝着对方」。
+  // （老的「四条边中点」不再作为落点：同边可能有多个端点，说不清是哪一个。）
+  if (side){
+    const onSide = list.filter(q => q.side === side);
+    if (onSide.length) list = onSide;
+  }
+  const b = nodeBox(n);
+  const self = { x:b.x + b.w / 2, y:b.y + b.h / 2 };
+  const other = { x:otherBox.x + otherBox.w / 2, y:otherBox.y + otherBox.h / 2 };
+  let best = list[0], bestScore = -Infinity;
+  for (const q of list){
+    const o = (typeof PORT_OUT === 'object' && PORT_OUT[q.side]) || { x:1, y:0 };
+    // 朝外的方向 · 指向对方的方向：越大越正对
+    const score = o.x * (other.x - self.x) + o.y * (other.y - self.y);
+    if (score > bestScore){ bestScore = score; best = q; }
+  }
+  return best;
+}
 function edgeGeomFor(e){
   const wg = waypointGeom(e);
   if (wg) return wg;
@@ -135,9 +166,15 @@ function edgeGeomFor(e){
   //   直接往上写 __forced 会把它永久污染 —— 之后所有用到这个盒子的锚点
   //   四条边全变成同一个点，几何退化，线就画不出来了。
   const a = Object.assign({}, a0), b = Object.assign({}, b0);
-  // 端点钉死的位置优先 —— 端点在哪儿，线就从哪儿出来
-  const fa = forcedAnchorOf(e.s, e.aPort); if (fa) a.__forced = fa;
-  const fb = forcedAnchorOf(e.t, e.bPort); if (fb) b.__forced = fb;
+  /* ★ 两端都钉在**真实端点**上。
+     老的「四条边中点」不再作为落点 —— 同一节点上可能有多个端点，
+     「哪条边」表达不了是哪一个，只有端点 id 说得清。
+     没记端点（老存档 / 程序内部建的边）就按「哪个端口朝着对方」自动挑一个。 */
+  let pa = e.aPort, pb = e.bPort;
+  if (pa == null){ const q = autoPortFor(e.s, b0, 'a', e.aSide); if (q) pa = q.id; }
+  if (pb == null){ const q = autoPortFor(e.t, a0, 'b', e.bSide); if (q) pb = q.id; }
+  const fa = forcedAnchorOf(e.s, pa); if (fa) a.__forced = fa;
+  const fb = forcedAnchorOf(e.t, pb); if (fb) b.__forced = fb;
   if (e.route === 'curve') return bezierGeom(a, b, e.aSide, e.bSide);
   // 正交折线：按 id 哈希给每条线一点走廊偏移，避免平行线完全重叠
   return orthoGeom(a, b, ((hashId(e.id) % 7) - 3) * 9, e.aSide, e.bSide);
