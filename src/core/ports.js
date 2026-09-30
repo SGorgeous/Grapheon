@@ -18,6 +18,12 @@
    ========================================================================== */
 
 const PORT_SIDES = ['t', 'b', 'l', 'r'];
+/* 端点分三类：
+     ins   —— 输入端点：数据从这儿进来（程序节点用）
+     outs  —— 输出端点：数据从这儿出去（程序节点用）
+     conns —— **连接端点**：只管连不连得上，**不参与任何求值**。
+              普通节点默认四条边各一个 —— 老的「四方向点」正式收编成端点。 */
+const PORT_DIRS = ['ins', 'outs', 'conns'];
 const PORT_MAX_PER_DIR = 8;                    // 一边最多几个，太多画不下也点不准
 const PORT_HIT_R = 12;                         // 命中半径（世界单位，缩放会修正）
 const PORT_DOT_R = 4.5;
@@ -36,30 +42,37 @@ function defaultPorts(n){
   /* 运算符节点：两个输入端点，各对一个操作数格子（按 ID 升序就是运算顺序）。
      广播节点：只有一个输入 —— 它的值来自上游，没有输出端点。 */
   if (n && n.kind === 'op'){
-    /* 输入端点个数 = arity + 1：第 1 个端点是流进来的那个值（第一个操作数），
-       后面每个端点各对一个运算值格子。
-       + - * / 的 arity 是 1 → 正好 2 个输入端点。 */
     const arity = (typeof opArity === 'function') ? opArity(normalizeOpDef(n.opDef).op) : 1;
     const ins = [{ id:1, side:'l', at:0.5, label:'操作数 1' }];
     for (let i = 0; i < arity; i++){
       ins.push({ id:2 + i, side:'l', at:0.5, label:'操作数 ' + (i + 2) });
     }
     spreadPorts({ ins, outs:[] }, 'l');
-    return { ins, outs:[{ id:2 + arity, side:'r', at:0.5, label:'' }] };
+    return { ins, outs:[{ id:2 + arity, side:'r', at:0.5, label:'' }], conns:[] };
   }
   if (n && n.kind === 'broadcast'){
-    return { ins:[{ id:1, side:'l', at:0.5, label:'取值' }], outs:[] };
+    return { ins:[{ id:1, side:'l', at:0.5, label:'取值' }], outs:[], conns:[] };
   }
   if (n && n.kind === 'program'){
-    return { ins:[{ id:1, side:'l', at:0.5, label:'' }], outs:[] };
+    return { ins:[{ id:1, side:'l', at:0.5, label:'' }], outs:[], conns:[] };
   }
   if (n && n.kind === 'cond'){
     return { ins:[{ id:1, side:'l', at:0.5, label:'条件' }],
-             outs:[{ id:3, side:'r', at:0.5, label:'' }] };
+             outs:[{ id:3, side:'r', at:0.5, label:'' }], conns:[] };
   }
+  /* ★ 变量节点 / 输出节点：还是老规矩，一进一出。
+     ⚠ 这个分支必须写在「普通节点」那条**前面** —— 否则会掉进 connd 默认，
+       变量节点就变成四个连接端点、一个输入输出都没有了。 */
+  if (n && (n.kind === 'var' || n.kind === 'out')){
+    return { ins:[{ id:1, side:'l', at:0.5, label:'' }],
+             outs:[{ id:3, side:'r', at:0.5, label:'' }], conns:[] };
+  }
+  /* ★ 普通节点（以及图片 / 表格 / 嵌入）：**四条边各一个连接端点**。
+     连接端点只管连不连得上，不参与求值。 */
   return {
-    ins:  [{ id:1, side:'l', at:0.5, label:'' }],
-    outs: [{ id:3, side:'r', at:0.5, label:'' }]
+    ins:  [],
+    outs: [],
+    conns: PORT_SIDES.map((s, i) => ({ id:i + 1, side:s, at:0.5, label:'' }))
   };
 }
 
@@ -76,7 +89,8 @@ function normalizePort(p, fallbackId){
 /* 规整一张端点表。id 重复的话，后面的那个往后挪到第一个空位 ——
    宁可自动让开，也不要因为一个手滑的数字就让整份文档读不出来。 */
 function normalizePorts(ports){
-  const src = (ports && (Array.isArray(ports.ins) || Array.isArray(ports.outs))) ? ports : null;
+  const src = (ports && (Array.isArray(ports.ins) || Array.isArray(ports.outs)
+                         || Array.isArray(ports.conns))) ? ports : null;
   if (!src) return null;                       // null = 用默认
   const used = new Set();
   const take = (list, dirFallback) => {
@@ -93,16 +107,19 @@ function normalizePorts(ports){
     });
     return out;
   };
-  return { ins:take(src.ins), outs:take(src.outs) };
+  return { ins:take(src.ins), outs:take(src.outs), conns:take(src.conns) };
 }
 /* 拿到实际生效的端点表（没配就是默认） */
 function portList(n){
-  if (!n) return { ins:[], outs:[] };
+  if (!n) return { ins:[], outs:[], conns:[] };
   const own = normalizePorts(n.ports);
   if (own) return own;
   return defaultPorts(n);
 }
-const nodePorts = (n) => portList(n).ins.concat(portList(n).outs);
+const nodePorts = (n) => {
+  const L = portList(n);
+  return L.ins.concat(L.outs, L.conns || []);
+};
 
 /* 端点在世界里的位置 */
 function portPoint(n, port){
@@ -123,8 +140,8 @@ function portById(n, id){
 function usedPortIds(n, exceptDir, exceptId){
   const s = new Set();
   const L = portList(n);
-  for (const dir of ['ins', 'outs']){
-    for (const p of L[dir]){
+  for (const dir of PORT_DIRS){
+    for (const p of (L[dir] || [])){
       if (dir === exceptDir && p.id === exceptId) continue;
       s.add(p.id);
     }
@@ -174,7 +191,7 @@ function setPortLabel(n, dir, id, label){
 }
 /* 加一个端点：自动挑一条还有空位的边，位置均分 */
 function addPort(n, dir){
-  if (!n || (dir !== 'ins' && dir !== 'outs')) return null;
+  if (!n || PORT_DIRS.indexOf(dir) < 0) return null;
   const L = normalizePorts(n.ports) || defaultPorts(n);
   if (L[dir].length >= PORT_MAX_PER_DIR){
     say('* 一边最多 ' + PORT_MAX_PER_DIR + ' 个端点。');
@@ -183,7 +200,7 @@ function addPort(n, dir){
   // 挑用得最少的一条边
   const count = {};
   for (const s of PORT_SIDES) count[s] = 0;
-  for (const d of ['ins', 'outs']) for (const p of L[d]) count[p.side] = (count[p.side] || 0) + 1;
+  for (const d of PORT_DIRS) for (const p of (L[d] || [])) count[p.side] = (count[p.side] || 0) + 1;
   let side = PORT_SIDES[0];
   for (const s of PORT_SIDES) if (count[s] < count[side]) side = s;
   const p = { id:nextPortId(n), side, at:0.5, label:'' };
@@ -213,7 +230,7 @@ function removePort(n, dir, id){
 /* 同一条边上的端点均匀铺开，免得叠在一起 */
 function spreadPorts(L, side){
   const same = [];
-  for (const d of ['ins', 'outs']) for (const p of L[d]) if (p.side === side) same.push(p);
+  for (const d of PORT_DIRS) for (const p of (L[d] || [])) if (p.side === side) same.push(p);
   same.sort((a, b) => a.id - b.id);            // 按 id 排，顺序稳定
   same.forEach((p, i) => { p.at = (i + 1) / (same.length + 1); });
 }
@@ -233,7 +250,7 @@ function portIdAtPoint(p, node){
   if (!node || typeof portList !== 'function') return null;
   const tol = 12 / Math.max(0.2, view.z);
   let best = null, bestD = Infinity;
-  for (const q of portList(node).ins.concat(portList(node).outs)){
+  for (const q of nodePorts(node)){
     const pt = portPoint(node, q);
     const d = Math.hypot(pt.x - p.x, pt.y - p.y);
     if (d <= tol && d < bestD){ bestD = d; best = q; }
@@ -295,7 +312,7 @@ function portHitAt(p, node){
     // 只在「全局找」时才要求它已经显示；显式指定了节点就直接算（双击就是这个用法）
     if (!node && !portsShowLabel(n)) continue;
     const L = portList(n);
-    for (const dir of ['ins', 'outs']){
+    for (const dir of PORT_DIRS){
       for (const q of L[dir]){
         const pt = portPoint(n, q);
         const d = Math.hypot(pt.x - p.x, pt.y - p.y);
@@ -344,7 +361,7 @@ function portHandleAt(p, node){
     if (!n || isHidden(n.id) || isEmbed(n)) continue;
     if (!hasPorts(n)) continue;              // 非程序节点没有可拖的端点
     if (!portsShowLabel(n)) continue;
-    for (const dir of ['ins', 'outs']){
+    for (const dir of PORT_DIRS){
       for (const q of portList(n)[dir]){
         if (inBox(portHandleBox(n, q), p)) return { node:n, dir, port:q };
       }
@@ -382,8 +399,8 @@ function drawPorts(g, n, showLabel){
   const L = portList(n);
   const hl = (typeof hoverPort !== 'undefined' && hoverPort && hoverPort.node === n) ? hoverPort : null;
   g.save();
-  for (const dir of ['ins', 'outs']){
-    for (const p of L[dir]){
+  for (const dir of PORT_DIRS){
+    for (const p of (L[dir] || [])){
       const pt = portPoint(n, p);
       const on = hl && hl.port && hl.port.id === p.id;
       const r = on ? PORT_DOT_R * 1.5 : PORT_DOT_R;

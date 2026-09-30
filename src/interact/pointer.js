@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -386,10 +386,14 @@ canvas.addEventListener('dblclick', (ev) => {
   if (n){
     selectOnly(n.id);
     if (isEmbed(n)){ enterEmbed(n); return; }        // 双击嵌入节点 = 进去编辑
-    // 双击端点 = 改 ID / 标签（一个小框两样都管）
+    /* 双击端点 = 改 ID / 标签（一个小框两样都管）。
+       ★ 但**连接端点不参与** —— 它「只有连接的功能，没有任何其他功能」，
+         所以连 ID / 标签都不给它改。
+         顺带解决一个真冲突：普通节点顶边正中就有一个连接端点，
+         而「双击靠上那条带改名」的落点离它只有 10px，会被端口编辑器抢走。 */
     if (typeof portHitAt === 'function'){
       const ph = portHitAt(p, n);
-      if (ph){ selectOnly(n.id); openPortEditor(n, ph.dir, ph.port.id); return; }
+      if (ph && ph.dir !== 'conns'){ selectOnly(n.id); openPortEditor(n, ph.dir, ph.port.id); return; }
     }
     // 表格节点：双击哪个格子就编辑哪个格子
     if (isTableNode(n)){

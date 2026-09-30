@@ -95,7 +95,7 @@ const SPAWN_SIDES = { right:['r','l'], left:['l','r'], up:['t','b'], down:['b','
 function ensurePortOn(node, side){
   if (!node || !side) return null;
   const L = portList(node);
-  const hit = L.ins.concat(L.outs).filter(p => p.side === side)[0];
+  const hit = L.ins.concat(L.outs, L.conns || []).filter(p => p.side === side)[0];
   if (hit) return hit;
   const dir = (side === 'r' || side === 't') ? 'outs' : 'ins';
   const p = addPort(node, dir);
