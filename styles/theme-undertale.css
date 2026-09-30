@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · 主题：Undertale
    全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
    加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
@@ -82,18 +82,22 @@ body.dsh-ready{cursor:none}
   caret-color:var(--y);cursor:text;
 }
 
-/* ---------- 右键菜单 ---------- */
-#ctx{
-  position:fixed;display:none;z-index:70;pointer-events:auto;
-  padding:5px;min-width:226px;
+/* ---------- 弹出菜单（#ctx 是根菜单，子菜单是 body 下的 .menu 兄弟节点） ---------- */
+#ctx,.menu{
+  position:fixed;z-index:70;pointer-events:auto;
+  padding:5px;min-width:214px;
 }
-#ctx .item{
-  padding:4px 10px;font-size:16px;color:var(--w);white-space:nowrap;display:flex;justify-content:space-between;gap:20px;
+#ctx{display:none}
+.menu .item{
+  padding:4px 10px;font-size:16px;color:var(--w);white-space:nowrap;
+  display:flex;justify-content:space-between;gap:20px;
 }
-#ctx .item:hover{background:var(--w);color:var(--bg)}
-#ctx .item:hover .k{color:var(--bg)}
-#ctx .k{color:var(--g);font-size:16px}
-#ctx .hr{height:3px;background:#333;margin:5px 0}
+.menu .item:hover,.menu .item.sel{background:var(--w);color:var(--bg)}
+.menu .item:hover .k,.menu .item.sel .k{color:var(--bg)}
+.menu .item.off{color:var(--d)}
+.menu .item.off:hover{background:transparent;color:var(--d)}
+.menu .k{color:var(--g);font-size:16px}
+.menu .hr{height:3px;background:#333;margin:5px 0}
 
 /* ---------- 帮助 ---------- */
 #help{
@@ -192,3 +196,14 @@ body.dsh-ready{cursor:none}
   color:var(--g);font-size:16px;line-height:1;
 }
 #endbox .opts{display:flex;gap:16px;flex-wrap:wrap}
+
+/* ==========================================================================
+   右侧浮层面板：一律贴在下方提示框的正上方，右下角对齐。
+   提示框高度会随文字换行变化，所以由 dialogue.js 量出来写进 --dlg-h。
+   ========================================================================== */
+#help,#exp,#edgebox,#endbox,#nodebox{
+  left:auto;right:24px;top:auto;transform:none;
+  bottom:calc(var(--dlg-h,132px) + 12px);
+  max-height:calc(100vh - var(--dlg-h,132px) - 116px);
+  overflow:auto;
+}

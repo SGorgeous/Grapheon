@@ -29,6 +29,23 @@
   const S = (wp) => w2s(wp);
   const center = (n) => S({ x:n.x + n.w / 2, y:n.y + n.h / 2 });
   const center0 = (n) => ({ x:n.x + n.w / 2, y:n.y + n.h / 2 });   // 世界坐标下的中心
+  // 右键菜单现在用子菜单分层。menuStack[0] 是根菜单，之后是展开着的各级子菜单。
+  const menuItems = () => menuStack.reduce((a, m) => a.concat([...m.querySelectorAll('.item')]), []);
+  /* 子菜单里的当前值前面有 ●，比较前先剥掉，否则「当前项」永远匹配不上 */
+  const labelOf   = (d) => d.querySelector('.lb').textContent.trim().replace(/^●\s*/, '');
+  const menuItem  = (prefix) => menuItems().find(d => labelOf(d).indexOf(prefix) === 0);
+  /* 在根菜单里找到某一项并把它的子菜单展开（mouseenter 不冒泡，直接派发） */
+  const openSub = (prefix) => {
+    const d = [...ctxEl.querySelectorAll('.item')].find(x => labelOf(x).indexOf(prefix) === 0);
+    if (!d) throw new Error('根菜单里没有「' + prefix + '」');
+    d.onmouseenter && d.onmouseenter();
+    return d;
+  };
+  const clickSub = (prefix) => {
+    const d = menuItem(prefix);
+    if (d) d.click();
+    return !!d;
+  };
   const nodeByText = (t) => doc.nodes.find(n => n.text === t);
   const rootNode = () => doc.nodes.find(n => isRoot(n));   // fresh() 会重建文档，别缓存节点引用
   const edgeOf = (s, t) => doc.edges.find(e => e.s === s.id && e.t === t.id);
@@ -1041,8 +1058,9 @@
     ok('W04 先改成固定尺寸', n.fixedW === 300);
     const c = center(n);
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
-    const it = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('恢复自适应') === 0);
-    ok('W04b 右键里有恢复项', !!it);
+    openSub('形状');
+    const it = menuItem('恢复自适应尺寸');
+    ok('W04b 右键「形状」子菜单里有恢复项', !!it);
     if (it) it.click();
     ok('W04c 已清掉固定尺寸', !n.fixedW && !n.fixedH);
     ok('W04d 又回到自动宽度', n.w !== 300);
@@ -1123,13 +1141,15 @@
     const e = doc.edges[0];
     const m = S(edgeGeomFor(e).mid);
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
-    const add = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('在此添加拐点') === 0);
-    ok('V06 菜单里有「在此添加拐点」', !!add);
+    openSub('拐点');
+    const add = menuItem('在此添加拐点');
+    ok('V06 「拐点」子菜单里有「在此添加拐点」', !!add);
     if (add) add.click();
     ok('V06b 加上了一个拐点', e.waypoints && e.waypoints.length === 1);
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
-    const clr = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('清除全部拐点') === 0);
-    ok('V06c 有拐点时出现「清除全部拐点」', !!clr);
+    openSub('拐点');
+    const clr = menuItem('清除全部拐点');
+    ok('V06c 有拐点时子菜单里有「清除全部拐点」', !!clr);
     if (clr) clr.click();
     ok('V06d 已清空', !e.waypoints);
     hideCtx();
@@ -1630,6 +1650,154 @@
       Math.abs(grp.x - need.x) < 1 && Math.abs(grp.w - need.w) < 1,
       JSON.stringify({ box:{ x:grp.x, w:grp.w }, need:{ x:need.x, w:need.w } }));
   });
+  /* ==================== 菜单分层 & 面板定位 ==================== */
+  T('M01 右键菜单按功能分成了子菜单', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const c = center(n);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
+    ok('M01 根菜单打开', ctxEl.style.display === 'block');
+    const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('M01b 根菜单收短了（≤10 项）', tops.length <= 10, tops.length + ' 项: ' + tops.join(' | '));
+    ok('M01c 有「形状」子菜单', tops.indexOf('形状') >= 0, tops.join(' | '));
+    ok('M01d 顶层不再平铺四个形状', tops.indexOf('矩形') < 0 && tops.indexOf('菱形（判断）') < 0, tops.join(' | '));
+    ok('M01e 子菜单项右边有 ▶', !!document.querySelector('.menu .item.sub .k'));
+    hideCtx();
+    ok('M01f 收起后子菜单元素也被清掉', document.querySelectorAll('.menu').length === 0,
+      document.querySelectorAll('.menu').length);
+  });
+  T('M02 子菜单鼠标移上去才展开，收起时不留痕', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const c = center(n);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
+    ok('M02 一开始只有一级菜单', menuStack.length === 1, menuStack.length);
+    openSub('形状');
+    ok('M02b 展开后有二级菜单', menuStack.length === 2, menuStack.length);
+    ok('M02c 形状项本身还在（子菜单是新的元素）', ctxEl.querySelectorAll('.item').length > 0);
+    const subs = [...menuStack[1].querySelectorAll('.item')].map(labelOf);
+    ok('M02d 四个形状都在子菜单里',
+      ['矩形', '圆角矩形', '菱形（判断）', '椭圆'].every(s => subs.some(x => x === s)), subs.join(' | '));
+    // 移到一个没有子菜单的顶层项上 → 二级菜单应当收起来
+    const plain = [...ctxEl.querySelectorAll('.item')].find(d => !d.classList.contains('sub'));
+    plain.onmouseenter && plain.onmouseenter();
+    ok('M02e 移到普通项上二级菜单收起', menuStack.length === 1, menuStack.length);
+    hideCtx();
+  });
+  T('M03 子菜单里的当前值带 ●，点了就生效', () => {
+    fresh(); layoutMind();
+    const e = doc.edges[0];
+    setEdgeStyle(e, { arrow:'both', dash:true, route:'curve' });
+    const m = S(edgeGeomFor(e).mid);
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
+    openSub('箭头');
+    const raw = [...menuStack[1].querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('M03 当前箭头带 ●', raw.some(t => t.indexOf('●') === 0 && t.indexOf('双向箭头') > 0), raw.join(' | '));
+    ok('M03b 只有当前那一个带 ●', raw.filter(t => t.indexOf('●') === 0).length === 1, raw.join(' | '));
+    clickSub('无箭头');
+    ok('M03c 点一下就切过去了', e.arrow === 'none', e.arrow);
+    ok('M03d 点完菜单关掉了', ctxEl.style.display === 'none' && menuStack.length === 0, menuStack.length);
+    // 线型
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:m.x, clientY:m.y, bubbles:true, cancelable:true }));
+    openSub('线型');
+    const ls = [...menuStack[1].querySelectorAll('.item')].map(labelOf);
+    const lsRaw = [...menuStack[1].querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('M03e 线型也是单选标记', lsRaw.some(t => t.indexOf('●') === 0 && t.indexOf('虚线') > 0), lsRaw.join(' | '));
+    clickSub('实线');
+    ok('M03f 线型已改', e.dash === false);
+  });
+  T('M04 分组颜色从「循环点」改成了直接选', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const tb = groupTitleBox(grp);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:h.x, clientY:h.y, bubbles:true, cancelable:true }));
+    openSub('颜色');
+    const ls = [...menuStack[1].querySelectorAll('.item')].map(labelOf);
+    ok('M04 颜色子菜单列出默认 + ' + NODE_COLORS.length + ' 色',
+      ls.length === NODE_COLORS.length + 1, ls.length + ': ' + ls.join(' | '));
+    ok('M04b 当前是默认，默认项带 ●', [...menuStack[1].querySelectorAll('.item')][0].querySelector('.lb').textContent.indexOf('●') === 0, ls[0]);
+    clickSub(NODE_COLORS[3][1]);                       // 红
+    ok('M04c 直接选中了红色', grp.color === NODE_COLORS[3][0], grp.color);
+    // 再打开，红色那项应当是 ●
+    cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:h.x, clientY:h.y, bubbles:true, cancelable:true }));
+    openSub('颜色');
+    const ls2 = [...menuStack[1].querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('M04d 重开后红色带 ●', ls2.some(t => t.indexOf('●') === 0 && t.indexOf('红') > 0), ls2.join(' | '));
+    clickSub('默认');
+    ok('M04e 可以选回默认', grp.color === null, grp.color);
+  });
+  T('M05 子菜单不会跑出视口右边', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    // 把这个节点平移到贴近右边缘的地方，再在它身上右键
+    view.x += (innerWidth - 30) - (n.x * view.z + view.x);
+    mark();
+    const c = center(n);
+    cv.dispatchEvent(new MouseEvent('contextmenu',
+      { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
+    ok('M05 根菜单夹进视口了', ctxEl.getBoundingClientRect().right <= innerWidth + 0.5,
+      ctxEl.getBoundingClientRect().right + ' / ' + innerWidth);
+    openSub('形状');
+    const sr = menuStack[1].getBoundingClientRect();
+    ok('M05b 子菜单也在视口内', sr.right <= innerWidth + 0.5 && sr.left >= -0.5,
+      Math.round(sr.left) + '..' + Math.round(sr.right) + ' / ' + innerWidth);
+    ok('M05c 放不下时翻到了左边', sr.left < ctxEl.getBoundingClientRect().left,
+      Math.round(sr.left) + ' vs ' + Math.round(ctxEl.getBoundingClientRect().left));
+    hideCtx();
+  });
+  T('M06 空的「新建」菜单也没问题', () => {
+    document.getElementById('b-new').click();
+    ok('M06 顶上「新建」菜单打开', ctxEl.style.display === 'block');
+    ok('M06b 里面有空白文件 / 示例文档',
+      [...ctxEl.querySelectorAll('.item')].length === 3, ctxEl.querySelectorAll('.item').length);
+    hideCtx();
+  });
+  T('M07 大面板贴在提示框正上方、右下角对齐', () => {
+    fresh(); layoutMind(); fitView();
+    syncDlgBox();
+    const dlg = document.getElementById('dialogue').getBoundingClientRect();
+    const panels = [['导出', expEl], ['连线样式', edgeBoxEl], ['连线端点', endBoxEl],
+                    ['节点样式', nodeBoxEl], ['帮助', helpEl]];
+    for (const [name, p] of panels){
+      const was = p.style.display;
+      p.style.display = 'block';
+      const r = p.getBoundingClientRect();
+      const gap = dlg.top - r.bottom;
+      if (gap < 0 || gap > 20) throw new Error(name + ' 没贴在提示框上方：gap=' + Math.round(gap));
+      const rightGap = innerWidth - r.right;
+      if (Math.abs(rightGap - 24) > 1) throw new Error(name + ' 右边缘没对齐：rightGap=' + Math.round(rightGap));
+      if (r.top < 70) throw new Error(name + ' 顶到顶栏了：top=' + Math.round(r.top));
+      p.style.display = was;
+    }
+    ok('M07 五个面板都贴在提示框上方、右下角对齐', true);
+    nodeBoxEl.style.display = 'block';
+    ok('M07b 不再居中（靠右，左边留出大片画布）',
+      nodeBoxEl.getBoundingClientRect().left > 200, Math.round(nodeBoxEl.getBoundingClientRect().left));
+    nodeBoxEl.style.display = 'none';
+  });
+  T('M08 提示框变高时面板跟着上移', () => {
+    fresh();
+    syncDlgBox();
+    const before = getComputedStyle(document.documentElement).getPropertyValue('--dlg-h').trim();
+    dlgBoxEl.style.minHeight = '280px';                    // 直接把提示框撑高
+    syncDlgBox();
+    const after = getComputedStyle(document.documentElement).getPropertyValue('--dlg-h').trim();
+    ok('M08 --dlg-h 跟上了提示框高度', parseFloat(after) > parseFloat(before),
+      before + ' -> ' + after);
+    const dlg = dlgBoxEl.getBoundingClientRect();
+    nodeBoxEl.style.display = 'block';
+    const r = nodeBoxEl.getBoundingClientRect();
+    nodeBoxEl.style.display = 'none';
+    ok('M08b 面板底边仍然贴着提示框上沿', Math.abs(dlg.top - r.bottom) < 20,
+      Math.round(dlg.top - r.bottom));
+    dlgBoxEl.style.minHeight = '';
+    syncDlgBox();
+    updateMeta();
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

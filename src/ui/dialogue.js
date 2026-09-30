@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/dialogue.js
    底部打字机对白栏与状态信息。
@@ -55,4 +55,17 @@ function updateMeta(){
   dlgHint.textContent = HINT;
 }
 document.getElementById('dialogue').addEventListener('click', skipDlg);
+
+/* =========================================================================
+   把下方提示框的实际高度写进 --dlg-h，右侧那些浮层面板靠它对齐到提示框上沿。
+   提示框高度会随文字换行变化，所以用 ResizeObserver 实时量，不能写死。
+   ========================================================================= */
+const dlgBoxEl = document.getElementById('dialogue');
+function syncDlgBox(){
+  const r = dlgBoxEl.getBoundingClientRect();
+  const h = Math.max(0, Math.round(window.innerHeight - r.top));
+  document.documentElement.style.setProperty('--dlg-h', h + 'px');
+}
+if (typeof ResizeObserver === 'function') new ResizeObserver(syncDlgBox).observe(dlgBoxEl);
+window.addEventListener('resize', syncDlgBox);
 
