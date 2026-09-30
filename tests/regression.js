@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · tests/regression.js
    在真实浏览器里跑的断言套件。用 node tests/run.mjs 执行。
    直接操作全局的模块函数（它们都是普通脚本，共享同一个全局作用域）。
@@ -1909,15 +1909,268 @@
     reindex(); sizeAll();
     ok('Q07b 「先覆盖32 后+8」= 40', effFsPx(tgt) === 40, effFsPx(tgt));
   });
-  T('Q08 程序节点不作用在另一个程序节点上', () => {
+  T('Q08 程序节点之间可以链式累加', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    // A 给 B 的操作数 +2，B 再把自己的 +5 一起给目标 → 目标拿到 7
+    const a = createProgramNode(0, 0);
+    setProgram(a, { op:'value', mode:'add', value:2 });
+    const b = createProgramNode(0, 0);
+    setProgram(b, { op:'value', mode:'add', value:5 });
+    linkNodes(a.id, b.id);
+    linkNodes(b.id, tgt.id);
+    reindex(); sizeAll();
+    ok('Q08 A 确实作用到了 B 身上', !!effOf(b) && effValue(b) === 2, JSON.stringify(effOf(b)));
+    ok('Q08b 目标拿到 5 + 2 = 7（依次累加）', effValue(tgt) === 7, effValue(tgt));
+    // 再加一环：C 给 A +3
+    const c = createProgramNode(0, 0);
+    setProgram(c, { op:'value', mode:'add', value:3 });
+    linkNodes(c.id, a.id);
+    reindex(); sizeAll();
+    ok('Q08c 三级链条：目标 = 5 + (2+3) = 10', effValue(tgt) === 10, effValue(tgt));
+  });
+  T('Q08d 链上有环也不会卡死', () => {
     fresh(); layoutMind();
     const a = createProgramNode(0, 0);
+    setProgram(a, { op:'value', mode:'add', value:1 });
     const b = createProgramNode(0, 0);
-    setProgram(a, { op:'style', key:'fsPx', mode:'add', value:8 });
+    setProgram(b, { op:'value', mode:'add', value:1 });
     linkNodes(a.id, b.id);
-    reindex(); sizeAll();
-    ok('Q08 程序节点之间不叠加', !effOf(b), JSON.stringify(effOf(b)));
+    linkNodes(b.id, a.id);
+    reindex(); sizeAll();          // 有界迭代，不许死循环
+    ok('Q08d 环上迭代有上限，跑得完', true, 'eff a=' + effValue(a) + ' b=' + effValue(b));
   });
+  T('Q20 程序节点可以作用在整个分组上', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    const baseA = effFsPx(a) || FS, baseB = effFsPx(b) || FS;
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:8 });
+    linkNodes(pg.id, grp.id);           // 连到分组，不是连到某个节点
+    reindex(); sizeAll();
+    ok('Q20 组内第一个节点受影响', effFsPx(a) === baseA + 8, effFsPx(a));
+    ok('Q20b 组内第二个节点也受影响', effFsPx(b) === baseB + 8, effFsPx(b));
+    ok('Q20c 记在了两个节点上', effOf(a) && effOf(a).ops === 1 && effOf(b) && effOf(b).ops === 1);
+    // 组外的节点不受影响
+    const out = nodeByText('操作');
+    ok('Q20d 组外的不受影响', !effOf(out), JSON.stringify(effOf(out)));
+    // 新拖进组的节点也会被算上
+    const c = nodeByText('Tab 加子节点');
+    grp.members.push(c.id);
+    reindex(); sizeAll();
+    ok('Q20e 后加进来的也算', !!effOf(c), JSON.stringify(effOf(c)));
+  });
+  T('Q21 程序节点作用在分组上时，套娃里的节点也算', () => {
+    fresh(); layoutMind();
+    // 用聚在一起的两个节点当内层成员，框才不会被撑到别处去（框只长不缩）
+    const a  = nodeByText('节点');
+    const n1 = nodeByText('矩形 / 圆角 / 菱形 / 椭圆');
+    const n2 = nodeByText('Tab 加子节点');
+    const out = nodeByText('操作');
+    const outer = newEmptyGroup(a.x - 400, a.y - 300);
+    const inner = newEmptyGroup(a.x - 400, a.y - 300);
+    inner.members = [n1.id, n2.id];
+    outer.members = [inner.id, a.id];
+    reindex(); sizeAll();
+    ok('Q21 前置：嵌套关系成立',
+      groupReaches(outer.id, inner.id) && groupAllNodes(outer.id).indexOf(n2.id) >= 0,
+      groupAllNodes(outer.id).join(','));
+    ok('Q21a 递归取节点能把内层的也拿到',
+      groupAllNodes(outer.id).sort().join(',') === [a.id, n1.id, n2.id].sort().join(','),
+      groupAllNodes(outer.id).join(','));
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'value', mode:'add', value:4 });
+    linkNodes(pg.id, outer.id);
+    reindex(); sizeAll();
+    ok('Q21c 外层的算符落到了内层节点上', effValue(n1) === 4 && effValue(n2) === 4,
+      effValue(n1) + '/' + effValue(n2));
+    ok('Q21d 也落到了直接成员上', effValue(a) === 4, effValue(a));
+    ok('Q21e 组外的节点不受影响', effValue(out) === 0, effValue(out));
+  });
+  T('Q22 程序节点连到空分组不会出问题', () => {
+    fresh(); layoutMind();
+    const empty = newEmptyGroup(0, 0);
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:8 });
+    linkNodes(pg.id, empty.id);
+    reindex(); sizeAll();
+    ok('Q22 不报错也没有效果', idx.eff.size === 0, idx.eff.size);
+  });
+
+  /* ==================== 分组套娃 ====================
+     注意：分组框「只长不缩」，所以成员一塞进去框就会包住它们。
+     测试里一律用本来就挨在一起的节点（节点 和它的两个孩子），
+     否则两个框会被撑到同一片区域，分不出谁是谁。 */
+  const nestSetup = () => {
+    const a  = nodeByText('节点');
+    const n1 = nodeByText('矩形 / 圆角 / 菱形 / 椭圆');
+    const n2 = nodeByText('Tab 加子节点');
+    const outer = newEmptyGroup(a.x - 500, a.y - 400);
+    const inner = newEmptyGroup(a.x - 1500, a.y - 1200);   // 先放远一点，免得起手就套上
+    inner.members = [n1.id, n2.id];
+    outer.members = [a.id];
+    reindex(); sizeAll();
+    return { a, n1, n2, outer, inner };
+  };
+  T('R01 把分组拖进另一个分组就套上了', () => {
+    fresh(); layoutMind();
+    const { outer, inner } = nestSetup();
+    ok('R01 前置：两个框还没套上', outer.members.indexOf(inner.id) < 0 &&
+      !pointInGroup(outer, inner.x + inner.w / 2, inner.y + inner.h / 2),
+      JSON.stringify({ outer:{ x:outer.x, y:outer.y, w:outer.w, h:outer.h },
+                       inner:{ x:inner.x, y:inner.y, w:inner.w, h:inner.h } }));
+    const tb = groupTitleBox(inner);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    // 拖动按指针位移算，所以落点要反推：让 inner 的中心正好落到 outer 的中心
+    const p0w = s2w(h.x, h.y);
+    const dstW = { x:p0w.x + (outer.x + outer.w / 2) - (inner.x + inner.w / 2),
+                   y:p0w.y + (outer.y + outer.h / 2) - (inner.y + inner.h / 2) };
+    const dst = S(dstW);
+    pe('pointerdown', h.x, h.y);
+    pe('pointermove', dst.x, dst.y);
+    pe('pointerup', dst.x, dst.y);
+    reindex();
+    ok('R01b inner 成了 outer 的成员', outer.members.indexOf(inner.id) >= 0, JSON.stringify(outer.members));
+    ok('R01c 只有最内层那一层收它', groupDescendantGroups(outer.id).length === 1,
+      groupDescendantGroups(outer.id).join(','));
+    ok('R01d 没有形成环', !groupReaches(inner.id, outer.id));
+    ok('R01e 层深算对了', groupDepth(outer.id) === 0 && groupDepth(inner.id) === 1,
+      groupDepth(outer.id) + '/' + groupDepth(inner.id));
+  });
+  T('R02 父框会跟着子框长大', () => {
+    fresh(); layoutMind();
+    const { outer, inner } = nestSetup();
+    outer.members = [inner.id];
+    reindex(); sizeAll();
+    const before = { w:outer.w, h:outer.h };
+    setGroupSize(inner, inner.w + 300, inner.h + 200);
+    inner.x -= 260; inner.y -= 180;
+    reindex(); sizeAll();
+    ok('R02 父框长大了', outer.w > before.w && outer.h > before.h,
+      before.w + 'x' + before.h + ' -> ' + outer.w + 'x' + outer.h);
+    ok('R02b 父框完整包住子框',
+      inner.x >= outer.x && inner.y >= outer.y &&
+      inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h,
+      JSON.stringify({ outer:{ x:outer.x, y:outer.y, w:outer.w, h:outer.h },
+                       inner:{ x:inner.x, y:inner.y, w:inner.w, h:inner.h } }));
+  });
+  T('R03 拖父分组，子分组和里面所有节点一起走', () => {
+    fresh(); layoutMind();
+    const { a, n1, n2, outer, inner } = nestSetup();
+    outer.members = [inner.id, a.id];
+    reindex(); sizeAll();
+    const p0 = { ax:a.x, ay:a.y, bx:n1.x, by:n1.y, cx:n2.x, cy:n2.y, ix:inner.x, iy:inner.y };
+    const tb = groupTitleBox(outer);
+    const h = S({ x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    ok('R03x 前置：抓到的是外框', !!drag && drag.mode === 'group' && drag.grpId === outer.id,
+      (drag && drag.mode) + ' / ' + (drag && drag.grpId) + ' vs outer=' + outer.id);
+    pe('pointermove', h.x + 150, h.y - 90);
+    pe('pointerup', h.x + 150, h.y - 90);
+    const dx = 150 / view.z, dy = -90 / view.z;
+    ok('R03 直接成员跟着走', Math.abs(a.x - p0.ax - dx) < 2 && Math.abs(a.y - p0.ay - dy) < 2,
+      Math.round(a.x - p0.ax) + ',' + Math.round(a.y - p0.ay));
+    ok('R03b 子分组跟着走', Math.abs(inner.x - p0.ix - dx) < 2 && Math.abs(inner.y - p0.iy - dy) < 2,
+      Math.round(inner.x - p0.ix) + ',' + Math.round(inner.y - p0.iy));
+    ok('R03c 子分组里的节点也跟着走',
+      Math.abs(n1.x - p0.bx - dx) < 2 && Math.abs(n2.y - p0.cy - dy) < 2,
+      Math.round(n1.x - p0.bx) + ',' + Math.round(n2.y - p0.cy));
+    ok('R03d 相对位置全都没变', Math.abs((n1.x - a.x) - (p0.bx - p0.ax)) < 0.01);
+  });
+  T('R04 不能把分组放进自己或自己的后代里', () => {
+    fresh(); layoutMind();
+    const { outer, inner } = nestSetup();
+    outer.members = [inner.id];
+    reindex();
+    ok('R04 前置：inner 在 outer 里', groupReaches(outer.id, inner.id));
+    // 硬把 outer 塞进 inner 会成环，得被断掉
+    inner.members.push(outer.id);
+    reindex();
+    ok('R04b 环被断掉了', inner.members.indexOf(outer.id) < 0, JSON.stringify(inner.members));
+    ok('R04c 原有关系还留着', outer.members.indexOf(inner.id) >= 0, JSON.stringify(outer.members));
+    // 自己塞自己也不行
+    outer.members.push(outer.id);
+    reindex();
+    ok('R04d 自引用被去掉', outer.members.indexOf(outer.id) < 0, JSON.stringify(outer.members));
+    ok('R04e 结构完好', groupReaches(outer.id, inner.id) && !groupReaches(inner.id, outer.id));
+  });
+  T('R05 解散父分组不会连子分组一起拆掉', () => {
+    fresh(); layoutMind();
+    const { a, n1, outer, inner } = nestSetup();
+    outer.members = [inner.id, a.id];
+    reindex();
+    const n0 = doc.nodes.length;
+    selectGroup(outer.id);
+    dissolveGroup(outer);
+    reindex();
+    ok('R05 外层没了', !byGroup(outer.id));
+    ok('R05b 内层还在', !!byGroup(inner.id));
+    ok('R05c 内层成员也还在', inner.members.indexOf(n1.id) >= 0, JSON.stringify(inner.members));
+    ok('R05d 节点一个没少', doc.nodes.length === n0, doc.nodes.length);
+  });
+  T('R06 绘制 / 命中都按层深排序', () => {
+    fresh(); layoutMind();
+    const { n1, outer, inner } = nestSetup();
+    outer.members = [inner.id];
+    reindex();
+    const order = idx.groupOrder.map(g => g.id);
+    ok('R06 祖先排在子分组前面', order.indexOf(outer.id) < order.indexOf(inner.id), order.join(' > '));
+    ok('R06b 层深正确', groupDepth(outer.id) === 0 && groupDepth(inner.id) === 1,
+      groupDepth(outer.id) + '/' + groupDepth(inner.id));
+    // 把两个标题栏叠在一起，点下去应该是最内层接住
+    inner.x = outer.x; inner.y = outer.y;   // 故意叠在一起，测「最内层先接住」
+    const tb = groupTitleBox(inner);
+    const qw = { x:tb.x + tb.w / 2, y:tb.y + tb.h / 2 };
+    ok('R06c 两个标题栏确实重叠', (() => {
+      const ob = groupTitleBox(outer);        // 世界坐标，别和屏幕坐标混
+      return qw.x >= ob.x && qw.x <= ob.x + ob.w && qw.y >= ob.y && qw.y <= ob.y + ob.h;
+    })());
+    const q = S(qw);
+    pe('pointerdown', q.x, q.y);
+    ok('R06d 点下去命中的是最内层', selGroupId === inner.id, selGroupId + ' vs inner=' + inner.id);
+    pe('pointerup', q.x, q.y);
+    // n1 还在内层里，说明断环和层深计算都没把结构搞坏
+    ok('R06e 结构没坏', groupAllNodes(inner.id).indexOf(n1.id) >= 0, groupAllNodes(inner.id).join(','));
+  });
+  T('R07 拖节点进嵌套框时归属最内层', () => {
+    fresh(); layoutMind();
+    const { outer, inner } = nestSetup();
+    outer.members = [inner.id];
+    reindex(); sizeAll();
+    const c = nodeByText('操作');
+    const cc = center(c);
+    const dst = S({ x:inner.x + inner.w / 2, y:inner.y + inner.h / 2 });
+    pe('pointerdown', cc.x, cc.y);
+    pe('pointermove', dst.x, dst.y);
+    pe('pointerup', dst.x, dst.y);
+    reindex();
+    ok('R07 归到了内层', inner.members.indexOf(c.id) >= 0, JSON.stringify(inner.members));
+    ok('R07b 不在外层', outer.members.indexOf(c.id) < 0, JSON.stringify(outer.members));
+    ok('R07c 但外层透过子分组也能拿到它',
+      groupAllNodes(outer.id).indexOf(c.id) >= 0, groupAllNodes(outer.id).join(','));
+  });
+  T('R08 嵌套分组能存下来', () => {
+    fresh(); layoutMind();
+    const { a, n1, n2, outer, inner } = nestSetup();
+    outer.members = [inner.id, a.id];
+    inner.members = [n1.id, n2.id];
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const rawOuter = snap.groups.find(g => g.id === outer.id);
+    ok('R08 序列化里外层含分组 id', rawOuter.members.indexOf(inner.id) >= 0, JSON.stringify(rawOuter.members));
+    deserialize(snap);
+    const o2 = byGroup(outer.id), i2 = byGroup(inner.id);
+    ok('R08b 往返后嵌套关系还在',
+      o2.members.indexOf(i2.id) >= 0 && i2.members.indexOf(n1.id) >= 0,
+      JSON.stringify(o2.members) + ' / ' + JSON.stringify(i2.members));
+    ok('R08c 递归取节点也正常',
+      groupAllNodes(o2.id).sort().join(',') === [a.id, n1.id, n2.id].sort().join(','),
+      groupAllNodes(o2.id).join(','));
+  });
+
+
   T('Q09 路由与命中都用「有效位置」', () => {
     fresh(); layoutMind();
     const tgt = nodeByText('节点');

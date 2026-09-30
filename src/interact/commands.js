@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/commands.js
    结构操作：子/兄弟/父节点、删除、折叠、形状、方向生成、连线样式。
@@ -345,19 +345,26 @@ function renameGroup(grp, title){
   grp.title = String(title == null ? '' : title).replace(/[\r\n]+/g, ' ').trim() || '分组';
   pushHist(); mark();
 }
+/* 搬动一个分组：它自己和里面所有东西（子分组递归）一起走 */
 function moveGroupBy(grp, dx, dy){
   if (!grp) return;
-  for (const id of grp.members){ const n = byId(id); if (n){ n.x += dx; n.y += dy; } }
+  applyGroupDelta(groupSnapshot(grp), dx, dy);
   mark();
 }
-/* 把选中的节点塞进一个已有分组 */
+/* 把选中的东西（节点和/或分组）塞进一个已有分组 */
 function addSelectionToGroup(grp){
   if (!grp) return;
+  // 分组不能塞进自己或自己的后代里
+  const bad = new Set([grp.id, ...groupDescendantGroups(grp.id)]);
   const ids = [...sel].filter(id => byId(id) && grp.members.indexOf(id) < 0);
-  if (!ids.length){ say('* 没有新的节点可以加进去。'); return; }
-  grp.members = grp.members.concat(ids);
+  if (selGroupId && selGroupId !== grp.id && !bad.has(selGroupId) && grp.members.indexOf(selGroupId) < 0){
+    ids.push(selGroupId);
+  }
+  const ok = ids.filter(id => !bad.has(id));
+  if (!ok.length){ say('* 没有新的东西可以加进去。'); return; }
+  grp.members = grp.members.concat(ok);
   reindex(); pushHist(); mark();
-  say('* 已把 ' + ids.length + ' 个节点加入「' + grp.title + '」。');
+  say('* 已把 ' + ok.length + ' 个东西加入「' + grp.title + '」。');
 }
 function removeSelectionFromGroup(grp){
   if (!grp) return;
@@ -383,18 +390,26 @@ function setGroupSize(grp, w, h){
 }
 /* 拖进拖出自动收纳：节点中心落在框里就加入，离开就移除。
    只在「拖完节点」「新建节点」时调用，其它操作（排版、改尺寸）不碰成员关系，免得误伤。 */
+/* 拖进拖出自动收纳：一个东西归「包含它中心的最内层分组」所有。
+   节点和分组都按这个规则走，所以把分组拖进另一个分组就是套娃。
+   只在「拖完」「新建」时调用，其它操作不碰成员关系，免得误伤。 */
 function syncGroupMembership(ids){
   const list = doc.groups || [];
   if (!list.length || !ids || !ids.length) return false;
   let changed = false;
-  for (const grp of list){
-    for (const id of ids){
-      const n = byId(id);
-      if (!n) continue;
-      const inside = pointInGroup(grp, n.x + n.w / 2, n.y + n.h / 2);
-      const at = grp.members.indexOf(id);
-      if (inside && at < 0){ grp.members.push(id); changed = true; }
-      else if (!inside && at >= 0){ grp.members.splice(at, 1); changed = true; }
+  for (const id of ids){
+    const n = byId(id), grp = n ? null : byGroup(id);
+    if (!n && !grp) continue;
+    // 移动的是分组时，它自己和它的后代都不能当自己的父级
+    const exclude = grp ? new Set([grp.id, ...groupDescendantGroups(grp.id)]) : null;
+    const b = n ? nodeBox(n) : groupBox(grp);
+    const want = innermostGroupAt(b.x + b.w / 2, b.y + b.h / 2, exclude);
+    for (const g of list){
+      if (exclude && exclude.has(g.id)) continue;
+      const at = g.members.indexOf(id);
+      const should = !!want && want.id === g.id;
+      if (should && at < 0){ g.members.push(id); changed = true; }
+      else if (!should && at >= 0){ g.members.splice(at, 1); changed = true; }
     }
   }
   if (changed) mark();
@@ -476,10 +491,22 @@ function toggleProgramNode(n){
   refreshEffects(); sizeAll(); pushHist(); mark();
 }
 /* 一个节点身上叠了哪些算符（面板里列出来给人看） */
+/* 一个东西身上叠了哪些程序算符。传节点 id 找直接指向它的；
+   传分组 id 找指向这个分组（或它的任一祖先分组）的 —— 组内的节点都算被作用到。 */
 function programHits(id){
+  const ancestors = new Set([id]);
+  for (const g of (doc.groups || [])){
+    if ((g.members || []).indexOf(id) >= 0) ancestors.add(g.id);
+  }
+  // 分组套娃：把祖先的祖先也加进来
+  for (let i = 0; i < 4; i++){
+    for (const g of (doc.groups || [])){
+      for (const a of [...ancestors]) if ((g.members || []).indexOf(a) >= 0) ancestors.add(g.id);
+    }
+  }
   const out = [];
   for (const e of doc.edges){
-    if (e.t !== id) continue;
+    if (!ancestors.has(e.t)) continue;
     const src = byId(e.s);
     if (src && isProgram(src)) out.push(src);
   }

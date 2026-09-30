@@ -148,7 +148,7 @@ function showCtx(x, y, n, e, info){
   } else if (info.group){
     const grp = info.group;
     pushCommonItems(items, grp, 'group', '双击标题');
-    items.push(['把选中的节点加入', '', () => addSelectionToGroup(grp)]);
+    items.push(['把选中的（节点 / 分组）加入', '', () => addSelectionToGroup(grp)]);
     items.push('hr');
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
       grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');

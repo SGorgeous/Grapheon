@@ -57,8 +57,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const gt = hitGroupTitle(p);
   if (gt){
     selectGroup(gt.id);
-    drag = { mode:'group', grpId:gt.id, p0:p, ox:gt.x, oy:gt.y,
-             starts:gt.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
+    drag = { mode:'group', grpId:gt.id, p0:p, snap:groupSnapshot(gt), moved:false };
     mark();
     return;
   }
@@ -96,8 +95,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const gb = hitGroupBorder(p);
   if (gb){
     selectGroup(gb.id);
-    drag = { mode:'group', grpId:gb.id, p0:p, ox:gb.x, oy:gb.y,
-             starts:gb.members.map(id => ({ id, x:byId(id).x, y:byId(id).y })), moved:false };
+    drag = { mode:'group', grpId:gb.id, p0:p, snap:groupSnapshot(gb), moved:false };
     mark();
     return;
   }
@@ -138,9 +136,7 @@ window.addEventListener('pointermove', (ev) => {
     } else if (drag.mode === 'group'){
       const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
-      const grp = byGroup(drag.grpId);
-      if (grp){ grp.x = drag.ox + dx; grp.y = drag.oy + dy; }   // 框自己也要走
-      for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
+      applyGroupDelta(drag.snap, dx, dy);      // 快照 + 位移：自己和所有后代一起走
       mark();
     } else if (drag.mode === 'resize'){
       if (drag.isGroup){
@@ -195,6 +191,8 @@ window.addEventListener('pointerup', (ev) => {
     if (settleGroups(drag.starts.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
     pushHist();
   } else if (drag.mode === 'group' && drag.moved){
+    // 分组也能被拖进别的分组（套娃）；拖完再让父框长大到装得下
+    settleGroups([drag.grpId]);
     pushHist();
   } else if (drag.mode === 'resize' && drag.moved){
     if (drag.isGroup){

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -52,7 +52,7 @@ function drawGrid(){
   ctx.restore();
 }
 function drawGraph(g){
-  for (const grp of (doc.groups || [])) drawGroup(g, grp);   // 分组框在最底层
+  for (const grp of (idx.groupOrder || doc.groups || [])) drawGroup(g, grp);   // 祖先先画、子分组叠在上面
   for (const e of doc.edges){
     if (!edgeVisible(e)) continue;                    // 被折叠藏起来的不画
     if (relink && relink.edgeId === e.id) continue;   // 正在拖端点的那条改用预览画

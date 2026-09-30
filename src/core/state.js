@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -62,12 +62,37 @@ function reindex(){
   for (const n of doc.nodes) { idx.children.set(n.id, []); idx.byId.set(n.id, n); }
   // 自由框：成员允许为空（就是个空盒子，等着往里拖东西），所以只清理「已不在文档里」的成员
   if (!Array.isArray(doc.groups)) doc.groups = [];
+  for (const g of doc.groups) idx.groups.set(g.id, g);
+  // 成员可以是节点，也可以是另一个分组（套娃）。先去掉失效成员和自引用。
   for (const g of doc.groups){
-    g.members = (g.members || []).filter(id => idx.byId.has(id));
+    g.members = (g.members || []).filter(id =>
+      id !== g.id && (idx.byId.has(id) || idx.groups.has(id)));
+  }
+  // 断环：按 doc.groups 的顺序逐条接受「父分组 → 子分组」的关系，会成环的那条直接丢掉。
+  // 贪心 + 固定顺序 = 结果确定；否则按遍历顺序不同会砍错边（把好的砍了、留下成环的那条）。
+  const accepted = new Map();
+  for (const g of doc.groups) accepted.set(g.id, []);
+  const reachesAccepted = (from, target, seen) => {
+    if (from === target) return true;
+    seen = seen || new Set();
+    if (seen.has(from)) return false;
+    seen.add(from);
+    for (const c of (accepted.get(from) || [])) if (reachesAccepted(c, target, seen)) return true;
+    return false;
+  };
+  for (const g of doc.groups){
+    g.members = g.members.filter(id => {
+      if (!idx.groups.has(id)) return true;              // 节点成员原样保留
+      if (reachesAccepted(id, g.id)) return false;       // 这条会成环，丢掉
+      accepted.get(g.id).push(id);
+      return true;
+    });
+  }
+  idx.groupOrder = groupOrderByDepth();          // 绘制按这个顺序（祖先在前），命中反过来
+  for (const g of doc.groups){
     if (!(+g.w > 0) || !(+g.h > 0)) fitGroupToMembers(g);   // 老档案没尺寸就按成员补一个
     else groupGrowToFit(g);                                 // 维持不变量：框永远装得下成员
   }
-  for (const g of doc.groups) idx.groups.set(g.id, g);
   const seen = new Set();
   for (const e of doc.edges){
     if (seen.has(e.id)) continue; seen.add(e.id);
@@ -116,29 +141,99 @@ function anchorOf(id){
   if (g) return groupBox(g);
   return null;
 }
-/* 分组是个「自由框」：尺寸自己存着，可以随便拉大拉小；成员靠拖进拖出同步。 */
+/* 分组是个「自由框」：尺寸自己存着，可以随便拉大拉小；成员靠拖进拖出同步。
+   members 里可以放节点 id，也可以放别的分组 id（套娃）。 */
 function groupBox(g){
   return { id:g.id, isGroup:true, group:g, x:g.x, y:g.y, w:g.w, h:g.h };
 }
+/* A 是不是 B 的后代（顺带用来断环） */
+function groupReaches(from, target, seen){
+  if (from === target) return true;
+  seen = seen || new Set();
+  if (seen.has(from)) return false;
+  seen.add(from);
+  const g = idx.groups.get(from);
+  if (!g) return false;
+  for (const m of (g.members || [])) if (idx.groups.has(m) && groupReaches(m, target, seen)) return true;
+  return false;
+}
+/* 一个分组里所有的后代分组 id */
+function groupDescendantGroups(id, out, seen){
+  out = out || []; seen = seen || new Set();
+  const g = idx.groups.get(id);
+  if (!g || seen.has(id)) return out;
+  seen.add(id);
+  for (const m of (g.members || [])){
+    if (!idx.groups.has(m)) continue;
+    out.push(m);
+    groupDescendantGroups(m, out, seen);
+  }
+  return out;
+}
+/* 一个分组里所有的后代节点 id（套娃会一直往里挖，带环保护） */
+function groupAllNodes(id, out, seen){
+  out = out || []; seen = seen || new Set();
+  if (seen.has(id)) return out;
+  seen.add(id);
+  const g = idx.groups.get(id);
+  if (!g){ if (idx.byId.has(id)) out.push(id); return out; }
+  for (const m of (g.members || [])) groupAllNodes(m, out, seen);
+  return out;
+}
+const groupChildNodes  = (g) => (g.members || []).filter(id => idx.byId.has(id));
+const groupChildGroups = (g) => (g.members || []).filter(id => idx.groups.has(id));
+/* 嵌了几层（根分组是 0）。绘制按它升序、命中按它降序。 */
+function groupDepth(id, seen){
+  seen = seen || new Set();
+  if (seen.has(id)) return 0;
+  seen.add(id);
+  let best = 0;
+  for (const g of (doc.groups || [])){
+    if ((g.members || []).indexOf(id) < 0) continue;
+    best = Math.max(best, 1 + groupDepth(g.id, seen));
+  }
+  return best;
+}
+function groupOrderByDepth(){
+  return (doc.groups || []).slice().sort((a, b) => groupDepth(a.id) - groupDepth(b.id));
+}
+/* 分组的「成员外接范围」：直接成员里的节点 + 子分组的框（子分组的框本来就装着它的成员） */
+function groupMemberBounds(grp){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const seen = new Set([grp.id]);
+  const walk = (g) => {
+    for (const m of (g.members || [])){
+      const g2 = idx.groups.get(m);
+      if (g2){
+        if (seen.has(g2.id)) continue;
+        seen.add(g2.id);
+        minX = Math.min(minX, g2.x); minY = Math.min(minY, g2.y);
+        maxX = Math.max(maxX, g2.x + g2.w); maxY = Math.max(maxY, g2.y + g2.h);
+        walk(g2);
+        continue;
+      }
+      const n = idx.byId.get(m);
+      if (!n) continue;
+      const b = nodeBox(n);
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+    }
+  };
+  walk(grp);
+  return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
 /* 按当前成员算一个刚好装下它们的框（新建分组、以及老档案缺尺寸时用） */
 function fitGroupToMembers(g){
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const id of (g.members || [])){
-    const n = idx.byId.get(id);
-    if (!n) continue;
-    const b = nodeBox(n);
-    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
-  }
-  if (!isFinite(minX)){
+  const r = groupMemberBounds(g);
+  if (!r){
     g.x = +g.x || 0; g.y = +g.y || 0;
     g.w = Math.max(200, +g.w || 0); g.h = Math.max(150, +g.h || 0);
     return g;
   }
-  g.x = minX - GROUP_PAD;
-  g.y = minY - GROUP_TITLE_H;
-  g.w = (maxX - minX) + GROUP_PAD * 2;
-  g.h = (maxY - minY) + GROUP_TITLE_H + GROUP_PAD;
+  g.x = r.minX - GROUP_PAD;
+  g.y = r.minY - GROUP_TITLE_H;
+  g.w = (r.maxX - r.minX) + GROUP_PAD * 2;
+  g.h = (r.maxY - r.minY) + GROUP_TITLE_H + GROUP_PAD;
   return g;
 }
 /* 一个点（一般是节点中心）在不在这个框里 */
@@ -148,17 +243,10 @@ function pointInGroup(g, x, y){
 /* 框只会「长大」：手动拉的尺寸是下限，成员超出就往那个方向扩，成员走了不缩。
    向左/上扩要同时挪原点，否则右下角会跟着漂。 */
 function groupGrowToFit(grp){
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const id of (grp.members || [])){
-    const n = idx.byId.get(id);
-    if (!n) continue;
-    const b = nodeBox(n);
-    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
-  }
-  if (!isFinite(minX)) return false;                 // 空框：保持你拉的样子
-  const needX = minX - GROUP_PAD, needY = minY - GROUP_TITLE_H;
-  const needR = maxX + GROUP_PAD, needB = maxY + GROUP_PAD;
+  const r = groupMemberBounds(grp);
+  if (!r) return false;                              // 空框：保持你拉的样子
+  const needX = r.minX - GROUP_PAD, needY = r.minY - GROUP_TITLE_H;
+  const needR = r.maxX + GROUP_PAD, needB = r.maxY + GROUP_PAD;
   let changed = false;
   if (needX < grp.x){ grp.w += grp.x - needX; grp.x = needX; changed = true; }
   if (needY < grp.y){ grp.h += grp.y - needY; grp.y = needY; changed = true; }
@@ -167,33 +255,67 @@ function groupGrowToFit(grp){
   return changed;
 }
 /* 把每个非空框重新贴合到它的成员（排版这种「全局重排」之后用）。
-   空框不动 —— 那是你手动拉的尺寸，没有成员就没有参照。 */
+   空框不动 —— 那是你手动拉的尺寸，没有成员就没有参照。
+   从最外层往里做，父框才会把子框的新位置算进去。 */
 function refitAllGroups(){
   let changed = false;
-  for (const grp of (doc.groups || [])){
+  for (const grp of groupOrderByDepth()){
     if (!grp.members || !grp.members.length) continue;
     fitGroupToMembers(grp);
     changed = true;
   }
   return changed;
-}function growAllGroups(){
+}
+function growAllGroups(){
   let changed = false;
-  for (const grp of (doc.groups || [])) if (groupGrowToFit(grp)) changed = true;
+  for (const grp of groupOrderByDepth()) if (groupGrowToFit(grp)) changed = true;
   return changed;
 }
 /* 这个框装得下现在的成员吗（用于夹住手动缩小） */
 function groupMinSize(grp){
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const id of (grp.members || [])){
-    const n = idx.byId.get(id);
-    if (!n) continue;
-    const b = nodeBox(n);
-    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+  const r = groupMemberBounds(grp);
+  if (!r) return { x:null, y:null, w:0, h:0 };
+  return { x:r.minX - GROUP_PAD, y:r.minY - GROUP_TITLE_H,
+           w:(r.maxX - r.minX) + GROUP_PAD * 2, h:(r.maxY - r.minY) + GROUP_TITLE_H + GROUP_PAD };
+}
+/* 搬动一个分组：它自己和它里面所有东西（子分组递归）一起走。
+   先拍快照再套位移，这样拖动过程中反复算也不会越拖越偏。 */
+function groupSnapshot(grp){
+  const out = [{ kind:'group', id:grp.id, x:grp.x, y:grp.y }];
+  const seen = new Set([grp.id]);
+  const walk = (g) => {
+    for (const m of (g.members || [])){
+      const g2 = idx.groups.get(m);
+      if (g2){
+        if (seen.has(g2.id)) continue;
+        seen.add(g2.id);
+        out.push({ kind:'group', id:g2.id, x:g2.x, y:g2.y });
+        walk(g2);
+        continue;
+      }
+      const n = idx.byId.get(m);
+      if (n) out.push({ kind:'node', id:n.id, x:n.x, y:n.y });
+    }
+  };
+  walk(grp);
+  return out;
+}
+function applyGroupDelta(snap, dx, dy){
+  for (const s of snap){
+    if (s.kind === 'group'){ const g = idx.groups.get(s.id); if (g){ g.x = s.x + dx; g.y = s.y + dy; } }
+    else { const n = idx.byId.get(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
   }
-  if (!isFinite(minX)) return { x:null, y:null, w:0, h:0 };
-  return { x:minX - GROUP_PAD, y:minY - GROUP_TITLE_H,
-           w:(maxX - minX) + GROUP_PAD * 2, h:(maxY - minY) + GROUP_TITLE_H + GROUP_PAD };
+}
+/* 包含这个点的最内层分组。exclude 用来防止把分组塞进自己或自己的后代里。 */
+function innermostGroupAt(x, y, exclude){
+  let best = null, bestDepth = -1;
+  for (const grp of (doc.groups || [])){
+    if (exclude && exclude.has(grp.id)) continue;
+    if (!pointInGroup(grp, x, y)) continue;
+    const d = groupDepth(grp.id);
+    if (d > bestDepth){ bestDepth = d; best = grp; }
+  }
+  return best;
 }
 
 /* =========================================================================
@@ -222,22 +344,52 @@ function normalizeProgram(p){
   }
   return out;
 }
-/* 从零算一遍所有节点上的程序效果（reindex 末尾调用） */
+function blankEff(){
+  return { dx:0, dy:0, shape:null, color:null, border:null,
+           font:null, fsPx:null, value:null, ops:0 };
+}
+/* 把一条边的算符施加到这一遍的目标上 */
+function applyEdge(e, bonus, eff){
+  const src = idx.byId.get(e.s);
+  if (!src || src.kind !== 'program') return false;
+  // 目标可以是节点，也可以是分组 —— 分组的话作用到组内全部节点（套娃会一路挖下去）
+  const tgtNode = idx.byId.get(e.t);
+  const tgtGrp  = idx.groups.get(e.t);
+  const targets = tgtNode ? [tgtNode]
+                : (tgtGrp ? groupAllNodes(tgtGrp.id).map(id => idx.byId.get(id)).filter(Boolean) : []);
+  if (!targets.length) return false;
+  const p = normalizeProgram(src.program);
+  // 程序节点之间可以链式累加：别的程序节点用「数值」算符改它的操作数
+  if (bonus && bonus.has(src.id) && p.op === 'value') p.value = p.value + bonus.get(src.id);
+  for (const tgt of targets){
+    let x = eff.get(tgt.id);
+    if (!x){ x = blankEff(); eff.set(tgt.id, x); }
+    applyProgram(x, p, tgt);
+    x.ops++;
+  }
+  return true;
+}
+/* 从零算一遍所有节点上的程序效果（reindex 末尾调用）。
+   程序节点之间可以互相叠加（依次累加），所以迭代到不动点为止；
+   遇到环最多跑 EFFECT_MAX_PASS 遍就停，不会死循环。 */
+const EFFECT_MAX_PASS = 6;
 function refreshEffects(){
   idx.eff = new Map();
-  for (const e of doc.edges){
-    const src = idx.byId.get(e.s), tgt = idx.byId.get(e.t);
-    if (!src || !tgt) continue;
-    if (src.kind !== 'program') continue;         // 只有程序节点会施加算符
-    if (tgt.kind === 'program') continue;         // 程序节点不作用在另一个程序节点上
-    let eff = idx.eff.get(tgt.id);
-    if (!eff){
-      eff = { dx:0, dy:0, shape:null, color:null, border:null,
-              font:null, fsPx:null, value:null, ops:0 };
-      idx.eff.set(tgt.id, eff);
+  let bonus = new Map();
+  for (let pass = 0; pass < EFFECT_MAX_PASS; pass++){
+    const eff = new Map();
+    for (const e of doc.edges) applyEdge(e, bonus, eff);
+    // 统计每个程序节点被叠了多少操作数，供下一遍使用
+    const next = new Map();
+    for (const [id, x] of eff){
+      const n = idx.byId.get(id);
+      if (n && n.kind === 'program' && x.value != null) next.set(id, x.value);
     }
-    applyProgram(eff, normalizeProgram(src.program), tgt);
-    eff.ops++;
+    idx.eff = eff;
+    let same = next.size === bonus.size;
+    if (same) for (const [k, v] of next) if (bonus.get(k) !== v){ same = false; break; }
+    bonus = next;
+    if (same) break;
   }
   // 失效的缓存扔掉
   if (!idx.box) idx.box = new Map();

@@ -46,8 +46,9 @@ function hitPort(p){
 /* ---------------- 分组 ---------------- */
 /* 标题栏（永远可以抓，用来选中/改名） */
 function hitGroupTitle(p){
-  const list = doc.groups || [];
-  for (let i = list.length - 1; i >= 0; i--){
+  // 从最内层往外判：套娃时里面那个先接住点击
+  const list = (idx.groupOrder || doc.groups || []).slice().reverse();
+  for (let i = 0; i < list.length; i++){
     const b = groupTitleBox(list[i]);
     if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return list[i];
   }
@@ -55,9 +56,9 @@ function hitGroupTitle(p){
 }
 /* 只有边框那一条能抓 —— 框内部要留给成员节点，不然点不到它们 */
 function hitGroupBorder(p){
-  const list = doc.groups || [];
+  const list = (idx.groupOrder || doc.groups || []).slice().reverse();
   const tol = Math.max(10, 10 / view.z);
-  for (let i = list.length - 1; i >= 0; i--){
+  for (let i = 0; i < list.length; i++){
     const grp = list[i], r = groupBox(grp);
     if (p.x < r.x - tol || p.x > r.x + r.w + tol || p.y < r.y - tol || p.y > r.y + r.h + tol) continue;
     const inner = p.x > r.x + tol && p.x < r.x + r.w - tol &&
@@ -69,8 +70,8 @@ function hitGroupBorder(p){
 function hitGroup(p){ return hitGroupTitle(p) || hitGroupBorder(p); }
 /* 落点用：整个框内部都算这个分组（连线可以连到「一组节点」上） */
 function hitGroupArea(p){
-  const list = doc.groups || [];
-  for (let i = list.length - 1; i >= 0; i--){
+  const list = (idx.groupOrder || doc.groups || []).slice().reverse();
+  for (let i = 0; i < list.length; i++){
     const r = groupBox(list[i]);
     if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return r;
   }
