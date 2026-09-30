@@ -73,7 +73,7 @@ const opArity = (id) => opDefOf(id).arity;
 
 /* ---------------- 数据规范化 ---------------- */
 const VAR_CONTROLS = ['plain', 'check', 'slider', 'switch'];
-const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', switch:'开关' };
+const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', switch:'通路' };
 function normalizeVarDef(v){
   const out = Object.assign({ name:'x', value:'0', type:'number', scope:'global',
     control:'plain', options:[], picked:[], min:0, max:100, step:1, on:false }, v || {});
@@ -625,6 +625,6 @@ function varScopeText(vd){
   const kind = v.control === 'plain' ? VAR_TYPE_LABEL[v.type]
              : v.control === 'check' ? '列表'
              : v.control === 'slider' ? (v.min + ' ~ ' + v.max + ' 步长 ' + v.step)
-             : '开关';
+             : '通路';
   return VAR_SCOPE_LABEL[v.scope] + ' · ' + kind;
 }

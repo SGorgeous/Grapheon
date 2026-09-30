@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/components.js
    面向组件的扩展层。
@@ -243,7 +243,7 @@ const BUILTIN_COMPONENTS = {
     { id:'title',     label:'标题',   hint:'★ 可以填 {变量}' },
     { id:'color',     label:'颜色',   hint:'外框颜色' },
     { id:'collapse',  label:'折叠',   hint:'成员一起藏起来' },
-    { id:'function',  label:'函数分组', hint:'组内变量 + 运算 + 输出' }
+    { id:'function',  label:'程序组', hint:'组内变量 + 运算 + 输出' }
   ]
 };
 

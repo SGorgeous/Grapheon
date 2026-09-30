@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/editing.js
    行内编辑（浮层 textarea）：节点文本 / 连线标签 / 分组标题。
@@ -23,6 +23,7 @@ const editValue = (kind, t) => {
   if (kind === 'varValue') return normalizeVarDef(t.varDef).value;
   if (kind === 'outName') return normalizeOutDef(t.outDef).name;
   if (kind === 'checkOpts') return normalizeVarDef(t.varDef).options.join(', ');
+  if (kind === 'cell') return (tableOf(t).cells[editing.row] || [])[editing.col] || '';
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
   if (/^opVal[0-9]+$/.test(kind)) return normalizeOpDef(t.opDef).operands[+kind.slice(5)] || '';
   return t.text;
@@ -35,6 +36,7 @@ function editSetValue(kind, t, v){
   else if (kind === 'varValue') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { value:v.trim() }));
   else if (kind === 'outName') t.outDef = normalizeOutDef({ name:v });
   else if (kind === 'checkOpts') setCheckOptions(t, v);
+  else if (kind === 'cell') setTableCell(t, editing.row, editing.col, v.trim());
   else if (kind === 'opVal' || /^opVal[0-9]+$/.test(kind)){
     const i = kind === 'opVal' ? 0 : +kind.slice(5);
     const args = normalizeOpDef(t.opDef).operands.slice();
@@ -44,10 +46,12 @@ function editSetValue(kind, t, v){
   else t.text = v;
 }
 
-function startEdit(kind, id, initial){
+function startEdit(kind, id, initial, extra){
   const target = editTarget(kind, id);
   if (!target) return;
-  editing = { kind, id, orig: editValue(kind, target) };
+  // 先挂上 editing 再算 orig：像表格格子这种，要靠 row/col 才取得到原文
+  editing = Object.assign({ kind, id }, extra || {});
+  editing.orig = editValue(kind, target);
   editor.value = initial != null ? initial : editing.orig;
   editor.style.display = 'block';
   positionEditor();
@@ -81,7 +85,7 @@ function positionEditor(){
     x = s.x; y = s.y;
     editor.style.textAlign = 'left';
   } else if (editing.kind === 'varName' || editing.kind === 'varValue'
-             || editing.kind === 'outName' || editing.kind === 'checkOpts'
+             || editing.kind === 'outName' || editing.kind === 'checkOpts' || editing.kind === 'cell'
              || editing.kind === 'opOp' || /^opVal[0-9]?$/.test(editing.kind)){
     // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
     const n = byId(editing.id);
@@ -91,6 +95,7 @@ function positionEditor(){
     else if (editing.kind === 'varValue') box = varBoxes(n).valBox;
     else if (editing.kind === 'outName') box = outBoxes(n).nameBox;
     else if (editing.kind === 'checkOpts') box = varBoxes(n).listBox || outBoxes(n).nameBox;
+    else if (editing.kind === 'cell') box = tableCellBox(tableGeom(n), editing.row, editing.col);
     else if (editing.kind === 'opOp') box = opBoxes(n).opBox;
     else box = opBoxes(n).valBoxes[editing.kind === 'opVal' ? 0 : +editing.kind.slice(5)] || opBoxes(n).valBox;
     const s = w2s({ x:box.x, y:box.y });

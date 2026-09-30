@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -307,6 +307,11 @@ canvas.addEventListener('dblclick', (ev) => {
   if (n){
     selectOnly(n.id);
     if (isEmbed(n)){ enterEmbed(n); return; }        // 双击嵌入节点 = 进去编辑
+    // 表格节点：双击哪个格子就编辑哪个格子
+    if (isTableNode(n)){
+      const cell = tableCellAt(n, p);
+      if (cell){ startEdit('cell', n.id, null, { row:cell.r, col:cell.c }); return; }
+    }
     // 变量 / 运算节点：双击哪个小框就编辑哪个字段
     const vp = hitVarPart(n, p);
     if (vp === 'varName' || vp === 'varValue'){ startEdit(vp, n.id); return; }

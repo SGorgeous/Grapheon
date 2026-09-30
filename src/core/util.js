@@ -33,7 +33,7 @@ const NODE_COLORS = [
   ['#00ffff', '青'], ['#00ff00', '绿'], ['#3b7dff', '蓝'], ['#b967ff', '紫'], ['#8a8a8a', '灰']
 ];
 /* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
-const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op', 'out'];
+const NODE_KINDS = ['node', 'program', 'image', 'embed', 'var', 'op', 'out', 'table'];
 /* ---------------- 变量定义节点 / 运算节点 ----------------
    两个都是「框里有框」：描述文字在左上角，下面一排输入框。 */
 const VAR_PAD = 12;

@@ -112,8 +112,21 @@ function sizeOutNode(n){
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
   n.h = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
 }
+/* 表格节点：宽 = 各列宽之和，高 = 行数 × 行高。手动拉过宽度就按比例摊给各列。 */
+function sizeTableNode(n){
+  setFont(mctx, FS, 'normal', FONT);
+  const t = normalizeTableDef(n.tableDef);
+  const cols = tableColWidths(n);
+  const natural = cols.reduce((a, x) => a + x, 0);
+  n.w = (+n.fixedW > 0) ? Math.max(MIN_FIXED_W, +n.fixedW) : Math.max(MIN_FIXED_W, natural);
+  n.h = t.rows * tableRowH();
+  n.lines = [''];
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+}
 function sizeNode(n){
   if (n.kind === 'image'){ sizeImageNode(n); return; }
+  if (n.kind === 'table'){ sizeTableNode(n); return; }
   if (n.kind === 'out'){ sizeOutNode(n); return; }
   if (n.kind === 'embed'){ sizeEmbedNode(n); return; }
   if (n.kind === 'var'){ sizeVarNode(n); return; }

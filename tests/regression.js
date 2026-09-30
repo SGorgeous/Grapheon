@@ -5947,6 +5947,253 @@
       String(groupGestureTarget(blank, true)));
   });
 
+
+  /* ==================== 右键菜单重构 + 表格节点 ==================== */
+  const emptyMenu = () => {
+    fresh(); layoutMind();
+    selectOnly(null);
+    showCtx(600, 500, null, null, { p:{ x:0, y:0 } });
+    return [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+  };
+  const subMenu = (label) => {
+    // 子菜单是 body 下的兄弟节点，不在 ctxEl 里，得全局找
+    const it = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf(label) === 0);
+    if (!it) return [];
+    it.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+    return [...document.querySelectorAll('.menu .item')].map(d => d.textContent);
+  };
+
+  T('RB01 空白右键菜单只剩「新建 / 全选 / 居中」', () => {
+    const labels = emptyMenu();
+    ok('RB01 顶层就三项', labels.length === 3, labels.join(' / '));
+    ok('RB01b 第一项是新建', labels[0].indexOf('新建') === 0, labels[0]);
+    ok('RB01c 有全选', labels.some(t => t.indexOf('全选') === 0), labels.join(' / '));
+    ok('RB01d 有居中', labels.some(t => t.indexOf('居中') === 0), labels.join(' / '));
+    ok('RB01e 排版不再出现在这里', !labels.some(t => /排版/.test(t)), labels.join(' / '));
+    ok('RB01f 防重叠那些也收走了', !labels.some(t => /重叠/.test(t)), labels.join(' / '));
+    hideCtx();
+  });
+  T('RB02 新建里是五项：节点 / 空组 / 程序节点 / 程序组 / 嵌入', () => {
+    emptyMenu();
+    const sub = subMenu('新建');
+    ok('RB02 五项齐', ['节点', '空组', '程序节点', '程序组', '嵌入 Grapheon']
+      .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
+    hideCtx();
+  });
+  T('RB03 节点里是三项：文本 / 图片 / 表格', () => {
+    emptyMenu();
+    subMenu('新建');
+    const sub = subMenu('节点');
+    ok('RB03 三项齐', ['文本节点', '图片节点', '表格节点']
+      .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
+    hideCtx();
+  });
+  T('RB04 程序节点里含变量 / 勾选 / 滑条 / 通路 / 输出', () => {
+    emptyMenu();
+    subMenu('新建');
+    const sub = subMenu('程序节点');
+    ok('RB04 五种都在', ['变量节点', '勾选节点', '滑条节点', '通路节点', '输出节点']
+      .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
+    ok('RB04b 叫「通路节点」，不叫「开关节点」',
+      sub.some(t => t.indexOf('通路节点') === 0) && !sub.some(t => t.indexOf('开关节点') === 0),
+      sub.join(' / '));
+    // 这两项原来是**出不来**的（少了个逗号），专门盯一下
+    ok('RB04c 运算节点也在（原来因为少逗号显示不出来）',
+      sub.some(t => t.indexOf('运算节点') === 0), sub.join(' / '));
+    ok('RB04d 程序化节点也在（同上）',
+      sub.some(t => t.indexOf('程序化节点') === 0), sub.join(' / '));
+    hideCtx();
+  });
+  T('RB05 每一项都带灰字说明', () => {
+    emptyMenu();
+    const top = [...ctxEl.querySelectorAll('.item')];
+    const allHaveHint = top.every(d => {
+      const h = d.querySelector('.k');
+      return !!h && !!h.textContent.trim();
+    });
+    ok('RB05 新建 / 全选 / 居中都有灰字', allHaveHint,
+      top.map(d => d.textContent).join(' / '));
+    const sub = subMenu('新建');
+    const flat = [...document.querySelectorAll('.menu .item')];
+    const noHint = flat.filter(d => {
+      const h = d.querySelector('.k');
+      return !h || !h.textContent.trim();
+    }).map(d => d.textContent);
+    ok('RB05b 子菜单里的每一项也有灰字', noHint.length === 0, noHint.join(' / '));
+    hideCtx();
+  });
+  T('RB06 程序组：建出来就是函数分组', () => {
+    fresh(); layoutMind();
+    emptyMenu();
+    subMenu('新建');
+    const it = [...document.querySelectorAll('.menu .item')]
+      .find(d => d.textContent.indexOf('程序组') === 0);
+    it.dispatchEvent(new MouseEvent('click', { bubbles:true }));
+    skipDlg();
+    const g = doc.groups[doc.groups.length - 1];
+    ok('RB06 建了一个分组', !!g);
+    ok('RB06b 它就是函数分组（内部字段没改名，老存档照旧）', g.isFunction === true, String(g.isFunction));
+    ok('RB06c 默认名字叫「程序组」', g.title === '程序组', g.title);
+    hideCtx();
+  });
+
+  T('TB01 建表格：形状 / 默认内容 / 尺寸', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    ok('TB01 kind 是 table', t.kind === 'table', t.kind);
+    ok('TB01b 默认 3 行 3 列', tableOf(t).rows === 3 && tableOf(t).cols === 3,
+      tableOf(t).rows + '×' + tableOf(t).cols);
+    ok('TB01c 默认带表头', tableOf(t).header === true);
+    ok('TB01d 首行有内容', tableOf(t).cells[0].join('') !== '', tableOf(t).cells[0].join(','));
+    ok('TB01e 尺寸 = 列宽之和 × 行数', (() => {
+      const cols = tableColWidths(t);
+      return Math.abs(t.w - cols.reduce((a, x) => a + x, 0)) < 1.5
+        && Math.abs(t.h - 3 * tableRowH()) < 1.5;
+    })(), t.w + '×' + t.h);
+    ok('TB01f 列宽夹在上下限内', tableColWidths(t).every(w => w >= TBL_MIN_COL && w <= TBL_MAX_COL),
+      tableColWidths(t).join(','));
+    ok('TB01g 画得出来', (dirty = true, draw(), true));
+  });
+  T('TB02 格子内容可编辑，也能引用变量', () => {
+    fresh(); layoutMind();
+    const v = mkVar('单价', '12');
+    const t = addTableNode(0, 0);
+    ok('TB02 写一个格子', setTableCell(t, 1, 0, '苹果'));
+    ok('TB02b 读回来', tableOf(t).cells[1][0] === '苹果');
+    ok('TB02c 显示出来的就是它', displayTableCell(byId(t.id), 1, 0) === '苹果',
+      displayTableCell(byId(t.id), 1, 0));
+    // 引用变量
+    setTableCell(t, 1, 1, '{单价} 元');
+    reindex(); sizeAll();
+    ok('TB02d 格子里能引用变量', displayTableCell(byId(t.id), 1, 1) === '12 元',
+      displayTableCell(byId(t.id), 1, 1));
+    setVarDef(byId(v.id), { value:'20' });
+    reindex(); sizeAll();
+    ok('TB02e 变量一改格子跟着变', displayTableCell(byId(t.id), 1, 1) === '20 元',
+      displayTableCell(byId(t.id), 1, 1));
+    ok('TB02f 越界写会被挡下', setTableCell(byId(t.id), 99, 99, 'x') === false);
+  });
+  T('TB03 命中：点在哪个格子就是哪个', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    const G = tableGeom(byId(t.id));
+    ok('TB03 左上角是第一格', (() => {
+      const c = tableCellAt(byId(t.id), { x:G.xs[0] + 5, y:G.ys[0] + 5 });
+      return c && c.r === 0 && c.c === 0;
+    })());
+    ok('TB03b 右下角是最后一格', (() => {
+      const c = tableCellAt(byId(t.id), { x:G.xs[2] + 5, y:G.ys[2] + 5 });
+      return c && c.r === 2 && c.c === 2;
+    })(), JSON.stringify(tableCellAt(byId(t.id), { x:G.xs[2] + 5, y:G.ys[2] + 5 })));
+    ok('TB03c 中间那格', (() => {
+      const c = tableCellAt(byId(t.id), { x:G.xs[1] + 5, y:G.ys[1] + 5 });
+      return c && c.r === 1 && c.c === 1;
+    })());
+    ok('TB03d 表格外面不算', tableCellAt(byId(t.id), { x:G.x - 30, y:G.y }) === null);
+    ok('TB03e 下边外面也不算', tableCellAt(byId(t.id), { x:G.x + 5, y:G.y + G.h + 20 }) === null);
+  });
+  T('TB04 双击格子打开编辑器，改完写回去', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    const G = tableGeom(byId(t.id));
+    const cx = Math.round(G.xs[1] + 10 + view.x), cy = Math.round(G.ys[1] + 8 + view.y);
+    cv.dispatchEvent(new MouseEvent('click', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
+    ok('TB04 编辑器开了，指的是第 1 行第 1 列',
+      !!editing && editing.kind === 'cell' && editing.row === 1 && editing.col === 1,
+      editing ? JSON.stringify({ k:editing.kind, r:editing.row, c:editing.col }) : '没开');
+    editor.value = '香蕉';
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    ok('TB04b 写回那个格子了', tableOf(byId(t.id)).cells[1][1] === '香蕉',
+      tableOf(byId(t.id)).cells[1][1]);
+    ok('TB04c 别的格子没被改', tableOf(byId(t.id)).cells[0][0] === tableOf(t).cells[0][0]);
+  });
+  T('TB05 加 / 删行列', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    setTableCell(t, 1, 1, 'A');
+    tableAddRow(byId(t.id));
+    ok('TB05 加了一行', tableOf(byId(t.id)).rows === 4, tableOf(byId(t.id)).rows);
+    ok('TB05b 老内容还在', tableOf(byId(t.id)).cells[1][1] === 'A');
+    ok('TB05c 新行是空的', tableOf(byId(t.id)).cells[3].join('') === '');
+    tableAddCol(byId(t.id));
+    ok('TB05d 加了一列', tableOf(byId(t.id)).cols === 4, tableOf(byId(t.id)).cols);
+    ok('TB05e 每行的数组都跟着长', tableOf(byId(t.id)).cells.every(r => r.length === 4));
+    tableDelRow(byId(t.id));
+    tableDelCol(byId(t.id));
+    ok('TB05f 删回去也是 3×3', tableOf(byId(t.id)).rows === 3 && tableOf(byId(t.id)).cols === 3,
+      tableOf(byId(t.id)).rows + '×' + tableOf(byId(t.id)).cols);
+    ok('TB05g 删到最后一行一列就不让删了', (() => {
+      const s = addTableNode(0, 0, { rows:1, cols:1, cells:[['']] });
+      tableDelRow(byId(s.id)); tableDelCol(byId(s.id));
+      return tableOf(byId(s.id)).rows === 1 && tableOf(byId(s.id)).cols === 1;
+    })(), (() => {
+      const s = doc.nodes.find(x => x.kind === 'table' && tableOf(x).rows === 1);
+      return s ? tableOf(s).rows + '×' + tableOf(s).cols : '?';
+    })());
+    ok('TB05h 表头能开关', (() => {
+      toggleTableHeader(byId(t.id));
+      const off = tableOf(byId(t.id)).header === false;
+      toggleTableHeader(byId(t.id));
+      return off && tableOf(byId(t.id)).header === true;
+    })());
+  });
+  T('TB06 表格能存读往返 / 参与选中 / 折叠', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    setTableCell(t, 1, 2, '{标题}');
+    const msg = mkVar('标题', '月报');
+    reindex(); sizeAll();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('TB06 存档里有 tableDef', !!snap.nodes.find(n => n.id === t.id).tableDef);
+    ok('TB06b 存的是原文', snap.nodes.find(n => n.id === t.id).tableDef.cells[1][2] === '{标题}',
+      snap.nodes.find(n => n.id === t.id).tableDef.cells[1][2]);
+    deserialize(snap);
+    ok('TB06c 读回来还是表格', byId(t.id).kind === 'table');
+    ok('TB06d 读回来还算得出来', displayTableCell(byId(t.id), 1, 2) === '月报',
+      displayTableCell(byId(t.id), 1, 2));
+    ok('TB06e 能选中', (selectOnly(t.id), sel.has(t.id)));
+    ok('TB06f 折叠开关不炸（表格没有子节点，折叠本身是空操作）', (() => {
+      selectOnly(t.id);
+      toggleCollapseOf(byId(t.id)); reindex();
+      toggleCollapseOf(byId(t.id)); reindex();
+      return byId(t.id).kind === 'table';
+    })());
+    // 非法 / 缺字段的 tableDef 要被规整
+    ok('TB06g 缺字段也能规整出合法结构', (() => {
+      const d = normalizeTableDef(undefined);
+      return d.cols === 3 && d.rows === 3 && d.cells.length === 3 && d.cells[0].length === 3;
+    })());
+    ok('TB06h 行列数超范围会被夹住', (() => {
+      const d = normalizeTableDef({ cols:999, rows:999 });
+      return d.cols === TBL_MAX_COLS && d.rows === TBL_MAX_ROWS;
+    })());
+    ok('TB06i 短行会补齐', (() => {
+      const d = normalizeTableDef({ cols:3, rows:2, cells:[['a']] });
+      return d.cells[0].length === 3 && d.cells[0][0] === 'a' && d.cells[1].join('') === '';
+    })());
+  });
+  T('TB07 表格节点的右键菜单', () => {
+    fresh(); layoutMind();
+    const t = addTableNode(0, 0);
+    selectOnly(t.id);
+    showCtx(500, 400, byId(t.id), null, { p:{} });
+    const items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('TB07 菜单上有表格那一项', items.some(x => x.indexOf('表格：3 行 × 3 列') === 0), items.join(' / '));
+    const sub = subMenu('表格：');
+    ok('TB07b 有加行 / 加列 / 删行 / 删列 / 表头',
+      ['末尾加一行', '末尾加一列', '删掉最后一行', '删掉最后一列', '第 0 行当表头']
+        .every(L => sub.some(x => x.indexOf(L) >= 0)), sub.join(' / '));
+    const tblItems = [...document.querySelectorAll('.menu .item')]
+      .filter(d => /加一行|加一列|删掉最后|表头/.test(d.textContent));
+    ok('TB07c 表格那几项都有灰字', tblItems.length >= 5 && tblItems.every(d => {
+      const h = d.querySelector('.k');
+      return !!h && !!h.textContent.trim();
+    }), tblItems.map(d => d.textContent).join(' / '));
+    hideCtx();
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单，支持多级子菜单。右键菜单和顶栏「新建」菜单共用。
@@ -53,8 +53,10 @@ function showMenu(x, y, items, depth, anchorEl){
     const [label, hint, fn, subs] = it;
     const d = el('div', 'item' + (subs ? ' sub' : '') + (!fn && !subs ? ' off' : ''));
     d.appendChild(el('span', 'lb', label));
+    // 有子菜单的也要显示灰字说明 —— 以前直接跳过 hint 只给个 ▶，
+    // 结果「节点」「程序节点」这两项光秃秃的。
+    if (hint) d.appendChild(el('span', 'k', hint));
     if (subs) d.appendChild(el('span', 'k', '▶'));
-    else if (hint) d.appendChild(el('span', 'k', hint));
 
     if (subs){
       d.onmouseenter = () => {
@@ -135,6 +137,19 @@ function showCtx(x, y, n, e, info){
         'hr',
         ['横向等距分布', '至少三个', () => distributeSelection('x')],
         ['竖向等距分布', '至少三个', () => distributeSelection('y')]
+      ]]);
+    }
+    // 表格节点：行列的增删
+    if (isTableNode(n)){
+      const tt = tableOf(n);
+      items.push(['表格：' + tt.rows + ' 行 × ' + tt.cols + ' 列', '双击格子改内容', null, [
+        ['末尾加一行', '行高固定', () => tableAddRow(n)],
+        ['末尾加一列', '列宽按内容算', () => tableAddCol(n)],
+        'hr',
+        ['删掉最后一行', '至少留一行', () => tableDelRow(n)],
+        ['删掉最后一列', '至少留一列', () => tableDelCol(n)],
+        'hr',
+        [(tt.header ? '● ' : '   ') + '第 0 行当表头', '底色反一下，用它当标题行', () => toggleTableHeader(n)]
       ]]);
     }
     items.push(['组件…', 'C', () => openComps()]);
@@ -219,7 +234,7 @@ function showCtx(x, y, n, e, info){
       grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');
     })]);
     items.push(['组件…', 'C', () => openComps()]);
-    items.push([grp.isFunction ? '取消函数分组' : '设为函数分组', '', () => toggleFunctionGroup(grp)]);
+    items.push([grp.isFunction ? '取消程序组' : '设为程序组', '', () => toggleFunctionGroup(grp)]);
     items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Space', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
     items.push('hr');
@@ -249,65 +264,85 @@ function showCtx(x, y, n, e, info){
     items.push('hr');
     items.push(['删除连线', 'Del', () => deleteEdgeOnly(e)]);
   } else {
-    items.push(['新建', '', null, [
-      ['节点', '双击空白', () => {
+    items.push(['新建', '加一个东西', null, [
+      ['节点', '文本 / 图片 / 表格', null, [
+        ['文本节点', '一个普通节点，双击改名', () => {
+          const p = s2w(x, y);
+          const nn = addNodeAt('新节点', p.x - 70, p.y - 24, 'rect');
+          reindex(); relayout(); settleGroups([nn.id]);
+          selectOnly(nn.id); pushHist(); mark();
+        }],
+        ['图片节点…', '也可以直接把图片拖进窗口', () => pickImageFile(s2w(x, y))],
+        ['表格节点', '行列可编辑，格子里的字也能引用变量', () => {
+          const p = s2w(x, y);
+          const nn = addTableNode(Math.round(p.x - 160), Math.round(p.y - 70));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个表格节点。双击格子改内容，右键可以加行 / 加列。');
+        }]
+      ]],
+      ['空组', '一个空的分组框，往里拖东西就自动收纳', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
+      ['程序节点', '变量 / 勾选 / 滑条 / 通路 / 输出', null, [
+        ['变量节点', '{name} 可引用，全局零连线可用', () => {
+          const p = s2w(x, y);
+          const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个变量节点。双击左边的框改名，右边的框改值；别处写 {名字} 就能引用。');
+        }],
+        ['勾选节点', '选项随便加，输出选中的那一串', () => {
+          const p = s2w(x, y);
+          const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 勾选节点：点方框就能勾 / 取消，输出是选中的那一串。右键「编辑选项…」加减选项。');
+        }],
+        ['滑条节点', '上下限 + 步长，拖一下实时生效', () => {
+          const p = s2w(x, y);
+          const nn = addControlNode('slider', Math.round(p.x - 140), Math.round(p.y - 60));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 滑条节点：拖圆点实时改值，引用它的地方跟着变。上下限 / 步长在面板或右键里设。');
+        }],
+        ['通路节点', '断开时这条连接逻辑上不通', () => {
+          const p = s2w(x, y);
+          const nn = addControlNode('switch', Math.round(p.x - 140), Math.round(p.y - 60));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 通路节点：放在连接中间，断开之后这条连接在逻辑上就断了（值流不过去）。');
+        }],
+        ['输出节点', '声明本作用域的输出值', () => {
+          const p = s2w(x, y);
+          const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个输出节点。把值连进来，或者双击名字框填一个同作用域的变量名。');
+        }],
+        'hr',
+        // 这两个也是程序节点，只是不是「变量」那一类。
+        // 不放在这里的话就没有别的入口了 —— 见 README 的说明。
+        ['运算节点', '给流过来的变量值做 + - * /，可以叠加', () => {
+          const p = s2w(x, y);
+          const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个运算节点。双击算符框切换 + - * /，双击右边的框改运算值。');
+        }],
+        ['程序化节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
+          const p = s2w(x, y);
+          const nn = createProgramNode(p.x - 70, p.y - 24);
+          reindex(); relayout();
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个程序化节点。从它拉一条线到目标节点，算符就会叠加过去。');
+        }]
+      ]],
+      ['程序组', '组内变量 + 运算 + 输出，外面接它的输出（原函数分组）', () => {
         const p = s2w(x, y);
-        const nn = addNodeAt('新节点', p.x - 70, p.y - 24, 'rect');
-        reindex(); relayout(); settleGroups([nn.id]);
-        selectOnly(nn.id); pushHist(); startEdit('node', nn.id, ''); mark();
+        const g = newEmptyGroup(Math.round(p.x - 160), Math.round(p.y - 120));
+        g.isFunction = true;
+        renameGroup(g, '程序组');
+        reindex(); sizeAll();
+        selectGroup(g.id); pushHist(); mark();
+        say('* 建了一个程序组。往里放变量 / 运算 / 输出节点，外面用一个变量节点指向它就能取到结果。');
       }],
-      ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
-      ['图片…', '也可以直接拖进来', () => pickImageFile(s2w(x, y))],
-      ['嵌入 Grapheon…', '整份文档当一个节点', () => pickEmbedFile(s2w(x, y))],
-      ['变量定义节点', '{name} 可引用', () => {
-        const p = s2w(x, y);
-        const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 建了一个变量定义节点。双击左边的框改名，右边的框改值；别的节点文本里用 {名字} 引用它。');
-      }],
-      ['勾选节点', '输出选中的那一串', () => {
-        const p = s2w(x, y);
-        const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 勾选节点：点方框就能勾 / 取消，输出是选中的那一串。右键「编辑选项…」加减选项。');
-      }],
-      ['滑条节点', '拖一下实时改值', () => {
-        const p = s2w(x, y);
-        const nn = addControlNode('slider', Math.round(p.x - 140), Math.round(p.y - 60));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 滑条节点：拖圆点实时改值，引用它的地方跟着变。上下限 / 步长在面板或右键里设。');
-      }],
-      ['开关节点', '断开时逻辑上不通', () => {
-        const p = s2w(x, y);
-        const nn = addControlNode('switch', Math.round(p.x - 140), Math.round(p.y - 60));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 开关节点：放在连接中间，关掉之后这条连接在逻辑上就断了（值流不过去）。');
-      }],
-      ['输出节点', '本作用域的输出值', () => {
-        const p = s2w(x, y);
-        const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 建了一个输出节点。把值连进来，或者双击名字框填一个同作用域的变量名。');
-      }],
-      ['运算节点', '给变量加运算', () => {
-        const p = s2w(x, y);
-        const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 建了一个运算节点。双击算符框切换 + - * /，双击右边的框改运算值。');
-      }]
-      ['程序节点', '会改变目标', () => {
-        const p = s2w(x, y);
-        const nn = createProgramNode(p.x - 70, p.y - 24);
-        reindex(); relayout();
-        selectOnly(nn.id); pushHist(); mark();
-        say('* 建了一个程序节点。从它拉一条线到目标节点，算符就会叠加过去。');
-      }]
+      ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile(s2w(x, y))]
     ]]);
     items.push(['全选', 'Ctrl+A', selectAll]);
+    items.push(['居中', '把所有内容放进视野', fitView]);
     if (sel.size >= 2) items.push(['把选中的 ' + sel.size + ' 个节点加入分组', 'Ctrl+G', () => createGroup()]);
-    items.push('hr');
-    items.push(['排版（按树形摆一次）', 'Ctrl+L', () => { tidyLayout(); pushHist(); say('* 已按树形排版，分组框也跟着重新贴合了。'); }]);
-    items.push(['居中显示', '', fitView]);
   }
   showMenu(x, y, items);
 }
@@ -384,7 +419,7 @@ function showInsertMenu(anchor){
       const n = addControlNode('slider', Math.round(c.x - 140), Math.round(c.y - 60));
       selectOnly(n.id); pushHist(); mark();
     }],
-    ['开关节点', '关掉后连接逻辑上断开', () => {
+    ['通路节点', '断开后这条连接逻辑上不通', () => {
       const c = viewCenter();
       const n = addControlNode('switch', Math.round(c.x - 140), Math.round(c.y - 60));
       selectOnly(n.id); pushHist(); mark();

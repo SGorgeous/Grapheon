@@ -604,6 +604,7 @@ function drawNode(g, n){
   else if (n.kind === 'var') drawVarNode(g, n, b, selected, hov);
   else if (n.kind === 'op')  drawOpNode(g, n, b, selected, hov);
   else if (n.kind === 'out') drawOutNode(g, n, b, selected, hov);
+  else if (n.kind === 'table') drawTableNode(g, n, b, selected, hov);
   else {
   g.save();
   g.lineJoin = 'round';

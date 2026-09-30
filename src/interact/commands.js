@@ -775,8 +775,8 @@ function toggleFunctionGroup(grp){
   grp.isFunction = !grp.isFunction;
   reindex(); sizeAll(); pushHist(); mark();
   say(grp.isFunction
-    ? '* 「' + (grp.title || '分组') + '」现在是函数分组：变量节点指向它，值就变成组内算出来的值。'
-    : '* 「' + (grp.title || '分组') + '」不再是函数分组。');
+    ? '* 「' + (grp.title || '分组') + '」现在是程序组：变量节点指向它，值就变成组内算出来的值。'
+    : '* 「' + (grp.title || '分组') + '」不再是程序组。');
 }
 /* 手动设优先级 */
 function setPriority(n, v){
@@ -992,4 +992,71 @@ function selectGroupNodes(grp){
   say('* 选中了「' + (grp.title || '分组') + '」里的 ' + sel.size + ' 个节点'
       + (skipped ? '（另有 ' + skipped + ' 个藏着，跳过了）' : '') + '。');
   return true;
+}
+
+/* =========================================================================
+   表格节点
+   ========================================================================= */
+function addTableNode(x, y, opts){
+  const n = addNodeAt('', x, y, 'rect');
+  n.kind = 'table';
+  n.tableDef = normalizeTableDef(Object.assign({ cols:3, rows:3,
+    cells:[['列一', '列二', '列三'], ['', '', ''], ['', '', '']], header:true }, opts || {}));
+  sizeNode(n);
+  reindex(); sizeAll();
+  return n;
+}
+function setTableCell(n, r, c, text){
+  if (!isTableNode(n)) return false;
+  const t = tableOf(n);
+  if (r < 0 || c < 0 || r >= t.rows || c >= t.cols) return false;
+  t.cells[r][c] = String(text == null ? '' : text);
+  n.tableDef = t;
+  sizeNode(n);
+  reindex(); sizeAll(); mark();
+  return true;
+}
+/* 加 / 删行列。删到只剩一行一列就不让删了，表格总得有个格子。 */
+function tableAddRow(n, after){
+  if (!isTableNode(n)) return;
+  const t = tableOf(n);
+  t.cells.splice(after == null ? t.rows : after + 1, 0, new Array(t.cols).fill(''));
+  t.rows = t.cells.length;
+  n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 加了一行，现在 ' + t.rows + ' 行。');
+}
+function tableAddCol(n, after){
+  if (!isTableNode(n)) return;
+  const t = tableOf(n);
+  const at = (after == null ? t.cols : after + 1);
+  for (const row of t.cells) row.splice(at, 0, '');
+  t.cols = t.cells[0].length;
+  n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 加了一列，现在 ' + t.cols + ' 列。');
+}
+function tableDelRow(n, r){
+  if (!isTableNode(n)) return;
+  const t = tableOf(n);
+  if (t.rows <= TBL_MIN_ROWS){ say('* 至少留一行。'); return; }
+  t.cells.splice(r == null ? t.rows - 1 : r, 1);
+  t.rows = t.cells.length;
+  n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 删了一行，现在 ' + t.rows + ' 行。');
+}
+function tableDelCol(n, c){
+  if (!isTableNode(n)) return;
+  const t = tableOf(n);
+  if (t.cols <= TBL_MIN_COLS){ say('* 至少留一列。'); return; }
+  const at = (c == null ? t.cols - 1 : c);
+  for (const row of t.cells) row.splice(at, 1);
+  t.cols = t.cells[0].length;
+  n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 删了一列，现在 ' + t.cols + ' 列。');
+}
+function toggleTableHeader(n){
+  if (!isTableNode(n)) return;
+  const t = tableOf(n);
+  t.header = !t.header;
+  n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say(t.header ? '* 第 0 行当表头。' : '* 取消表头。');
 }
