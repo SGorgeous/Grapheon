@@ -99,7 +99,7 @@
       (window.__loadErrors || []).join(' | ') || '无');
   });
   T('A02 顶栏每个按钮都绑上了处理函数', () => {
-    const ids = ['b-tidy','b-undo','b-redo','b-new','b-open','b-save','b-png','b-fit','b-help'];
+    const ids = ['b-tidy','b-undo','b-redo','b-new','b-open','b-img','b-save','b-png','b-fit','b-help'];
     const missing = ids.filter(id => {
       const b = document.getElementById(id);
       return !b || typeof b.onclick !== 'function';
@@ -115,6 +115,7 @@
       ['b-tidy', () => true],
       ['b-new',  () => ctxEl.style.display === 'block'],
       ['b-open', () => true],                       // 拉起文件选择框，headless 里无副作用
+      ['b-img',  () => imgPicked > 0],               // 图片按钮要真的去点文件选择框
       ['b-save', () => dl && /^grapheon-\d{4}-\d{2}-\d{2}\.json$/.test(dl.filename) && dl.size > 100],
       ['b-png',  () => expEl.style.display === 'block'],
       ['b-fit',  () => true],
@@ -122,12 +123,16 @@
       ['b-undo', () => true],
       ['b-redo', () => true]
     ];
+    // b-img 得验证「确实拉起了图片选择框」，所以把它拦下来数一次
+    let imgPicked = 0;
+    const origImgClick = imgFileEl.click.bind(imgFileEl);
+    imgFileEl.click = () => { imgPicked++; };
     const bad = [];
     for (const [id, check] of cases){
       fresh();
       expEl.style.display = 'none'; helpEl.style.display = 'none';
       edgeBoxEl.style.display = 'none'; hideCtx();
-      dl = null;
+      dl = null; imgPicked = 0;
       try { document.getElementById(id).click(); }
       catch (e){ bad.push(id + ':抛异常(' + e.message + ')'); continue; }
       if (!check()) bad.push(id + ':无效果');
@@ -135,7 +140,8 @@
     expEl.style.display = 'none'; helpEl.style.display = 'none';
     edgeBoxEl.style.display = 'none'; hideCtx();
     downloadBlob = origDL;
-    ok('A03 9 个按钮全部生效', bad.length === 0, bad.join(' '));
+    imgFileEl.click = origImgClick;
+    ok('A03 10 个按钮全部生效', bad.length === 0, bad.join(' '));
   });
   T('A04 保存走的是统一下载通道，内容是真 JSON', () => {
     fresh();
@@ -2603,6 +2609,235 @@
 
   });
 
+
+  /* ==================== 图片节点 ==================== */
+  /* 一个 1×1 的红色 PNG，够用了：测的是通道和几何，不是画质 */
+  const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const mkImg = (x, y, opts) => {
+    const o = opts || {};
+    const n = newImageNode(o.url || TINY_PNG, o.natW || 400, o.natH || 300,
+                           x == null ? 0 : x, y == null ? 0 : y);
+    if (o.desc != null) setNodeDesc(n, o.desc);
+    if (o.name != null) n.text = o.name;
+    reindex(); sizeAll();
+    return n;
+  };
+  T('Z01 建一个图片节点', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { name:'架构图', desc:'模块依赖关系' });
+    ok('Z01 kind 是 image', n.kind === 'image');
+    ok('Z01b 图片存下来了', /^data:image\/png/.test(n.image), String(n.image).slice(0, 30));
+    ok('Z01c 记了原始尺寸', n.imgW === 400 && n.imgH === 300);
+    ok('Z01d 名称就是节点文字', n.text === '架构图');
+    ok('Z01e 描述也存下来了', n.desc === '模块依赖关系');
+    ok('Z01f 描述折行算好了', n.lines.length >= 1, n.lines.length);
+  });
+  T('Z02 尺寸 = 名称带 + 图片（等比）+ 描述', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { name:'', desc:'' });
+    ok('Z02 宽度按图片原始宽度（不超上限）', n.w === 320, n.w);
+    ok('Z02b 图片高度按原始比例', n.imgDrawH === Math.round(300 * (320 / 400)), n.imgDrawH);
+    ok('Z02c 高度 = 名称带 + 图片高', n.h === IMG_NAME_H + n.imgDrawH, n.h + ' vs ' + (IMG_NAME_H + n.imgDrawH));
+    setNodeDesc(n, '一行描述');
+    ok('Z02d 加描述后变高', n.h > IMG_NAME_H + n.imgDrawH, n.h);
+    const withDesc = n.h;
+    setNodeDesc(n, '');
+    ok('Z02e 描述清掉又变回去', n.h === IMG_NAME_H + n.imgDrawH && n.h < withDesc);
+  });
+  T('Z03 窄图不会被拉宽，宽图有限宽', () => {
+    fresh(); layoutMind();
+    const narrow = mkImg(0, 0, { natW:80, natH:120 });
+    ok('Z03 太窄的图用最小宽度', narrow.w === IMG_MIN_W, narrow.w);
+    ok('Z03b 高度仍按比例', narrow.imgDrawH === Math.round(120 * (IMG_MIN_W / 80)), narrow.imgDrawH);
+    const wide = mkImg(0, 0, { natW:4000, natH:500 });
+    ok('Z03c 超宽的图被限到上限', wide.w === IMG_MAX_W, wide.w);
+    ok('Z03d 比例没变形', Math.abs((wide.w / wide.imgDrawH) - (4000 / 500)) < 0.02,
+      (wide.w / wide.imgDrawH).toFixed(3));
+  });
+  T('Z04 拖右下角改宽度，图片等比缩放', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, {});
+    const h0 = n.imgDrawH;
+    selectOnly(n.id);
+    const r = resizeHandleRect(nodeBox(n));
+    const h = S({ x:r.x + r.w / 2, y:r.y + r.h / 2 });
+    pe('pointerdown', h.x, h.y);
+    const tgt = S({ x:n.x + 200, y:n.y + 400 });
+    pe('pointermove', tgt.x, tgt.y);
+    ok('Z04 宽度变成 200', Math.abs(n.w - 200) <= 1, n.w);
+    ok('Z04b 图片高度跟着等比缩', n.imgDrawH < h0 && Math.abs(n.imgDrawH - Math.round(300 * (200 / 400))) <= 1,
+      n.imgDrawH);
+    pe('pointerup', tgt.x, tgt.y);
+  });
+  T('Z05 图片节点分三块命中：名称 / 图片 / 描述', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { desc:'一段描述' });
+    const b = nodeBox(n);
+    ok('Z05 顶部是名称带', hitImagePart(n, { x:b.x + b.w / 2, y:b.y + 4 }) === 'name');
+    ok('Z05b 中间是图片', hitImagePart(n, { x:b.x + b.w / 2, y:b.y + IMG_NAME_H + 10 }) === 'image');
+    ok('Z05c 下面是描述', hitImagePart(n, { x:b.x + 10, y:b.y + IMG_NAME_H + n.imgDrawH + 6 }) === 'desc');
+    ok('Z05d 普通节点没有这个划分', hitImagePart(nodeByText('节点'), { x:0, y:0 }) === null);
+  });
+  T('Z06 双击不同部位编辑不同字段', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { name:'原名', desc:'原描述' });
+    const b = nodeBox(n);
+    let q = S({ x:b.x + b.w - 20, y:b.y + 6 });
+    cv.dispatchEvent(new MouseEvent('dblclick', { clientX:q.x, clientY:q.y, bubbles:true, cancelable:true }));
+    ok('Z06 双击右上角编辑名称', !!editing && editing.kind === 'node' && editing.id === n.id,
+      editing && editing.kind);
+    editor.value = '新名字';
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    ok('Z06b 名称改掉了', n.text === '新名字', n.text);
+    ok('Z06c 描述没被动', n.desc === '原描述', n.desc);
+    reindex(); sizeAll();
+    const b2 = nodeBox(n);
+    q = S({ x:b2.x + 10, y:b2.y + IMG_NAME_H + n.imgDrawH + 6 });
+    cv.dispatchEvent(new MouseEvent('dblclick', { clientX:q.x, clientY:q.y, bubbles:true, cancelable:true }));
+    ok('Z06d 双击图下方编辑描述', !!editing && editing.kind === 'nodeDesc' && editing.id === n.id,
+      editing && editing.kind);
+    editor.value = '第一行\n第二行';
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    ok('Z06e 描述换行保留', n.desc === '第一行\n第二行', JSON.stringify(n.desc));
+    ok('Z06f 描述折成两行', n.lines.length === 2, n.lines.length);
+    ok('Z06g 名称没被动', n.text === '新名字', n.text);
+  });
+  T('Z07 描述改了尺寸跟着重算', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { desc:'短' });
+    const h1 = n.h;
+    setNodeDesc(n, '很长很长的一段描述文字，长到必须折成好几行才放得下这个宽度');
+    ok('Z07 长了就高', n.h > h1, h1 + ' -> ' + n.h);
+    ok('Z07b 折成了多行', n.lines.length >= 2, n.lines.length);
+  });
+  T('Z08 图片节点能连线、能当程序节点的目标', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, {});
+    const tgt = nodeByText('操作');
+    const e = linkNodes(tgt.id, n.id);
+    reindex(); sizeAll();
+    ok('Z08 能连上图片节点', !!e);
+    const ep = edgeEndpoints(e);
+    const P = anchorsFor(nodeBox(n));
+    ok('Z08b 连线端点落在图片节点上',
+      ['r','l','t','b'].some(k => Math.abs(ep.b.x - P[k].x) < 0.01 && Math.abs(ep.b.y - P[k].y) < 0.01),
+      JSON.stringify(ep.b));
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'shape', mode:'set', value:'diamond' });
+    linkNodes(pg.id, n.id);
+    reindex(); sizeAll();
+    ok('Z08c 程序算符也作用得到', effShape(n) === 'diamond', effShape(n));
+    dirty = true; draw();
+    ok('Z08d 画得出来（图片节点 + 程序形状叠加）', true);
+  });
+  T('Z09 图片字段能存下来', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { name:'图', desc:'说明文字' });
+    n.fixedW = 260;
+    sizeNode(n);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const raw = snap.nodes.find(x => x.id === n.id);
+    ok('Z09 序列化带 image / imgW / imgH / desc',
+      /^data:image\//.test(raw.image) && raw.imgW === 400 && raw.imgH === 300 && raw.desc === '说明文字',
+      JSON.stringify({ w:raw.imgW, h:raw.imgH, d:raw.desc }));
+    deserialize(snap);
+    const n2 = byId(n.id);
+    ok('Z09b 往返后还是图片节点', n2.kind === 'image');
+    ok('Z09c 图片和尺寸都在', n2.image === n.image && n2.imgW === 400 && n2.imgH === 300);
+    ok('Z09d 描述还在', n2.desc === '说明文字', n2.desc);
+    ok('Z09e 手动宽度也保留了', n2.fixedW === 260 && n2.w === 260, n2.w);
+  });
+  T('Z10 不是 data:image 的东西不会被当图片', () => {
+    fresh(); layoutMind();
+    const n = addNodeAt('x', 0, 0, 'rect');
+    n.kind = 'image';
+    n.image = 'https://example.com/a.png';       // 外链：不内嵌，存/读都会丢掉
+    n.imgW = 100; n.imgH = 100;
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('Z10 外链不会被写进存档', snap.nodes.find(x => x.id === n.id).image === null,
+      String(snap.nodes.find(x => x.id === n.id).image));
+    const bad = { v:2, nid:1,
+      nodes:[{ id:'n1', text:'', x:0, y:0, kind:'image', image:'javascript:alert(1)', imgW:10, imgH:10 }],
+      edges:[], groups:[] };
+    deserialize(bad);
+    ok('Z10b 反序列化也会过滤掉非 data:image', byId('n1').image === null, byId('n1').image);
+    ok('Z10c kind 是合法值', NODE_KINDS.indexOf(byId('n1').kind) >= 0, byId('n1').kind);
+  });
+  T('Z11 非法 kind 会被规整回 node', () => {
+    deserialize({ v:2, nid:1, nodes:[{ id:'n1', text:'甲', x:0, y:0, kind:'外星人' }], edges:[], groups:[] });
+    ok('Z11 未知 kind → node', byId('n1').kind === 'node', byId('n1').kind);
+  });
+  T('Z12 图片节点参与选中 / 分组 / 折叠', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, {});
+    selectOnly(n.id);
+    ok('Z12 能被选中', sel.has(n.id));
+    const t = nodeByText('操作');
+    selectGroup(null); sel.clear(); sel.add(n.id); sel.add(t.id);
+    const g = createGroup();
+    ok('Z12b 能进分组', groupAllNodes(g.id).indexOf(n.id) >= 0, groupAllNodes(g.id).join(','));
+    selectOnly(t.id);
+    toggleCollapseOf(t);
+    ok('Z12c 能跟着折叠藏起来', isHidden(n.id) === (descendants(t.id).indexOf(n.id) >= 0),
+      isHidden(n.id) + '/' + descendants(t.id).length);
+  });
+  T('Z13 导出会先等图片解码完', () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { desc:'导出测试' });
+    ok('Z13 ensureImagesLoaded 返回 Promise', typeof ensureImagesLoaded().then === 'function');
+    const c = buildExportCanvas([n]);
+    ok('Z13b 导出画布建得出来', c.width > 0 && c.height > 0, c.width + 'x' + c.height);
+  });
+
+  await TA('Z14 拖进来的图片真的会变成图片节点（走完整导入链路）', async () => {
+    fresh(); layoutMind();
+    const before = doc.nodes.length;
+    // 现画一张 4×2 的红图，走 canvas → blob → File → insertImageFile 全程
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 2;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#ff0000'; cx.fillRect(0, 0, 4, 2);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    ok('Z14 前置：拿到了一张图的 blob', !!blob && blob.size > 0, blob && blob.size);
+    const file = new File([blob], 'a.png', { type:'image/png' });
+    insertImageFile(file, { x:0, y:0 });
+    for (let i = 0; i < 60 && doc.nodes.length === before; i++) await sleep(25);
+    ok('Z14b 多了一个节点', doc.nodes.length === before + 1, doc.nodes.length);
+    const n = doc.nodes[doc.nodes.length - 1];
+    ok('Z14c 是图片节点', n.kind === 'image', n.kind);
+    ok('Z14d 图片是内嵌的 data URL', /^data:image\//.test(n.image || ''), String(n.image).slice(0, 24));
+    ok('Z14e 原始尺寸记对了', n.imgW === 4 && n.imgH === 2, n.imgW + 'x' + n.imgH);
+    ok('Z14f 导入后自动选中', sel.has(n.id));
+    skipDlg();
+    ok('Z14g 提示里报了尺寸', /4×2/.test(dlgText.textContent), dlgText.textContent.slice(0, 50));
+  });
+  await TA('Z15 非图片文件会被挡下来', async () => {
+    fresh(); layoutMind();
+    const before = doc.nodes.length;
+    insertImageFile(new File(['hello'], 'a.txt', { type:'text/plain' }), { x:0, y:0 });
+    await sleep(80);
+    ok('Z15 没有新建节点', doc.nodes.length === before, doc.nodes.length);
+    skipDlg();
+    ok('Z15b 有提示说它不是图片', /不是图片/.test(dlgText.textContent), dlgText.textContent.slice(0, 40));
+  });
+  await TA('Z16 换图会替换内容但保留描述和名称', async () => {
+    fresh(); layoutMind();
+    const n = mkImg(0, 0, { name:'标题', desc:'说明' });
+    const oldUrl = n.image;
+    const c = document.createElement('canvas');
+    c.width = 60; c.height = 20;
+    c.getContext('2d').fillRect(0, 0, 60, 20);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    replaceImage(n, new File([blob], 'b.png', { type:'image/png' }));
+    for (let i = 0; i < 60 && n.image === oldUrl; i++) await sleep(25);
+    ok('Z16 图片换掉了', n.image !== oldUrl && /^data:image\//.test(n.image));
+    ok('Z16b 原始尺寸更新', n.imgW === 60 && n.imgH === 20, n.imgW + 'x' + n.imgH);
+    ok('Z16c 名称保留', n.text === '标题', n.text);
+    ok('Z16d 描述保留', n.desc === '说明', n.desc);
+    ok('Z16e 尺寸按新图重算', n.imgDrawH === Math.round(20 * (n.w / 60)), n.imgDrawH);
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -13,12 +13,16 @@ const editor = document.getElementById('editor');
 function editTarget(kind, id){
   if (kind === 'edge') return doc.edges.find(e => e.id === id) || null;
   if (kind === 'group') return byGroup(id) || null;
-  return byId(id) || null;
+  return byId(id) || null;   // 'node' 和 'nodeDesc' 都是节点，只是改的字段不同
 }
-const editValue = (kind, t) => (kind === 'edge') ? (t.label || '') : (kind === 'group' ? (t.title || '') : t.text);
+const editValue = (kind, t) => (kind === 'edge') ? (t.label || '')
+  : (kind === 'group') ? (t.title || '')
+  : (kind === 'nodeDesc') ? (t.desc || '')
+  : t.text;
 function editSetValue(kind, t, v){
   if (kind === 'edge') t.label = String(v).replace(/\n/g, ' ').trim();
   else if (kind === 'group') t.title = String(v).replace(/\n/g, ' ');
+  else if (kind === 'nodeDesc') t.desc = v;      // 描述允许换行
   else t.text = v;
 }
 
@@ -56,6 +60,17 @@ function positionEditor(){
     const tb = groupTitleBox(grp);
     const s = w2s({ x:tb.x, y:tb.y });
     w = tb.w; h = tb.h; fs = FS; lh = 20; padX = 6; padY = 4;
+    x = s.x; y = s.y;
+    editor.style.textAlign = 'left';
+  } else if (editing.kind === 'nodeDesc'){
+    // 图片描述：盖在图片下面那一块上
+    const n = byId(editing.id);
+    if (!n){ hideEditor(); return; }
+    const b = nodeBox(n);
+    const dy = b.y + IMG_NAME_H + (n.imgDrawH || 0);
+    const s = w2s({ x:b.x, y:dy });
+    fs = FS; lh = n.lh || Math.round(FS * 1.32);
+    w = b.w; h = Math.max(28, b.y + b.h - dy); padX = PADX; padY = PADY;
     x = s.x; y = s.y;
     editor.style.textAlign = 'left';
   } else {

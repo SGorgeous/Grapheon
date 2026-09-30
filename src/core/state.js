@@ -520,9 +520,12 @@ function serialize(){
     nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape,
       collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null,
       font:n.font || null, fsPx:n.fsPx || null, color:n.color || null, border:n.border || null,
-      kind:(n.kind === 'program' ? 'program' : 'node'),
+      kind:(NODE_KINDS.indexOf(n.kind) >= 0 ? n.kind : 'node'),
       value:(Math.round(+n.value) || 0),
-      program:(n.kind === 'program') ? normalizeProgram(n.program) : null })),
+      program:(n.kind === 'program') ? normalizeProgram(n.program) : null,
+      image:(n.kind === 'image' && typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
+      imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
+      desc:(n.desc == null ? '' : String(n.desc)) })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
@@ -553,8 +556,11 @@ function deserialize(d){
       font:NODE_FONTS[n.font] ? n.font : null,
       fsPx:(+n.fsPx > 0) ? +n.fsPx : ((+n.fs > 0) ? +n.fs : null),   // 也认早期写成 fs 的档
       color:n.color || null, border:n.border || null,
-      kind:(n.kind === 'program') ? 'program' : 'node',
-      value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program) });
+      kind:NODE_KINDS.indexOf(n.kind) >= 0 ? n.kind : 'node',
+      value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program),
+      image:(typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
+      imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
+      desc:(n.desc == null ? '' : String(n.desc)) });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const e of (d.edges || [])){

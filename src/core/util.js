@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/util.js
    全局常量、调色板、小工具函数。
@@ -33,7 +33,15 @@ const NODE_COLORS = [
   ['#00ffff', '青'], ['#00ff00', '绿'], ['#3b7dff', '蓝'], ['#b967ff', '紫'], ['#8a8a8a', '灰']
 ];
 /* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
-const NODE_KINDS = ['node', 'program'];
+const NODE_KINDS = ['node', 'program', 'image'];
+/* ---------------- 图片节点 ----------------
+   图片以 data URL 内嵌（存文件、存 localStorage 都靠它），导入时先等比缩到 IMG_SRC_MAX 以内，
+   太大再转 JPEG 压一道。名称画在右上角那条带里，描述画在图片下面。 */
+const IMG_MAX_W  = 320;    // 节点默认宽度上限（按图片原始宽度取小）
+const IMG_MIN_W  = 140;
+const IMG_NAME_H = 30;     // 右上角名称带的高度
+const IMG_SRC_MAX = 900;   // 导入时等比缩放的最长边
+const IMG_BUDGET  = 700000; // data URL 超过这个长度就改用 JPEG 压
 const SHAPES = ['rect', 'round', 'diamond', 'oval'];
 const SHAPE_LABEL = { rect:'矩形', round:'圆角矩形', diamond:'菱形', oval:'椭圆' };
 /* ---------------- 程序化节点 ----------------

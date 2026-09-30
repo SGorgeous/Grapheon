@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/exporter.js
    导出面板：范围选择、标题与文件名、PNG 输出。
@@ -163,17 +163,23 @@ function doExport(){
   if (!nodes.length){ say('* 这个范围里没有节点。'); return; }
   const name = sanitizeFile(expNameEl.value.replace(/\.png$/i, ''));
   const title = sanitizeTitle(expTitleEl.value);
-  try {
-    const c = buildExportCanvas(nodes, title);
-    const finish = () => {
-      closeExport();
-      say('* 已把 ' + nodes.length + ' 个节点导出为 ' + name + '.png' + (title ? '（标题：' + title + '）' : ''));
-    };
-    if (c.toBlob) c.toBlob((blob) => { downloadBlob(blob, name + '.png'); finish(); }, 'image/png');
-    else { downloadBlob(dataURLtoBlob(c.toDataURL('image/png')), name + '.png'); finish(); }
-  } catch (err){
-    say('* 导出失败了：' + err.message);
-  }
+  // 图片节点要等解码完再画，不然导出的会是「图片加载中…」占位
+  const go = () => {
+    try {
+      const c = buildExportCanvas(nodes, title);
+      const finish = () => {
+        closeExport();
+        say('* 已把 ' + nodes.length + ' 个节点导出为 ' + name + '.png' + (title ? '（标题：' + title + '）' : ''));
+      };
+      if (c.toBlob) c.toBlob((blob) => { downloadBlob(blob, name + '.png'); finish(); }, 'image/png');
+      else { downloadBlob(dataURLtoBlob(c.toDataURL('image/png')), name + '.png'); finish(); }
+    } catch (err){
+      say('* 导出失败了：' + err.message);
+    }
+  };
+  say('* 正在导出……');
+  const pending = ensureImagesLoaded();
+  if (pending && pending.then) pending.then(go, go); else go();
 }
 function onExportFieldKey(ev){
   ev.stopPropagation();

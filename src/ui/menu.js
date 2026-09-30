@@ -122,6 +122,12 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
+    if (n.kind === 'image'){
+      items.push(['换一张图片…', '', () => pickImageFile(null, n)]);
+      items.push(['编辑描述…', '双击图下方', () => startEdit('nodeDesc', n.id)]);
+      items.push(['编辑名称…', '双击右上角', () => startEdit('node', n.id)]);
+      items.push('hr');
+    }
     items.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
     items.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '', () => toggleProgramNode(n)]);
     items.push('hr');
@@ -189,6 +195,7 @@ function showCtx(x, y, n, e, info){
         selectOnly(nn.id); pushHist(); startEdit('node', nn.id, ''); mark();
       }],
       ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
+      ['图片…', '也可以直接拖进来', () => pickImageFile(s2w(x, y))],
       ['程序节点', '会改变目标', () => {
         const p = s2w(x, y);
         const nn = createProgramNode(p.x - 70, p.y - 24);

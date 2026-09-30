@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/text.js
    文本度量、中英混排换行、节点尺寸计算。
@@ -43,7 +43,27 @@ function wrapText(text, maxW, size, weight, family){
   if (!lines.length) lines.push('');
   return lines;
 }
+/* 图片节点：尺寸由「名称带 + 图片（按原始比例）+ 描述」叠出来。
+   拖右下角改宽度时图片等比缩放，高度自己跟着走。 */
+function sizeImageNode(n){
+  const natW = (+n.imgW > 0) ? +n.imgW : 4;
+  const natH = (+n.imgH > 0) ? +n.imgH : 3;
+  let w = (+n.fixedW > 0) ? Math.max(IMG_MIN_W, +n.fixedW)
+                          : Math.min(IMG_MAX_W, Math.max(IMG_MIN_W, natW));
+  w = Math.round(w);
+  const imgH = Math.max(24, Math.round(natH * (w / natW)));
+  n.imgDrawW = w;
+  n.imgDrawH = imgH;
+  const desc = String(n.desc == null ? '' : n.desc);
+  n.lines = desc ? wrapText(desc, w - PADX * 2, FS, 'normal', FONT) : [];
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  const descH = n.lines.length ? n.lines.length * n.lh + PADY * 2 : 0;
+  n.w = w;
+  n.h = IMG_NAME_H + imgH + descH;
+}
 function sizeNode(n){
+  if (n.kind === 'image'){ sizeImageNode(n); return; }
   const size = nodeFontSize(n);
   const family = nodeFontFamily(n);
   const weight = 'normal';   // Unifont 无粗体；统一不用合成粗体

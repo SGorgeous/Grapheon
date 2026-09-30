@@ -574,3 +574,71 @@ function programHits(id){
   }
   return out;
 }
+
+/* =========================================================================
+   图片节点
+   ========================================================================= */
+/* 把一张图片等比缩到 IMG_SRC_MAX 以内并转成 data URL（存文件、存 localStorage 都靠它） */
+function imageToDataURL(file, cb){
+  const reader = new FileReader();
+  reader.onerror = () => cb(null, 0, 0);
+  reader.onload = () => {
+    const im = new Image();
+    im.onerror = () => cb(null, 0, 0);
+    im.onload = () => {
+      const natW = im.naturalWidth || 1, natH = im.naturalHeight || 1;
+      const s = Math.min(1, IMG_SRC_MAX / Math.max(natW, natH));
+      const w = Math.max(1, Math.round(natW * s)), h = Math.max(1, Math.round(natH * s));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext('2d');
+      cx.drawImage(im, 0, 0, w, h);
+      let url = cv.toDataURL('image/png');
+      if (url.length > IMG_BUDGET) url = cv.toDataURL('image/jpeg', 0.82);   // 太大就压一道
+      cb(url, natW, natH);
+    };
+    im.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+const newImageNode = (url, natW, natH, x, y) => {
+  const n = addNodeAt('', x, y, 'rect');
+  n.kind = 'image';
+  n.image = url; n.imgW = natW; n.imgH = natH || 1;
+  n.desc = '';
+  sizeNode(n);
+  return n;
+};
+/* 视口正中的世界坐标，用来决定新图片落在哪 */
+const viewCenter = () => s2w(VW / 2, VH / 2 - 60);
+/* 从文件插一张图。at 不给就放视口正中 */
+function insertImageFile(file, at){
+  if (!file){ return; }
+  if (!/^image\//.test(file.type || '')){ say('* 「' + (file.name || '这个文件') + '」不是图片。'); return; }
+  say('* 正在处理图片……');
+  imageToDataURL(file, (url, natW, natH) => {
+    if (!url){ say('* 这张图片读不出来。'); return; }
+    const p = at || viewCenter();
+    const n = newImageNode(url, natW, natH, Math.round(p.x - 140), Math.round(p.y - 110));
+    reindex(); sizeAll();
+    selectOnly(n.id);
+    pushHist(); mark();
+    say('* 图片已加入（' + natW + '×' + natH + '，内嵌约 ' + Math.round(url.length / 1024) +
+        ' KB）。右上角双击命名，图片下面双击写描述。');
+  });
+}
+/* 给已有的图片节点换一张图 */
+function replaceImage(n, file){
+  if (!n || n.kind !== 'image' || !file) return;
+  imageToDataURL(file, (url, natW, natH) => {
+    if (!url){ say('* 这张图片读不出来。'); return; }
+    n.image = url; n.imgW = natW; n.imgH = natH || 1;
+    sizeNode(n); pushHist(); mark();
+    say('* 换好了（' + natW + '×' + natH + '）。');
+  });
+}
+function setNodeDesc(n, text){
+  if (!n) return;
+  n.desc = String(text == null ? '' : text);
+  sizeNode(n); mark();
+}

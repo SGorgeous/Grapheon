@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -195,6 +195,83 @@ function roundRect(g, x, y, w, h, r){
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
 }
+/* 图片缓存：按 data URL 存，加载完 mark() 一帧重画。
+   同一张图被多个节点用也只解码一次。 */
+const imgCache = new Map();
+function imageRec(n){
+  if (!n || !n.image) return null;
+  let rec = imgCache.get(n.image);
+  if (!rec){
+    rec = { img:new Image(), ok:false, bad:false };
+    rec.img.onload  = () => { rec.ok = true; mark(); };
+    rec.img.onerror = () => { rec.bad = true; mark(); };
+    rec.img.src = n.image;
+    imgCache.set(n.image, rec);
+  }
+  return rec;
+}
+const imageReady = (n) => { const r = imageRec(n); return !!(r && r.ok); };
+/* 等所有图片解码完（导出前用：不然导出的是「加载中」占位） */
+function ensureImagesLoaded(){
+  const pending = [...doc.nodes].filter(n => n.kind === 'image' && n.image && !imageReady(n));
+  if (!pending.length) return Promise.resolve();
+  return Promise.all(pending.map(n => new Promise(res => {
+    const r = imageRec(n);
+    if (!r || r.ok || r.bad) return res();
+    const done = () => res();
+    r.img.addEventListener('load', done, { once:true });
+    r.img.addEventListener('error', done, { once:true });
+    setTimeout(done, 4000);              // 兜底，别把导出卡死
+  })));
+}
+/* 图片节点：右上角名称带 + 图片 + 下方描述 */
+function drawImageNode(g, n, b, selected, hov){
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+  const nameY = b.y + IMG_NAME_H;
+  const imgY  = nameY;
+  const descY = imgY + (n.imgDrawH || 0);
+  g.save();
+  g.lineJoin = 'round';
+  g.fillStyle = C.bg;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  // 图片本体
+  const rec = imageRec(n);
+  if (rec && rec.ok){
+    g.drawImage(rec.img, b.x + 1.5, imgY, b.w - 3, n.imgDrawH || 0);
+  } else {
+    g.fillStyle = C.bg;
+    g.fillRect(b.x + 1.5, imgY, b.w - 3, n.imgDrawH || 0);
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = C.dim;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(rec && rec.bad ? '图片读不出来' : '图片加载中…', b.x + b.w / 2, imgY + (n.imgDrawH || 0) / 2);
+  }
+  // 分隔线
+  g.strokeStyle = C.dim; g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(b.x, nameY); g.lineTo(b.x + b.w, nameY);
+  if (n.lines && n.lines.length){ g.moveTo(b.x, descY); g.lineTo(b.x + b.w, descY); }
+  g.stroke();
+  // 右上角名称
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = n.color || C.white;
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillText(fitText(g, n.text || '未命名', b.w - 16), b.x + b.w - 8, b.y + IMG_NAME_H / 2 + 1);
+  // 描述
+  if (n.lines && n.lines.length){
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = C.gray;
+    g.textAlign = 'left';
+    for (let i = 0; i < n.lines.length; i++){
+      g.fillText(n.lines[i], b.x + PADX, descY + PADY + n.lh / 2 + i * n.lh);
+    }
+  }
+  // 外框最后描，压住图片边缘
+  g.lineWidth = 3;
+  g.strokeStyle = stroke;
+  g.strokeRect(b.x, b.y, b.w, b.h);
+  g.restore();
+}
 function drawNode(g, n){
   const selected = sel.has(n.id);
   const hov = hover && hover.id === n.id;
@@ -203,6 +280,8 @@ function drawNode(g, n){
   // 位置/形状一律走「有效盒子」：程序化节点可能把目标挪走、或者改了它的形状
   const b = nodeBox(n);
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
+  if (n.kind === 'image') drawImageNode(g, n, b, selected, hov);
+  else {
   g.save();
   g.lineJoin = 'round';
   g.lineWidth = isRoot(n) ? 4 : 3;
@@ -232,6 +311,8 @@ function drawNode(g, n){
   g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
   const startY = b.y + b.h / 2 - ((n.lines.length - 1) * n.lh) / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + b.w / 2, startY + i * n.lh);
+  g.restore();
+  }
 
   // 被程序节点作用过的目标：右上角一个黄点，数值型再把累计结果显示在右下角
   if (eff && eff.ops && !prog){
@@ -272,7 +353,6 @@ function drawNode(g, n){
     g.fillStyle = C.yellow;
     g.fillRect(Math.round(r.x + r.w - 8), Math.round(r.y + r.h - 8), 5, 5);
   }
-  g.restore();
 }
 /* 分组：虚线外框 + 左上角标题。外框几何完全由成员算出，永远包住成员。 */
 function drawGroup(g, grp){

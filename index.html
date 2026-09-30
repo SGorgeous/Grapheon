@@ -22,6 +22,7 @@
     <span id="sep"></span>
     <button class="ud-btn" id="b-new">新建</button>
     <button class="ud-btn" id="b-open">打开</button>
+      <button class="ud-btn" id="b-img">图片</button>
     <button class="ud-btn" id="b-save">保存</button>
     <button class="ud-btn" id="b-png">导出</button>
     <button class="ud-btn" id="b-fit">居中</button>
@@ -195,6 +196,13 @@
     <tr><td>选中程序节点按 E</td><td>面板里选「作用 / 项目 / 方式 / 数值」</td></tr>
     <tr><td>被作用的目标</td><td>右上角出黄点；数值型的右下角显示累计结果</td></tr>
     <tr><td>删掉程序节点</td><td>目标立刻复原（算符从来没写回节点本身）</td></tr>
+    <tr><td class="sec" colspan="2">— 图片节点 —</td></tr>
+    <tr><td>把图片文件拖进窗口</td><td>落在鼠标松开的位置</td></tr>
+    <tr><td>右键空白处 →「新建 ▶ 图片…」</td><td>落在右键的位置</td></tr>
+    <tr><td>顶栏「图片」/ Ctrl+V 粘贴</td><td>落在视口正中</td></tr>
+    <tr><td>双击右上角 / 双击图片下方</td><td>改名称 / 写描述（描述可以换行）</td></tr>
+    <tr><td>拖图片节点右下角</td><td>改宽度，图片按原始比例等比缩放</td></tr>
+    <tr><td>右键图片节点</td><td>换一张图片 / 编辑描述 / 编辑名称</td></tr>
     <tr><td class="sec" colspan="2">— 分组 —</td></tr>
     <tr><td>选中多个节点 → Ctrl+G</td><td>成组（也可以右键空白处或用菜单）</td></tr>
     <tr><td>拖分组标题栏 / 边框</td><td>整体搬动这个框和组内所有节点，相对位置不变</td></tr>
@@ -229,6 +237,7 @@
 </div>
 
 <input type="file" id="file" accept=".json,application/json" hidden style="display:none">
+<input type="file" id="imgfile" accept="image/*" hidden style="display:none">
 <!-- 红心光标：颜色由 CSS 的 --r 决定（见 styles/theme-undertale.css），换主题会自动跟着变 -->
 <svg id="heart" viewBox="0 0 7 6" width="18" height="15" preserveAspectRatio="none" shape-rendering="crispEdges">
   <rect x="1" y="0" width="2" height="1"/><rect x="4" y="0" width="2" height="1"/>

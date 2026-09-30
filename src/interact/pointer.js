@@ -269,7 +269,13 @@ canvas.addEventListener('dblclick', (ev) => {
     return;
   }
   const n = hitNode(p);
-  if (n){ selectOnly(n.id); startEdit('node', n.id); return; }
+  if (n){
+    selectOnly(n.id);
+    // 图片节点分三块：点描述改描述，点名称带/图片改名称
+    const part = hitImagePart(n, p);
+    startEdit(part === 'desc' ? 'nodeDesc' : 'node', n.id);
+    return;
+  }
   const e = hitEdge(p);
   if (e){ selectEdge(e.id); startEdit('edge', e.id); return; }
   const nn = addNodeAt('新节点', p.x - 70, p.y - 24, 'rect');

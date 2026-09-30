@@ -50,10 +50,52 @@ function readFile(f){
   };
   r.readAsText(f);
 }
-window.addEventListener('dragover', (ev) => { ev.preventDefault(); });
+
+/* ---------------- 图片：按钮 / 右键 / 拖拽 / 粘贴 ----------------
+   四条入口最后都汇到 insertImageFile()，行为一致。 */
+const imgFileEl = document.getElementById('imgfile');
+let imgInsertAt = null;          // 右键插入时记住落点
+let imgReplaceFor = null;        // 「换一张图片」时记住要换哪个节点
+function pickImageFile(at, replaceNode){
+  imgInsertAt = at || null;
+  imgReplaceFor = replaceNode || null;
+  imgFileEl.value = '';
+  imgFileEl.click();
+}
+imgFileEl.addEventListener('change', () => {
+  const f = imgFileEl.files && imgFileEl.files[0];
+  if (f){
+    if (imgReplaceFor) replaceImage(imgReplaceFor, f);
+    else insertImageFile(f, imgInsertAt);
+  }
+  imgInsertAt = null; imgReplaceFor = null;
+  imgFileEl.value = '';
+});
+const isImageFile = (f) => !!f && /^image\//.test(f.type || '');
+const dropPos = (ev) => s2w(ev.clientX || 0, ev.clientY || 0);
+
+window.addEventListener('dragover', (ev) => {
+  ev.preventDefault();
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+});
 window.addEventListener('drop', (ev) => {
   ev.preventDefault();
-  const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (f) readFile(f);
+  const dt = ev.dataTransfer;
+  if (!dt) return;
+  // 图片直接插到鼠标松开的位置；不是图片才当存档读
+  const files = [...(dt.files || [])];
+  const img = files.find(isImageFile);
+  if (img){ insertImageFile(img, dropPos(ev)); return; }
+  if (files[0]) readFile(files[0]);
+});
+/* 从剪贴板粘一张图进来 */
+window.addEventListener('paste', (ev) => {
+  if (editing || (ev.target && ev.target.tagName === 'INPUT')) return;   // 正在打字就别抢
+  const items = (ev.clipboardData && ev.clipboardData.items) || [];
+  for (const it of items){
+    if (it.kind !== 'file' || !/^image\//.test(it.type || '')) continue;
+    const f = it.getAsFile();
+    if (f){ ev.preventDefault(); insertImageFile(f, viewCenter()); return; }
+  }
 });
 

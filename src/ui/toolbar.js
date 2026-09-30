@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/toolbar.js
    顶栏按钮的装配层。
@@ -15,6 +15,7 @@ const TOPBAR = [
   ['b-redo',  () => redo()],
   ['b-new',   (ev) => { hideCtx(); showNewMenu(ev.currentTarget); }],
   ['b-open',  () => fileEl.click()],
+  ['b-img',   () => pickImageFile()],
   ['b-save',  () => saveFile()],
   ['b-png',   () => openExport()],
   ['b-fit',   () => { fitView(); say('* 已居中。'); }],

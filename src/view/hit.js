@@ -25,6 +25,18 @@ function hitNode(p){
   }
   return null;
 }
+/* 图片节点分三块：右上角名称带 / 图片本体 / 下面的描述。
+   双击哪块就编辑哪块 —— 名称和描述是两个独立的文本字段。 */
+function hitImagePart(n, p){
+  if (!n || n.kind !== 'image') return null;
+  const b = nodeBox(n);
+  if (p.y < b.y + IMG_NAME_H) return 'name';
+  if (n.lines && n.lines.length){
+    const dy = b.y + IMG_NAME_H + (n.imgDrawH || 0);
+    if (p.y >= dy) return 'desc';
+  }
+  return 'image';
+}
 /* 选中对象的连接端口：选中的是节点就用节点，是分组就用分组框 */
 function hitPort(p){
   let box = null, id = null;
