@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"
+     viewBox="0 0 72 72" role="img" aria-label="Grapheon">
+  <title>Grapheon</title>
+
+  <!-- G 的骨架：正交折线。走线就是画布上那套直角路由 -->
+  <path d="M63.00 9.00 H9.00 V63.00 H63.00 V41.00 H41.00"
+        fill="none" stroke="#ffffff" stroke-width="9.00"
+        stroke-linecap="butt" stroke-linejoin="miter" shape-rendering="crispEdges"/>
+  <!-- 两端各一个方形节点 -->
+  <rect x="54.00" y="0.00" width="18.00" height="18.00" fill="#ffd800" shape-rendering="crispEdges"/>
+  <rect x="32.00" y="32.00" width="18.00" height="18.00" fill="#ffffff" shape-rendering="crispEdges"/>
+</svg>
