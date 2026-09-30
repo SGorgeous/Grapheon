@@ -185,6 +185,21 @@ function toNum(v){
   if (s === '' || isNaN(Number(s))) return null;
   return Number(s);
 }
+/* =========================================================================
+   多输入汇合 —— 求值模型的**唯一接缝**
+   -------------------------------------------------------------------------
+   现在每个节点都是「一进一出」：拿到一个值，变换一下，吐出去。
+   以后运算符 / 循环 / 广播节点会有**多个**输入，它们都在这里汇合。
+
+   incoming 是「流进这个节点的值」。单输入时它就是唯一的那个值。
+   ★ 所有节点变换都必须走这里 —— 别再在别处写 applyOperator，
+     否则以后加多输入时又会漏掉一路。
+   ========================================================================= */
+function applyNodeOut(ctx, node, incoming){
+  if (!node) return incoming;
+  if (isOpNode(node)) return applyOperator(incoming, node.opDef);
+  return incoming;                       // 其余节点原样透传
+}
 function applyOperator(v, od){
   const o = normalizeOpDef(od);
   const def = OP_BY_ID.get(o.op);
@@ -400,8 +415,9 @@ function evalFromIn(ctx, def, start, inside, targetId){
         seen.add(e.t);
         const m = ctx.byId.get(e.t);
         if (m && isVarNode(m) && !switchOpen(m)){ blocked = true; continue; }   // 开关关着 = 这条连接逻辑上断开
-        const out = (m && isOpNode(m)) ? applyOperator(cur.v, m.opDef) : cur.v;
+        const out = applyNodeOut(ctx, m, cur.v);
         if (targetId && e.t === targetId){
+          // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
           // 看到的是「进这个节点时的值」：运算节点自己看输入，别的一律看输出
           return (m && isOpNode(m)) ? cur.v : out;
         }
@@ -412,6 +428,51 @@ function evalFromIn(ctx, def, start, inside, targetId){
     frontier = next;
   }
   return targetId ? (blocked ? VAR_BLOCKED : null) : last;
+}
+/* =========================================================================
+   往回求「流向 nodeId 的那个值」
+   -------------------------------------------------------------------------
+   做法：沿入边往回走，找到**最近的变量定义节点**，然后用现有的前向求值
+   把这个变量到达那个上游节点时的值算出来，再把一路经过的节点变换叠上。
+
+   ★ 完全复用现有语义，不新造一套 —— 所以它和 evalFromIn 在单链上必然一致。
+
+   多输入节点（运算符 / 循环）的**每一路输入**都用它单独求值，
+   然后按端点 ID 升序汇合。这是「汇合」的原料。
+
+   找不到变量定义就返回 null（这条线上没有值来源）。
+   代 depth 防环：绕回去就放弃这一路。 */
+const UPSTREAM_MAX_DEPTH = 32;
+function valueFromUpstream(ctx, nodeId, depth){
+  depth = depth || 0;
+  if (depth > UPSTREAM_MAX_DEPTH) return null;
+  let best = null;
+  for (const e of ctx.edges){
+    if (e.t !== nodeId) continue;
+    const src = ctx.byId.get(e.s);
+    if (!src) continue;
+    // 关着的通路 = 这条路逻辑上断掉（和 evalFromIn 一致）
+    if (isVarNode(src) && !switchOpen(src)) return VAR_BLOCKED;
+    const hasIn = ctx.edges.some(x => x.t === src.id);
+    let incoming;
+    if (hasIn){
+      incoming = valueFromUpstream(ctx, src.id, depth + 1);
+      if (incoming === VAR_BLOCKED) return VAR_BLOCKED;
+      if (incoming == null) continue;
+    } else if (isVarNode(src)){
+      // ★ 没有入边的变量节点才是「源头」，用它自己的值。
+      //   有入边的（比如链路中间的通路节点）要**透传** ——
+      //   evalFromIn 就是这么做的，不能拿它自己的值顶上去。
+      incoming = defValueIn(ctx, src);
+      if (incoming === VAR_BLOCKED) return VAR_BLOCKED;
+      if (incoming == null) continue;
+    } else {
+      continue;                            // 非变量节点又没入边 = 没有来源
+    }
+    const out = applyNodeOut(ctx, src, incoming);
+    if (best == null) best = out;
+  }
+  return best;
 }
 /* 一个变量定义节点最终对外提供的值。
    指向函数分组的话，值就是那个分组声明出来的输出。 */

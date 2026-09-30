@@ -6520,6 +6520,135 @@
     setAnimFlow(true); syncSakura();
   });
 
+
+  /* ==================== A 期：多输入汇合的基础 ==================== */
+  T('FA01 节点变换只有一条路：applyNodeOut', () => {
+    fresh(); layoutMind();
+    const v = mkVar('n', '10');
+    const op = addOpNode('加五', 0, 0, { op:'+', operand:'5' });
+    const t = addNodeAt('目标', 0, 0, 'rect');
+    linkNodes(v.id, op.id); linkNodes(op.id, t.id);
+    reindex();
+    ok('FA01 运算节点会做变换', applyNodeOut(liveCtx(), byId(op.id), 10) === 15,
+      String(applyNodeOut(liveCtx(), byId(op.id), 10)));
+    ok('FA01b 普通节点原样透传', applyNodeOut(liveCtx(), byId(t.id), 10) === 10);
+    ok('FA01c 变量节点也透传', applyNodeOut(liveCtx(), byId(v.id), 7) === 7);
+    ok('FA01d 空节点不炸', applyNodeOut(liveCtx(), null, 7) === 7);
+    ok('FA01e 它就是 applyOperator 的那一层',
+      applyNodeOut(liveCtx(), byId(op.id), 3) === applyOperator(3, byId(op.id).opDef));
+  });
+  T('FA02 往回求上游值：和现有前向求值在单链上必然一致', () => {
+    fresh(); layoutMind();
+    const v = mkVar('单价', '12');
+    const op = addOpNode('乘四', 0, 0, { op:'*', operand:'4' });
+    const t1 = addNodeAt('第一站', 0, 0, 'rect');
+    const t2 = addNodeAt('第二站', 0, 0, 'rect');
+    linkNodes(v.id, op.id); linkNodes(op.id, t1.id); linkNodes(t1.id, t2.id);
+    reindex(); sizeAll();
+    // 注意：valueFromUpstream 给的是「**流进**这个节点」的值，不是它吐出去的。
+    // 运算节点的输入是 12；输出 48 要到下一站才看得到 —— 这和 evalFromIn 的 targetId 语义一致。
+    ok("FA02 流进运算节点的是 '12'（变量值本身是字符串）", valueFromUpstream(liveCtx(), byId(op.id).id) === '12',
+      String(valueFromUpstream(liveCtx(), byId(op.id).id)));
+    ok('FA02c 到第二站也还是 48', valueFromUpstream(liveCtx(), byId(t2.id).id) === 48,
+      String(valueFromUpstream(liveCtx(), byId(t2.id).id)));
+    // ★ 关键：和 resolveVarIn（走 evalFromIn 那条老路）逐站对齐
+    for (const n of [op, t1, t2]){
+      const a = valueFromUpstream(liveCtx(), n.id);
+      const b = resolveVar('单价', n.id);
+      ok('FA02d 「' + n.text + '」两条路算出来一样', String(a) === String(b), a + ' vs ' + b);
+    }
+    // 变量一改，两条路一起变
+    setVarDef(byId(v.id), { value:'20' });
+    reindex();
+    ok('FA02e 改完还是对齐',
+      String(valueFromUpstream(liveCtx(), byId(t2.id).id)) === String(resolveVar('单价', t2.id)),
+      valueFromUpstream(liveCtx(), byId(t2.id).id) + ' vs ' + resolveVar('单价', t2.id));
+    ok('FA02f 值也对（20 × 4 = 80）', valueFromUpstream(liveCtx(), byId(t2.id).id) === 80,
+      String(valueFromUpstream(liveCtx(), byId(t2.id).id)));
+  });
+  T('FA03 菱形：一个节点两路输入，每路都能单独求出来', () => {
+    fresh(); layoutMind();
+    const a = mkVar('甲', '2');
+    const b = mkVar('乙', '100');
+    const mid = addNodeAt('汇合点', 0, 0, 'rect');
+    linkNodes(a.id, mid.id);
+    linkNodes(b.id, mid.id);
+    reindex(); sizeAll();
+    const ctx = liveCtx();
+    ok('FA03 汇合点确实有两条入边',
+      ctx.edges.filter(e => e.t === mid.id).length === 2,
+      ctx.edges.filter(e => e.t === mid.id).length);
+    ok('FA03b 甲那一路求到 2', defValueIn(ctx, byId(a.id)) === '2', String(defValueIn(ctx, byId(a.id))));
+    ok('FA03c 乙那一路求到 100', defValueIn(ctx, byId(b.id)) === '100');
+    ok('FA03d valueFromUpstream 给出其中一路（按边序取第一路）',
+      valueFromUpstream(ctx, mid.id) === '2', String(valueFromUpstream(ctx, mid.id)));
+    // 只留乙那一路
+    doc.edges = doc.edges.filter(e => !(e.s === a.id && e.t === mid.id));
+    reindex();
+    ok('FA03e 撤掉一路之后取到另一路', valueFromUpstream(liveCtx(), mid.id) === '100',
+      String(valueFromUpstream(liveCtx(), mid.id)));
+  });
+  T('FA04 往回求：没有来源返回 null，遇到关着的通路返回 BLOCKED', () => {
+    fresh(); layoutMind();
+    const lone = addNodeAt('孤立', 0, 0, 'rect');
+    reindex();
+    ok('FA04 没有入边 → null', valueFromUpstream(liveCtx(), lone.id) === null,
+      String(valueFromUpstream(liveCtx(), lone.id)));
+    ok('FA04b 不存在的节点 → null', valueFromUpstream(liveCtx(), '不存在') === null);
+    // 通路关着
+    const src = mkVar('源', '9');
+    const sw = addControlNode('switch', 0, 0, { name:'闸' });
+    const dst = addNodeAt('下游', 0, 0, 'rect');
+    linkNodes(src.id, sw.id); linkNodes(sw.id, dst.id);
+    reindex();
+    ok('FA04c 通路关着 → BLOCKED', valueFromUpstream(liveCtx(), dst.id) === VAR_BLOCKED,
+      String(valueFromUpstream(liveCtx(), dst.id)));
+    toggleSwitch(byId(sw.id));
+    ok('FA04d 接通之后就有值了', valueFromUpstream(liveCtx(), dst.id) === '9',
+      String(valueFromUpstream(liveCtx(), dst.id)));
+  });
+  T('FA05 往回求：绕环不会挂', () => {
+    fresh(); layoutMind();
+    const a = mkVar('A', '1');
+    const n1 = addNodeAt('一', 0, 0, 'rect');
+    const n2 = addNodeAt('二', 0, 0, 'rect');
+    linkNodes(a.id, n1.id);
+    linkNodes(n1.id, n2.id);
+    linkNodes(n2.id, n1.id);          // 绕回去
+    reindex();
+    ok('FA05 有环也有限返回（不栈溢出）', (() => {
+      const r = valueFromUpstream(liveCtx(), n2.id);
+      return r === '1' || r === null;
+    })(), String(valueFromUpstream(liveCtx(), n2.id)));
+    ok('FA05b 深度上限是有限的', UPSTREAM_MAX_DEPTH > 0 && UPSTREAM_MAX_DEPTH < 1000,
+      UPSTREAM_MAX_DEPTH);
+    ok('FA05c 纯环（没变量定义）返回 null', (() => {
+      const x = addNodeAt('x', 0, 0, 'rect');
+      const y = addNodeAt('y', 0, 0, 'rect');
+      linkNodes(x.id, y.id); linkNodes(y.id, x.id);
+      reindex();
+      return valueFromUpstream(liveCtx(), y.id) === null;
+    })());
+  });
+  T('FA06 往回求穿过程序组也一样', () => {
+    fresh(); layoutMind();
+    const fg = newEmptyGroup(0, 0);
+    fg.isFunction = true;
+    const base = mkVar('基数', '100');
+    const sub = addOpNode('减十五', 0, 0, { op:'-', operand:'15' });
+    const out = addOutNode('折后', 0, 0);
+    linkNodes(base.id, sub.id); linkNodes(sub.id, out.id);
+    fg.members = [base.id, sub.id, out.id];
+    const dst = addNodeAt('外面', 0, 0, 'rect');
+    linkNodes(out.id, dst.id);        // 组内输出 → 组外
+    reindex(); sizeAll();
+    ok('FA06 组内算出来的值能一路求到组外',
+      valueFromUpstream(liveCtx(), dst.id) === 85,
+      String(valueFromUpstream(liveCtx(), dst.id)));
+    ok('FA06b 输出节点自己有值', outputValueIn(liveCtx(), byId(out.id)) === 85,
+      String(outputValueIn(liveCtx(), byId(out.id))));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
