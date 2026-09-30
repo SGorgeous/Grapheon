@@ -149,6 +149,8 @@ function drawGraph(g){
   }
   // 拖拽端点改接的预览
   if (relink) drawRelink(g);
+  // 拖端点**方块**的预览（方块挪位置 / 丢到别处连线）
+  drawPortDrag(g);
 }
 /* 折叠标记的位置/尺寸 —— 绘制和命中测试共用同一份几何 */
 function collapseBadgeRect(n){
@@ -178,6 +180,46 @@ function outlineNode(g, n){
   pathShape(g, n);
   g.stroke();
   g.restore();
+}
+/* 拖端点方块时的预览：
+     · 从端点（会被投影到边框上）到鼠标画一条黄虚线 —— 看得出在往哪拖
+     · 鼠标压到**别的端点**上时，线吸到那个端点并高亮它 —— 这就是「连接预览」
+   圆点和鼠标不是同一个位置（圆点在边框上滑动），所以这条线是有意义的。 */
+function drawPortDrag(g){
+  if (typeof drag === 'undefined' || !drag || drag.mode !== 'port') return;
+  const n = drag.node;
+  if (!n) return;
+  const p = portById(n, drag.portId);
+  if (!p) return;
+  const from = portPoint(n, p);
+  const at = drag.at || from;
+  const tgtN = (typeof linkTargetAt === 'function') ? linkTargetAt(at) : null;
+  const ok = !!tgtN && tgtN.id !== n.id && !isEmbed(byId(n.id));
+  const tgtP = (ok && typeof portIdAtPoint === 'function') ? portIdAtPoint(at, tgtN) : null;
+  const to = tgtP ? portPoint(tgtN, tgtP) : at;
+
+  g.save();
+  g.strokeStyle = C.yellow; g.lineWidth = 2.5;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.setLineDash([8, 6]);
+  g.beginPath();
+  g.moveTo(from.x, from.y);
+  g.lineTo(to.x, to.y);
+  g.stroke();
+  g.restore();
+
+  // 连接预览：落点上画个空心方块，压到端点就再套一圈
+  g.save();
+  g.strokeStyle = C.yellow; g.lineWidth = 2;
+  g.strokeRect(Math.round(to.x) - 6, Math.round(to.y) - 6, 12, 12);
+  if (tgtP){
+    g.beginPath();
+    g.arc(to.x, to.y, PORT_DOT_R * 2.1, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.restore();
+
+  if (ok && typeof outlineNode === 'function') outlineNode(g, tgtN);
 }
 function drawRelink(g){
   const e = doc.edges.find(x => x.id === relink.edgeId);

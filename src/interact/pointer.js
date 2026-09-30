@@ -94,7 +94,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   // 圆点不归这里管 —— 那是「拉线」的起点，不能抢。
   const ph = (typeof portHandleAt === 'function') ? portHandleAt(p, null) : null;
   if (ph){
-    drag = { mode:'port', node:ph.node, dir:ph.dir, portId:ph.port.id, moved:false };
+    drag = { mode:'port', node:ph.node, dir:ph.dir, portId:ph.port.id, moved:false, at:p };
     mark();
     return;
   }
@@ -208,6 +208,10 @@ window.addEventListener('pointermove', (ev) => {
       // 拖着端点走：往哪条边靠就挂到哪条边，沿边滑动改位置
       movePort(drag.node, drag.dir, drag.portId, p);
       drag.moved = true;
+      /* ★ 记住鼠标在哪 —— 圆点会被投影到节点**边框**上，
+         所以「圆点 → 鼠标」这一段是有长度的，得画条虚线指过去，
+         不然拖的时候完全看不出自己在干什么。 */
+      drag.at = p;
     } else if (drag.mode === 'link'){
       linking.to = p;
       hover = linkTargetAt(p);
