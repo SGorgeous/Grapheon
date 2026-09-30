@@ -8240,6 +8240,64 @@
       applyOperator(3, { op:'*', operands:['{宽}'] }, op.id) === 15,
       String(applyOperator(3, { op:'*', operands:['{宽}'] }, op.id)));
   });
+
+  T('RT01 端点背着目标时，线不许折回来穿过自己', () => {
+    fresh(); cancelEdit();
+    // A 在右、B 在左；线从 A 的**右**端点出发 —— 方向背着目标
+    const a = addNodeAt('甲', 400, 0, 'rect');
+    const b = addNodeAt('乙', -400, 0, 'rect');
+    reindex(); sizeAll();
+    const pa = portList(byId(a.id)).conns.filter(p => p.side === 'r')[0];
+    const pb = portList(byId(b.id)).conns.filter(p => p.side === 'l')[0];
+    const e = linkNodes(a.id, b.id, pa.id, pb.id);
+    reindex(); sizeAll();
+    ok('RT01 前置：端点钉在甲右边、乙左边', e && e.aPort === pa.id && e.bPort === pb.id,
+      e ? (e.aPort + '/' + e.bPort) : 'null');
+    const g = edgeGeomFor(e);
+    ok('RT01b 有折线几何', !!g && g.type === 'p', g ? g.type : 'null');
+    const box = nodeBox(byId(a.id));
+    // 采样每一条线段，看有没有落在甲的盒子里（留 1px 容差，贴着边不算）
+    const crossesSelf = (pts, bb) => {
+      for (let i = 1; i < pts.length; i++){
+        const p = pts[i-1], q = pts[i];
+        for (let t = 0; t <= 1; t += 0.02){
+          const x = p.x + (q.x - p.x) * t, y = p.y + (q.y - p.y) * t;
+          if (x > bb.x + 1 && x < bb.x + bb.w - 1 && y > bb.y + 1 && y < bb.y + bb.h - 1) return true;
+        }
+      }
+      return false;
+    };
+    ok('RT01c 线没有穿过自己（甲）', !crossesSelf(g.pts, box),
+      JSON.stringify(g.pts.map(p => [Math.round(p.x), Math.round(p.y)])));
+    // 反过来也一样
+    const a2 = addNodeAt('丙', -400, 400, 'rect');
+    const b2 = addNodeAt('丁', 400, 400, 'rect');
+    reindex(); sizeAll();
+    const p2 = portList(byId(a2.id)).conns.filter(p => p.side === 'l')[0];
+    const p3 = portList(byId(b2.id)).conns.filter(p => p.side === 'r')[0];
+    const e2 = linkNodes(a2.id, b2.id, p2.id, p3.id);
+    reindex(); sizeAll();
+    const g2 = edgeGeomFor(e2);
+    ok('RT01d 另一头背着也不许穿自己',
+      !!g2 && !crossesSelf(g2.pts, nodeBox(byId(a2.id))),
+      g2 ? JSON.stringify(g2.pts.map(p => [Math.round(p.x), Math.round(p.y)])) : 'null');
+    // 顺着走的时候不能被搞复杂
+    const a3 = addNodeAt('戊', -400, 800, 'rect');
+    const b3 = addNodeAt('己', 400, 800, 'rect');
+    reindex(); sizeAll();
+    const p4 = portList(byId(a3.id)).conns.filter(p => p.side === 'r')[0];
+    const p5 = portList(byId(b3.id)).conns.filter(p => p.side === 'l')[0];
+    const e3 = linkNodes(a3.id, b3.id, p4.id, p5.id);
+    reindex(); sizeAll();
+    const g3 = edgeGeomFor(e3);
+    // 正常形状：两端 + 两个桩 + 两个走廊点 = 6。多绕会超过这个数。
+    ok('RT01e 顺着走的情况保持简单（不多绕）', g3.pts.length <= 6, g3.pts.length + ' 个点');
+    ok('RT01f 两端仍然精确落在端点上', (() => {
+      const A = portPoint(byId(a3.id), p4), B = portPoint(byId(b3.id), p5);
+      const f = g3.pts[0], l = g3.pts[g3.pts.length - 1];
+      return Math.hypot(f.x - A.x, f.y - A.y) < 0.01 && Math.hypot(l.x - B.x, l.y - B.y) < 0.01;
+    })());
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

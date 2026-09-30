@@ -146,6 +146,23 @@ function segHitsBox(x1, y1, x2, y2, box){
   }
   return false;
 }
+/* 只数**中间那几段**，跳过两端的出桩 / 入桩。
+   ⚠ 必须跳过：segHitsBox 是 AABB 重叠判定（不是真的线段相交），
+     而出桩那一段本来就从节点边上出发、和节点盒子必然重叠 ——
+     不跳的话「撞上自己」对所有候选都成立，打分就白给了。
+     段 i 覆盖 pts[i-1] → pts[i]，所以 i 从 2 到 pts.length-2。 */
+function pathCrossCountInner(pts, boxes){
+  if (!boxes.length) return 0;
+  let n = 0;
+  for (const box of boxes){
+    let hit = false;
+    for (let i = 2; i < pts.length - 1 && !hit; i++){
+      if (segHitsBox(pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y, box)) hit = true;
+    }
+    if (hit) n++;
+  }
+  return n;
+}
 /* 这条路径穿过几个**不同的**盒子（同一条线穿两次只算一个） */
 function pathCrossCount(pts, boxes){
   if (!boxes.length) return 0;
@@ -227,13 +244,38 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
       q.push(p2, p3);
       cands.push({ pts:q, d });
     }
+    /* ★ 两端自己的盒子**单独**算一次。
+       它们不在 boxes 里（avoidBoxes 的契约），但「折回来穿过自己」是最难看的，
+       所以给它一个**次级**权重：穿别人 10 万，穿自己 1 万，偏移最小。 */
+    const selfBoxes = [a, b].filter(Boolean);
+    const selfCross = (q) => selfBoxes.length ? pathCrossCountInner(q, selfBoxes) : 0;
+
+    /* 绕开自己的两条：出桩 → 沿桩口竖直绕到两个盒子**之外** → 再横过去 → 入桩。
+       形状和上面「绕行」那类一样，只是 my 取得明确在两端盒子之外。 */
+    const PAD2 = AVOID_PAD + 16;
+    if (h1 && h2){
+      const top = Math.min(a.y, b.y) - PAD2;
+      const bot = Math.max(a.y + a.h, b.y + b.h) + PAD2;
+      for (const my of [top, bot]){
+        cands.push({ pts:[p0, p1, { x:p1.x, y:my }, { x:p2.x, y:my }, p2, p3], d:0 });
+      }
+    } else if (!h1 && !h2){
+      const lft = Math.min(a.x, b.x) - PAD2;
+      const rgt = Math.max(a.x + a.w, b.x + b.w) + PAD2;
+      for (const mx of [lft, rgt]){
+        cands.push({ pts:[p0, p1, { x:mx, y:p1.y }, { x:mx, y:p2.y }, p2, p3], d:0 });
+      }
+    }
+
     let bestC = null;
     for (const c of cands){
       const cross = pathCrossCount(c.pts, boxes);
-      // 穿过几个盒子是首要的（权重远大于偏移）；并列时取偏移小的
-      const score = cross * 10000 + Math.abs(c.d);
-      if (!bestC || score < bestC.score) bestC = { score, pts:c.pts, cross, d:c.d };
-      if (cross === 0 && c.d === 0) break;               // 直连就干净，不用再试
+      const self = selfCross(c.pts);
+      // 穿别人是首要的；穿自己次之（但绝不该赢过能绕开的方案）；并列时取偏移小的
+      const score = cross * 100000 + self * 10000 + Math.abs(c.d);
+      if (!bestC || score < bestC.score) bestC = { score, pts:c.pts, cross, self, d:c.d };
+      // 既不穿别人也不穿自己、还是直连 —— 那就是最好，不用再试
+      if (cross === 0 && self === 0 && c.d === 0) break;
     }
     if (bestC) pts = bestC.pts;
   }
