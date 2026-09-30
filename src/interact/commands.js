@@ -971,3 +971,25 @@ function distributeSelection(axis){
       + Math.round(gap) + 'px。');
   return true;
 }
+
+/* =========================================================================
+   双击分组 = 选中组内所有节点（不含外框）；三击 = 选中外框
+   -------------------------------------------------------------------------
+   「组内节点」是**递归**的：套娃里的成员也算 —— 你双击一个组，
+   想要的是「这个组里所有的东西」，不是「直接挂在这一层的那几个」。
+   ========================================================================= */
+function selectGroupNodes(grp){
+  if (!grp) return false;
+  sel.clear(); selGroups.clear(); selEdgeId = null;
+  let skipped = 0;
+  for (const id of groupAllNodes(grp.id)){
+    if (!byId(id)) continue;
+    if (isHidden(id)){ skipped++; continue; }     // 藏起来的选不上，和全选保持一致
+    sel.add(id);
+  }
+  lastClickNode = null;
+  mark();
+  say('* 选中了「' + (grp.title || '分组') + '」里的 ' + sel.size + ' 个节点'
+      + (skipped ? '（另有 ' + skipped + ' 个藏着，跳过了）' : '') + '。');
+  return true;
+}

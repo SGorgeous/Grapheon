@@ -5716,6 +5716,174 @@
       && typeof layoutMind === 'function');
   });
 
+
+  /* ==================== 双击 / 三击分组 ==================== */
+  const mkG = (title, memberIds) => {
+    const g = newEmptyGroup(0, 0);
+    renameGroup(g, title);
+    g.members = memberIds.slice();
+    reindex(); sizeAll();
+    return g;
+  };
+  /* 在分组标题上点 n 下（click 事件的 detail 就是连击次数） */
+  const clickTitle = (g, detail) => {
+    const tb = groupTitleBox(g);
+    cv.dispatchEvent(new MouseEvent('click', {
+      detail: detail || 1, bubbles:true, cancelable:true,
+      clientX: Math.round((tb.x + tb.w / 2) + view.x), clientY: Math.round((tb.y + tb.h / 2) + view.y)
+    }));
+  };
+  const clickBorder = (g, detail) => {
+    const b = groupBox(g);
+    cv.dispatchEvent(new MouseEvent('click', {
+      detail: detail || 1, bubbles:true, cancelable:true,
+      clientX: Math.round(b.x + view.x), clientY: Math.round(b.y + b.h / 2 + view.y)
+    }));
+  };
+
+  T('DC01 双击分组标题：选中组内所有节点，不含外框', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    const g = mkG('一组', [a.id, b.id]);
+    selectGroup(g.id);
+    ok('DC01 前置：外框是选中的', selGroups.has(g.id) && sel.size === 0);
+    clickTitle(byGroup(g.id), 2);
+    skipDlg();
+    ok('DC01b 组内两个节点都选中了',
+      sel.has(a.id) && sel.has(b.id), [...sel].join(','));
+    ok('DC01c 组外的没被选上', !sel.has(c.id));
+    ok('DC01d 外框自己没被选中（题目要的就是不含外框）',
+      selGroups.size === 0, [...selGroups].join(','));
+    ok('DC01e 有说明', /选中了/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    ok('DC01f 连线没被选', !selEdgeId);
+  });
+  T('DC02 组内节点是递归的：套娃里的也算', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线'), c = nodeByText('操作');
+    const inner = mkG('内层', [b.id, c.id]);
+    // 外层直接挂 a 和内层
+    const outer = newEmptyGroup(0, 0);
+    renameGroup(outer, '外层');
+    outer.members = [a.id, inner.id];
+    reindex(); sizeAll();
+    clickTitle(byGroup(outer.id), 2);
+    skipDlg();
+    ok('DC02 外层直接成员选上了', sel.has(a.id));
+    ok('DC02b 子分组里的也选上了（递归）', sel.has(b.id) && sel.has(c.id),
+      [...sel].join(','));
+    ok('DC02c 子分组的框没被选', !selGroups.has(inner.id) && selGroups.size === 0);
+    ok('DC02d 一共三个', sel.size === 3, sel.size);
+  });
+  T('DC03 三击：选中外框', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    const g = mkG('三击组', [a.id, b.id]);
+    clickTitle(byGroup(g.id), 3);
+    skipDlg();
+    ok('DC03 外框选中了', selGroups.has(g.id) && selGroups.size === 1, [...selGroups].join(','));
+    ok('DC03b 组内节点没被选（三击是「只选框」）', sel.size === 0, [...sel].join(','));
+    ok('DC03c 有说明', /选中了分组外框/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    // 外框边线上三击也一样。先在边上找一个真的能命中边框的点
+    selectGroup(null); sel.clear();
+    const bb = groupBox(byGroup(g.id));
+    let bp = null;
+    for (let y = bb.y + 10; y < bb.y + bb.h - 10 && !bp; y += 6){
+      const q = { x:bb.x, y };
+      if (hitGroupBorder(q)) bp = q;
+    }
+    ok('DC03d 前置：框边上找得到命中点', !!bp);
+    cv.dispatchEvent(new MouseEvent('click', {
+      detail:3, bubbles:true, cancelable:true,
+      clientX: Math.round(bp.x + view.x), clientY: Math.round(bp.y + view.y)
+    }));
+    ok('DC03e 点框边三击也认', selGroups.has(g.id), [...selGroups].join(','));
+  });
+  T('DC04 框里面的空白双击仍然是「新建节点」', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    const g = mkG('空框', [a.id, b.id]);
+    const before = doc.nodes.length;
+    const box = groupBox(g);
+    // 找一个框内、但不在任何节点上的点
+    let p = null;
+    for (let y = box.y + 60; y < box.y + box.h - 10 && !p; y += 12){
+      for (let x = box.x + 10; x < box.x + box.w - 10; x += 12){
+        if (!hitNode({ x, y }) && !hitEdge({ x, y })){ p = { x, y }; break; }
+      }
+    }
+    ok('DC04 前置：找得到框内空白点', !!p, JSON.stringify(p));
+    cv.dispatchEvent(new MouseEvent('dblclick', {
+      bubbles:true, cancelable:true, detail:2,
+      clientX: Math.round(p.x + view.x), clientY: Math.round(p.y + view.y)
+    }));
+    skipDlg();
+    ok('DC04b 新建了节点（没被分组的双击吃掉）', doc.nodes.length === before + 1,
+      before + ' -> ' + doc.nodes.length);
+  });
+  T('DC05 藏起来的成员不会被一起选中', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    const g = mkG('有隐藏的组', [a.id, b.id]);
+    // 注意：折叠分组会藏住**全部**成员，那样就没得选了 ——
+    // 这里用「条件隐藏」组件只藏 b 一个。
+    setComponent(byId(b.id), 'hideIf', { when:'1' });
+    reindex(); sizeAll();
+    ok('DC05 前置：只有 b 被藏起来了', isHidden(b.id) && !isHidden(a.id),
+      'b=' + isHidden(b.id) + ' a=' + isHidden(a.id));
+    clickTitle(byGroup(g.id), 2);
+    skipDlg();
+    ok('DC05b 只选到看得见的那个', sel.has(a.id) && !sel.has(b.id), [...sel].join(','));
+    ok('DC05c 说明里报了跳过了几个', /跳过/.test(dlgText.textContent), dlgText.textContent.slice(0, 40));
+  });
+  T('DC06 单击仍然是选中分组（拖拽搬动不受影响）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    const g = mkG('拖拽组', [a.id, b.id]);
+    clickTitle(byGroup(g.id), 1);
+    ok('DC06 单击选中外框', selGroups.has(g.id) && sel.size === 0,
+      [...selGroups].join(',') + ' / ' + [...sel].join(','));
+    // 数一下「连击周期性」：detail 回到 1 就重新算
+    clickTitle(byGroup(g.id), 2);
+    skipDlg();
+    ok('DC06b 两次单击之后还能双击选组内', sel.has(a.id) && sel.has(b.id));
+    // 单击选中是 pointerdown 干的，只发 click 不会触发 —— 补上真实的事件序列
+    const tb = groupTitleBox(byGroup(g.id));
+    const hx = Math.round(tb.x + tb.w / 2 + view.x), hy = Math.round(tb.y + tb.h / 2 + view.y);
+    pe('pointerdown', hx, hy);
+    pe('pointerup', hx, hy);
+    ok('DC06c 再单击又回到选外框', selGroups.has(g.id) && sel.size === 0,
+      [...selGroups].join(',') + ' / ' + [...sel].join(','));
+  });
+  T('DC07 分组改名：从双击挪到右键和 F2', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    const g = mkG('原名', [a.id, b.id]);
+    // 双击标题不再改名
+    clickTitle(byGroup(g.id), 2);
+    skipDlg();
+    ok('DC07 双击标题不会打开改名框', !editing, editing && editing.kind);
+    // 选中外框 + F2 改名
+    selectGroup(g.id);
+    keyRaw('F2');
+    ok('DC07b 选中外框按 F2 能改名', !!editing && editing.kind === 'group' && editing.id === g.id,
+      editing && editing.kind);
+    editor.value = '新名字';
+    editor.dispatchEvent(new Event('input', { bubbles:true }));
+    commitEdit();
+    ok('DC07c 改掉了', byGroup(g.id).title === '新名字', byGroup(g.id).title);
+    // 右键菜单里也有
+    showCtx(400, 400, byGroup(g.id), 'group');
+    const items = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('DC07d 右键菜单里有重命名', items.some(t => t.indexOf('重命名') === 0), items.join(' / '));
+    hideCtx();
+    // 节点上的 F2 还是改名节点
+    selectOnly(a.id);
+    keyRaw('F2');
+    ok('DC07e 节点上 F2 仍然改名节点', !!editing && editing.kind === 'node' && editing.id === a.id,
+      editing && editing.kind);
+    cancelEdit();
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单，支持多级子菜单。右键菜单和顶栏「新建」菜单共用。
@@ -212,7 +212,7 @@ function showCtx(x, y, n, e, info){
     items.push(['删除节点', 'Del', () => { selectOnly(n.id); deleteSelection(); }]);
   } else if (info.group){
     const grp = info.group;
-    pushCommonItems(items, grp, 'group', '双击标题');
+    pushCommonItems(items, grp, 'group', 'F2');
     items.push(['把选中的（节点 / 分组）加入', '', () => addSelectionToGroup(grp)]);
     items.push('hr');
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {

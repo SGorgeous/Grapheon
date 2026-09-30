@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -291,9 +291,8 @@ window.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('dblclick', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
-  // 双击分组标题 = 给分组改名
-  const gt = hitGroupTitle(p);
-  if (gt){ selectGroup(gt.id); startEdit('group', gt.id); return; }
+  // 分组上的双击 / 三击走下面 click 那条线（要数连击次数），这里不处理。
+  // 给分组改名挪到右键菜单和 F2 了。
   // 双击拐点 = 删掉它
   const wp = hitWaypoint(p);
   if (wp){
@@ -354,4 +353,21 @@ canvas.addEventListener('contextmenu', (ev) => {
 
 window.addEventListener('blur', () => {
   drag = null; marquee = null; linking = null; relink = null; mark();
+});
+
+/* =========================================================================
+   分组上的连击：双击 = 选中组内所有节点，三击 = 选中外框
+   -------------------------------------------------------------------------
+   为什么用 click + ev.detail 而不是 dblclick：dblclick 只管「第二下」，
+   数不到第三下。click 的 detail 就是连击次数，2 和 3 都拿得到。
+
+   只认**标题栏**和**外框边**：那两个地方才明确「属于分组」。
+   框里面的空白处双击仍然是「新建节点」—— 那个手势更有用，不动它。
+   ========================================================================= */
+canvas.addEventListener('click', (ev) => {
+  const p = s2w(ev.clientX, ev.clientY);
+  const gt = hitGroupTitle(p) || hitGroupBorder(p);
+  if (!gt) return;
+  if (ev.detail === 2){ selectGroupNodes(gt); return; }
+  if (ev.detail >= 3){ selectGroup(gt.id); say('* 选中了分组外框「' + (gt.title || '未命名') + '」。'); return; }
 });

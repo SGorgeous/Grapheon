@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/keys.js
    快捷键：一张可自定义的绑定表（BINDINGS）+ 一张动作注册表（ACTIONS）。
@@ -124,7 +124,11 @@ const ACTIONS = {
 
   'node.child':       { label:'添加子节点', group:'结构', run(){ addChild(); } },
   'node.sibling':     { label:'添加兄弟节点', group:'结构', run(){ addSibling(); } },
-  'node.rename':      { label:'重命名', group:'结构', run(){ if (soleSel()) startEdit('node', soleSel().id); } },
+  'node.rename':      { label:'重命名', group:'结构', run(){
+      if (soleSel()){ startEdit('node', soleSel().id); return; }
+      const g = soleGroup();                       // 选中分组外框时改分组名
+      if (g) startEdit('group', g.id);
+    } },
   'node.delete':      { label:'删除节点', group:'结构', run(){ deleteSelection(); } },
   'node.collapse':    { label:'折叠 / 展开', group:'结构', run(){ toggleCollapse(); } },
   'node.spawn.up':    { label:'在该方向生成节点', group:'结构', run(){ spawnInDirection('up'); } },
