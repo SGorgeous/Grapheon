@@ -341,6 +341,12 @@ function showCtx(x, y, n, e, info){
           selectOnly(nn.id); pushHist(); mark();
           say('* 条件节点：一个输入一个输出。流进来的值是 1 就把「所填的值」放出去；不是 1 就不通。');
         }],
+        ['广播节点', '把输入值变成全局变量，只能设名字', () => {
+          const p = s2w(x, y);
+          const nn = addBroadcastNode(Math.round(p.x - 137), Math.round(p.y - 50));
+          selectOnly(nn.id); pushHist(); mark();
+          say('* 建了一个广播节点。把值连进来，它的名字就是全局变量名。');
+        }],
         ['输出节点', '声明本作用域的输出值', () => {
           const p = s2w(x, y);
           const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));

@@ -29,7 +29,7 @@ function hitNode(p){
    运算节点分三块：描述 / 算符框 / 运算值框 */
 const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 function hitVarPart(n, p){
-  if (!n || n.kind !== 'var') return null;   // ★临时：排除广播节点看看
+  if (!n || !isVarNode(n)) return null;      // 含广播节点
   const L = varBoxes(n);
   const v = normalizeVarDef(n.varDef);
   // 变量名格子（普通变量和三种控件都有）。

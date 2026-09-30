@@ -7736,6 +7736,48 @@
     })()));
   });
 
+
+  T('BR01 广播节点：把输入值变成全局变量', () => {
+    fresh(); layoutMind();
+    let stage = 'init';
+    try {
+      stage = '建节点'; const bc = addBroadcastNode(0, 0, { name:'广播值' });
+      stage = '建源';   const src = mkVar('源', '42');
+      stage = '连线';   linkNodes(src.id, bc.id);
+      stage = 'reindex'; reindex(); sizeAll();
+      stage = 'kind';   ok('BR01 是广播节点', byId(bc.id).kind === 'broadcast', byId(bc.id).kind);
+      stage = '端点';   ok('BR01b 一进零出', (() => {
+        const L = portList(byId(bc.id));
+        return L.ins.length === 1 && L.outs.length === 0;
+      })(), JSON.stringify(portList(byId(bc.id))));
+      stage = '取值';   ok('BR01c 值 = 流进来的', defValueIn(liveCtx(), byId(bc.id)) === '42',
+        String(defValueIn(liveCtx(), byId(bc.id))));
+      stage = '远处引用'; const far = nodeByText('拖端点改接');
+      ok('BR01d 远处没连线的节点也能引用（全局）',
+        resolveVar('广播值', far.id) === '42', String(resolveVar('广播值', far.id)));
+      stage = '改名';   setVarDef(byId(src.id), { value:'99' });
+      reindex();
+      ok('BR01e 上游一改跟着变', resolveVar('广播值', far.id) === '99',
+        String(resolveVar('广播值', far.id)));
+      stage = '命中';   ok('BR01f 名字框可编辑', (() => {
+        const L = varBoxes(byId(bc.id));
+        return hitVarPart(byId(bc.id), { x:L.nameBox.x + 4, y:L.nameBox.y + 4 }) === 'varName';
+      })());
+      stage = '画图';   draw();
+      ok('BR01g 画得出来', true);
+      stage = '存读';   ok('BR01h 存读往返', (() => {
+        const snap = JSON.parse(JSON.stringify(serialize()));
+        deserialize(snap);
+        const back = doc.nodes.find(x => x.kind === 'broadcast');
+        return !!back && normalizeVarDef(back.varDef).name === '广播值';
+      })());
+    } catch (err){
+      say('* BR01 在「' + stage + '」这一步炸了：' + (err && err.message)
+        + ' || ' + String(err && err.stack || '').split('\n').slice(0, 4).join(' <<< '));
+      ok('BR01 不该炸（在 ' + stage + '）', false, String(err && err.message));
+    }
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

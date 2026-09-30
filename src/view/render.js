@@ -502,6 +502,12 @@ function drawVarNode(g, n, b, selected, hov){
   g.restore();
   // 变量名格子：普通变量和三种控件**都有**（控件节点的在左边，控件本体在它右边）
   drawField(g, L.nameBox, v.name, C.yellow);
+  /* 广播节点：右边显示**实际输出**（只读）—— 值来自输入，不能自己填 */
+  if (isBroadcast(n)){
+    drawField(g, L.valBox, valueToText(defValueIn(liveCtx(), n)), C.gray);
+    g.restore();
+    return;
+  }
   if (v.control === 'check')       drawCheckControl(g, L, v);
   else if (v.control === 'slider') drawSliderControl(g, L, v, n);
   else if (v.control === 'switch') drawSwitchControl(g, L, v);
