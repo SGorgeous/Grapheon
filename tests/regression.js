@@ -4302,6 +4302,285 @@
     closeLib();
   });
 
+
+  /* ==================== 面向组件 ==================== */
+  T('CP01 注册表结构是完整的', () => {
+    ok('CP01 每个组件都有 id / label / scopes / props',
+      COMPONENTS.every(c => c.id && c.label && Array.isArray(c.scopes) && Array.isArray(c.props)),
+      COMPONENTS.map(c => c.id).join(','));
+    ok('CP01b 每个属性都有 key / label / type',
+      COMPONENTS.every(c => c.props.every(p => p.key && p.label && p.type)),
+      COMPONENTS.map(c => c.id + ':' + c.props.length).join(' '));
+    ok('CP01c 三种作用域都有组件可挂',
+      COMPONENT_SCOPES.every(s => componentsFor(s).length > 0),
+      COMPONENT_SCOPES.map(s => s + ':' + componentsFor(s).length).join(' '));
+    ok('CP01d 三种作用域都有内置能力清单',
+      COMPONENT_SCOPES.every(s => (BUILTIN_COMPONENTS[s] || []).length > 0));
+    ok('CP01e 内置清单里点明了优先级可引用变量',
+      BUILTIN_COMPONENTS.node.some(b => b.id === 'priority' && /\{变量\}/.test(b.hint)),
+      JSON.stringify(BUILTIN_COMPONENTS.node.find(b => b.id === 'priority')));
+  });
+  T('CP02 加 / 改 / 删组件，一个类型只留一个', () => {
+    fresh();
+    const n = nodeByText('节点');
+    ok('CP02 一开始没有组件', compsOf(n).length === 0 && !compOn(n, 'badge'));
+    setComponent(n, 'badge', { text:'甲' });
+    ok('CP02b 加上了', compOn(n, 'badge') && compRaw(n, 'badge', 'text') === '甲');
+    setComponent(n, 'badge', { color:'#ff0000' });
+    ok('CP02c 改属性不会把别的属性冲掉',
+      compRaw(n, 'badge', 'text') === '甲' && compRaw(n, 'badge', 'color') === '#ff0000',
+      JSON.stringify(compOf(n, 'badge')));
+    setComponent(n, 'badge', { text:'乙' });
+    ok('CP02d 同类型不会加出第二个', compsOf(n).filter(c => c.type === 'badge').length === 1,
+      compsOf(n).length);
+    setComponent(n, 'hideIf', { when:'1' });
+    ok('CP02e 不同类型能并存', compsOf(n).length === 2);
+    removeComponent(n, 'badge');
+    ok('CP02f 删得掉', !compOn(n, 'badge') && compOn(n, 'hideIf'));
+    removeComponent(n, 'hideIf');
+    ok('CP02g 全删光之后 components 字段被清掉', !n.components, String(n.components));
+    ok('CP02h 删不存在的返回 false', removeComponent(n, 'badge') === false);
+    ok('CP02i 未知类型加不进去', setComponent(n, '不存在的组件', {}) === null);
+  });
+  T('CP03 可引用的属性真的会过插值', () => {
+    fresh(); layoutMind();
+    const v = mkVar('数量', '7');
+    const n = nodeByText('节点');
+    setComponent(n, 'badge', { text:'共 {数量} 个' });
+    reindex(); sizeAll();
+    ok('CP03 解析出真值', compText(n, 'badge', 'text', 'node') === '共 7 个',
+      compText(n, 'badge', 'text', 'node'));
+    ok('CP03b 裸字段没被改', compRaw(n, 'badge', 'text') === '共 {数量} 个',
+      compRaw(n, 'badge', 'text'));
+    setVarDef(byId(v.id), { value:'99' });
+    reindex(); sizeAll();
+    ok('CP03c 变量一改它跟着变', compText(n, 'badge', 'text', 'node') === '共 99 个',
+      compText(n, 'badge', 'text', 'node'));
+    ok('CP03d 没挂组件时返回空串', compText(n, 'outline', 'color', 'node') === '');
+    ok('CP03e 转义照样管用', (() => {
+      setComponent(n, 'badge', { text:'字面量 \\{数量}' });
+      reindex();
+      return compText(n, 'badge', 'text', 'node') === '字面量 {数量}';
+    })(), compText(n, 'badge', 'text', 'node'));
+  });
+  T('CP04 引用的作用域规则和节点正文完全一致', () => {
+    fresh(); layoutMind();
+    // 局内变量：下游看得到，旁边看不到
+    const lv = mkVar('lv', '5', { scope:'local' });
+    const down = nodeByText('操作');
+    const side = nodeByText('连线');
+    linkNodes(lv.id, down.id);
+    setComponent(down, 'badge', { text:'{lv}' });
+    setComponent(side, 'badge', { text:'{lv}' });
+    reindex(); sizeAll();
+    ok('CP04 下游解析得到', compText(down, 'badge', 'text', 'node') === '5',
+      compText(down, 'badge', 'text', 'node'));
+    ok('CP04b 非下游看到未定义', compText(side, 'badge', 'text', 'node') === '[未定义]',
+      compText(side, 'badge', 'text', 'node'));
+    ok('CP04c 和直接在正文里写的结果一模一样',
+      displayTextOf(side) !== null && compText(side, 'badge', 'text', 'node')
+        === interpolate('{lv}', side.id),
+      compText(side, 'badge', 'text', 'node') + ' vs ' + interpolate('{lv}', side.id));
+    // 函数分组隔离也要一致
+    const fg = newEmptyGroup(0, 0); fg.isFunction = true;
+    const inner = mkVar('gv', '9');
+    const m = nodeByText('点选连线改样式');
+    fg.members = [inner.id, m.id];
+    reindex();
+    setComponent(m, 'badge', { text:'{gv}' });
+    reindex();
+    ok('CP04d 组内节点看得到组内的变量', compText(m, 'badge', 'text', 'node') === '9',
+      compText(m, 'badge', 'text', 'node'));
+    ok('CP04e 组外节点看不到', (() => {
+      setComponent(side, 'badge', { text:'{gv}' });
+      reindex();
+      return compText(side, 'badge', 'text', 'node') === '[未定义]';
+    })(), compText(side, 'badge', 'text', 'node'));
+    // 连线用起点节点当锚点
+    ok('CP04f 连线的锚点是起点节点', (() => {
+      const e = doc.edges.find(x => x.s === lv.id);
+      setComponent(e, 'badge', { text:'{lv}' });
+      reindex();
+      return refAnchorOf(e, 'edge') === e.s;
+    })());
+  });
+  T('CP05 优先级可以填表达式', () => {
+    fresh(); layoutMind();
+    const v = mkVar('倍率', '500');
+    const a = addNodeAt('甲', 0, 0, 'rect');
+    const b = addNodeAt('乙', 0, 0, 'rect');
+    ok('CP05 默认还是 0', priorityOf(a) === 0, priorityOf(a));
+    a.priority = '20';
+    ok('CP05b 填普通数字能用', priorityOf(a) === 20, priorityOf(a));
+    a.priority = '{倍率}';
+    reindex();
+    ok('CP05c 填 {变量} 能用', priorityOf(a) === 500, priorityOf(a));
+    setVarDef(byId(v.id), { value:'1500' });
+    reindex();
+    ok('CP05d 变量改了就跟着变', priorityOf(a) === 1500, priorityOf(a));
+    a.priority = '{不存在的}';
+    reindex();
+    ok('CP05e 解析不出来就退回该类型的默认（普通节点 = 0）', priorityOf(a) === 0, priorityOf(a));
+    b.priority = '';
+    ok('CP05f 空串也算没填', priorityOf(b) === 0);
+    // 变量节点没填时仍然默认最高
+    const vv = mkVar('x', '1');
+    ok('CP05g 变量节点默认优先级不受影响', priorityOf(vv) === VAR_PRIORITY, priorityOf(vv));
+    vv.priority = '3';
+    ok('CP05h 变量节点也能手动覆盖', priorityOf(vv) === 3, priorityOf(vv));
+  });
+  T('CP06 条件隐藏：不是 0 / false 就藏起来', () => {
+    fresh(); layoutMind();
+    const v = mkVar('藏起来', '0');
+    const n = nodeByText('节点');
+    setComponent(n, 'hideIf', { when:'{藏起来}' });
+    reindex();
+    ok('CP06 0 不藏', !isHidden(n.id), 'hidden=' + isHidden(n.id));
+    setVarDef(byId(v.id), { value:'1' });
+    reindex();
+    ok('CP06b 1 就藏', isHidden(n.id));
+    ok('CP06c 和「折叠」走的是同一张 hidden 表', idx.hidden.has(n.id));
+    setVarDef(byId(v.id), { value:'false' });
+    reindex();
+    ok('CP06d false 不藏', !isHidden(n.id));
+    setVarDef(byId(v.id), { value:'关' });
+    reindex();
+    ok('CP06e 「关」不藏', !isHidden(n.id));
+    setVarDef(byId(v.id), { value:'要' });
+    reindex();
+    ok('CP06f 「要」藏', isHidden(n.id));
+    ok('CP06g hiddenByComponent 单独也能问', hiddenByComponent(n, 'node'));
+    // 连线也能藏
+    const e = doc.edges[0];
+    setComponent(e, 'hideIf', { when:'1' });
+    reindex();
+    ok('CP06h 连线能藏', isHidden(e.id));
+    ok('CP06i 藏起来的连线不会被画（edgeVisible）', !edgeVisible(e));
+    removeComponent(e, 'hideIf');
+    removeComponent(n, 'hideIf');
+    reindex();
+  });
+  T('CP07 角标 / 描边 / 线宽都画得出来', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setComponent(n, 'badge', { text:'角标 {n}', color:'#00ff00' });
+    setComponent(n, 'outline', { width:'5', color:'#ff00ff' });
+    const e = doc.edges[0];
+    setComponent(e, 'width', { value:'9' });
+    reindex(); sizeAll();
+    ok('CP07 角标文字解析出来了', badgeTextOf(n, 'node').indexOf('角标') === 0, badgeTextOf(n, 'node'));
+    ok('CP07b 角标颜色用自定义的', badgeColorOf(n, 'node') === '#00ff00', badgeColorOf(n, 'node'));
+    ok('CP07c 描边宽度读得到', compNumber(n, 'outline', 'width', 'node', 3) === 5);
+    ok('CP07d 线宽读得到', edgeWidthOf(e) === 9, edgeWidthOf(e));
+    ok('CP07e 没挂线宽组件时返回 0（用默认）', edgeWidthOf(doc.edges[1]) === 0);
+    ok('CP07f 整个画布画得出来', (dirty = true, draw(), true));
+    // 关掉之后回到默认
+    removeComponent(e, 'width');
+    ok('CP07g 删掉组件就回默认', edgeWidthOf(e) === 0);
+  });
+  T('CP08 组件能存读往返', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const e = doc.edges[0];
+    const a = nodeByText('连线'), b = nodeByText('操作');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    setComponent(n, 'badge', { text:'节点角标', color:'#ff0000' });
+    setComponent(n, 'hideIf', { when:'{关}' });
+    setComponent(n, 'outline', { width:'7' });
+    n.priority = '{倍率}';
+    setComponent(e, 'width', { value:'6' });
+    setComponent(grp, 'badge', { text:'分组角标' });
+    setComponent(grp, 'outline', { width:'2', color:'#00ffff' });
+    reindex();
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const rawN = snap.nodes.find(x => x.id === n.id);
+    ok('CP08 节点的组件写进存档了', Array.isArray(rawN.components) && rawN.components.length === 3,
+      JSON.stringify(rawN.components));
+    ok('CP08b 优先级按字符串存（表达式要保住）', rawN.priority === '{倍率}', String(rawN.priority));
+    ok('CP08c 连线的组件也在', snap.edges.find(x => x.id === e.id).components.length === 1);
+    ok('CP08d 分组的组件也在', snap.groups.find(g => g.id === grp.id).components.length === 2);
+    deserialize(snap);
+    const n2 = byId(n.id), e2 = doc.edges.find(x => x.id === e.id);
+    const g2 = byGroup(grp.id);
+    ok('CP08e 节点的组件读回来了', compsOf(n2).length === 3, compsOf(n2).length);
+    ok('CP08f 属性没丢', compRaw(n2, 'badge', 'text') === '节点角标'
+      && compRaw(n2, 'outline', 'width') === '7', JSON.stringify(compOf(n2, 'badge')));
+    ok('CP08g 优先级表达式也保住了', n2.priority === '{倍率}', String(n2.priority));
+    ok('CP08h 连线 / 分组的组件都在', compsOf(e2).length === 1 && compsOf(g2).length === 2);
+  });
+  T('CP09 坏数据会被规整，不会留脏东西', () => {
+    const n = { id:'n1', text:'x', x:0, y:0, priority:'', components:null };
+    ok('CP09 components 是 null 时不炸', compsOf(n).length === 0 && compOf(n, 'badge') === null);
+    n.components = [{ type:'badge', props:{ text:'a' } }, { type:'外星组件' }, { type:'badge', props:{ text:'b' } }];
+    const norm = normalizeComponents(n.components);
+    ok('CP09b 未知类型被丢掉', norm.length === 1, JSON.stringify(norm));
+    ok('CP09c 同类型只留第一个', norm[0].props.text === 'a', norm[0].props.text);
+    ok('CP09d 缺的属性用默认值补齐', norm[0].props.color === '', JSON.stringify(norm[0].props));
+    ok('CP09e 属性不是对象也不炸', (() => {
+      const r = normalizeComponents([{ type:'badge', props:'不是对象' }]);
+      return r.length === 1 && r[0].props.text === '';
+    })());
+    ok('CP09f 不是数组也不炸', normalizeComponents('abc').length === 0 && normalizeComponents(undefined).length === 0);
+  });
+  T('CP10 组件面板：开合 / 内容 / 操作', () => {
+    fresh(); layoutMind();
+    ok('CP10 一开始是关的', !compsOpen());
+    keyRaw('c');
+    ok('CP10b C 键打开', compsOpen());
+    ok('CP10c 没选中时给提示', /没有选中东西/.test(compsSubEl.textContent), compsSubEl.textContent);
+    selectOnly(nodeByText('节点').id);
+    renderComps();
+    ok('CP10d 选中节点后标题跟着变', /节点/.test(compsSubEl.textContent), compsSubEl.textContent);
+    const cards = compsListEl.querySelectorAll('.compcard');
+    ok('CP10e 列出了优先级 + 三个节点组件',
+      cards.length === 1 + componentsFor('node').length, cards.length);
+    ok('CP10f 内置能力也列出来了', compsListEl.querySelectorAll('.compbuiltin').length > 3,
+      compsListEl.querySelectorAll('.compbuiltin').length);
+    // 勾上「角标」
+    const first = [...cards].find(c => /角标/.test(c.textContent));
+    const cb = first.querySelector('input[type=checkbox]');
+    cb.checked = true; cb.onchange();
+    const n = nodeByText('节点');
+    ok('CP10g 勾上就真的加上了组件', compOn(n, 'badge'));
+    ok('CP10h 属性输入框出来了', compsListEl.querySelectorAll('.compinput').length >= 2,
+      compsListEl.querySelectorAll('.compinput').length);
+    // 填文字
+    const inp = [...compsListEl.querySelectorAll('.compinput')].find(i => i.placeholder && /变量/.test(i.placeholder));
+    inp.value = '共 {x} 个'; inp.onchange();
+    ok('CP10i 填进去生效', compRaw(nodeByText('节点'), 'badge', 'text') === '共 {x} 个',
+      compRaw(nodeByText('节点'), 'badge', 'text'));
+    // 取消勾选
+    const first2 = [...compsListEl.querySelectorAll('.compcard')].find(c => /角标/.test(c.textContent));
+    const cb2 = first2.querySelector('input[type=checkbox]');
+    cb2.checked = false; cb2.onchange();
+    ok('CP10j 取消勾选就删掉', !compOn(nodeByText('节点'), 'badge'));
+    keyRaw('Escape');
+    ok('CP10k Esc 关掉', !compsOpen());
+  });
+  T('CP11 组件面板对连线 / 分组也能用', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    sel.clear(); sel.add(a.id); sel.add(b.id);
+    const grp = createGroup();
+    selectGroup(grp.id);
+    openComps();
+    ok('CP11 分组也能开', /分组/.test(compsSubEl.textContent), compsSubEl.textContent);
+    const hasWidth = [...compsListEl.querySelectorAll('.compcard')].some(c => /线宽/.test(c.textContent));
+    ok('CP11b 分组下不会出现「线宽」（那是连线专属）', !hasWidth);
+    closeComps();
+    selectEdge(doc.edges[0].id);
+    openComps();
+    ok('CP11c 连线也能开', /连线/.test(compsSubEl.textContent), compsSubEl.textContent);
+    const hasOutline = [...compsListEl.querySelectorAll('.compcard')].some(c => /自定义描边/.test(c.textContent));
+    ok('CP11d 连线下不会出现「自定义描边」', !hasOutline);
+    const w = [...compsListEl.querySelectorAll('.compcard')].find(c => /线宽/.test(c.textContent));
+    ok('CP11e 连线有「线宽」', !!w);
+    ok('CP11f 连线没有「优先级」那一行（那是节点专属）',
+      !/优先级/.test(compsListEl.textContent));
+    closeComps();
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -68,6 +68,7 @@ const mark   = () => { dirty = true; };
    空分组（本来就没东西）不适用这条，那是你手动画的框，得留着。
    ========================================================================= */
 function computeHidden(){
+  const compHidden = (typeof computeComponentHidden === 'function') ? computeComponentHidden() : new Set();
   const hidden = new Set();
   // 1) 节点折叠
   for (const n of doc.nodes){
@@ -90,6 +91,8 @@ function computeHidden(){
       if (kids.every(id => hidden.has(id))){ hidden.add(g.id); changed = true; }
     }
   }
+  // 4) 「条件隐藏」组件：写的东西不是 0 / false / 空 就藏起来（可以引用变量）
+  for (const id of compHidden) hidden.add(id);
   return hidden;
 }
 function reindex(){
@@ -539,18 +542,21 @@ function serialize(){
       varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
-      priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
+      priority:(n.priority == null || n.priority === '') ? null : n.priority,
+      components:normalizeComponents(n.components),
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
+      components:normalizeComponents(e.components),
       waypoints:(e.waypoints && e.waypoints.length)
         ? e.waypoints.map(p => ({ x:Math.round(p.x), y:Math.round(p.y) })) : null
     })),
     groups: (doc.groups || []).map(g => ({
       id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null,
       collapsed:!!g.collapsed, isFunction:!!g.isFunction,
+      components:normalizeComponents(g.components),
       x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
     }))
   };
@@ -580,7 +586,8 @@ function deserialize(d){
       varDef:(n.kind === 'var') ? normalizeVarDef(n.varDef) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
-      priority:(typeof n.priority === 'number' && n.priority !== 0) ? n.priority : null,
+      priority:(n.priority == null || n.priority === '') ? null : n.priority,
+      components:normalizeComponents(n.components),
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null });
   }
@@ -594,7 +601,8 @@ function deserialize(d){
     doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
       members:(g.members || []).slice(), color:g.color || null,
       x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
-      collapsed:!!g.collapsed, isFunction:!!g.isFunction });
+      collapsed:!!g.collapsed, isFunction:!!g.isFunction,
+      components:normalizeComponents(g.components) });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const id of grpIds) ok.add(id);
@@ -607,6 +615,7 @@ function deserialize(d){
     doc.edges.push(normalizeEdge({
       id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:e.dash, route:e.route || legacyRoute, aSide:e.aSide, bSide:e.bSide,
+      components:normalizeComponents(e.components),
       waypoints:Array.isArray(e.waypoints) ? e.waypoints.map(p => ({ x:+p.x || 0, y:+p.y || 0 })) : null
     }));
   }

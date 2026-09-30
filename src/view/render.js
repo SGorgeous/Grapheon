@@ -661,6 +661,8 @@ function drawNode(g, n){
     g.fillStyle = C.white; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(r.label, r.x + r.w / 2, r.y + r.h / 2 + 1);
   }
+  // 组件（角标 / 自定义描边）—— 画在选中态之前，免得盖住手柄
+  if (typeof drawEntityComponents === 'function') drawEntityComponents(g, n, b, 'node');
   if (selected){
     if (themeHeart()) drawHeart(g, b.x - 26, b.y + b.h / 2 - 6.5, 2);   // 主题说不画就不画
     // 右下角缩放手柄
@@ -728,6 +730,7 @@ function drawGroup(g, grp){
     }
   }
   g.restore();
+  if (typeof drawEntityComponents === 'function') drawEntityComponents(g, grp, r, 'group');
 }
 /* 把一段连线几何铺成当前路径（贝塞尔 / 样条 / 带圆角的折线），绘制与预览共用 */
 function pathGeom(g, geom, radius){
@@ -766,7 +769,9 @@ function drawEdge(g, e){
   g.save();
   g.strokeStyle = stroke;
   g.globalAlpha = hi ? 1 : 0.85;
-  g.lineWidth = 2.5;
+  // 组件「线宽」：填了就用它（可以引用变量），没填保持默认
+  const cw = (typeof edgeWidthOf === 'function') ? edgeWidthOf(e) : 0;
+  g.lineWidth = cw > 0 ? cw : 2.5;
   g.lineCap = 'round';
   g.lineJoin = 'round';
   if (e.dash) g.setLineDash([11, 8]);

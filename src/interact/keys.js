@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/keys.js
    快捷键：一张可自定义的绑定表（BINDINGS）+ 一张动作注册表（ACTIONS）。
@@ -54,6 +54,7 @@ function defaultBindings(){
     'ctrl+arrowdown':  'node.nav.down',
     'ctrl+arrowright': 'node.nav.right',
     'e':          'style.open',
+    'c':          'comps.open',
     'ctrl+g':     'group.create',
     'h':          'ui.help',
     '?':          'ui.help',
@@ -73,6 +74,7 @@ function defaultBindings(){
 const ACTIONS = {
   'ui.escape':        { label:'关闭浮层 / 取消选择', group:'界面', overlay:true, run(){
       if (nodeBoxEl.style.display === 'block'){ closeNodeBox(); return; }
+      if (typeof compsOpen === 'function' && compsOpen()){ closeComps(); return; }
       if (typeof libOpen === 'function' && libOpen()){ closeLib(); return; }
       if (settingsOpen()){ closeSettings(); return; }
       if (insideEmbed()){ exitEmbed(); return; }   // 在嵌入文档里，Esc 先出来
@@ -85,6 +87,7 @@ const ACTIONS = {
       selectOnly(null); lastClickNode = null;
   }},
   'ui.help':          { label:'操作指南', group:'界面', run(){ openHelp(); } },
+  'comps.open':       { label:'组件面板', group:'样式', run(){ openComps(); } },
   'group.create':     { label:'把选中的节点加入分组', group:'分组', run(){ createGroup(); } },
   'group.dissolve':   { label:'解散选中的分组', group:'分组', run(){
       const grps = selectedGroups();

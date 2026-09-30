@@ -44,6 +44,13 @@
 <textarea id="editor" spellcheck="false" autocomplete="off"></textarea>
 <div id="ctx" class="ud"></div>
 
+<div id="comps" class="ud">
+  <h2>组件</h2>
+  <div class="sub" id="compsSub"></div>
+  <div id="compsList"></div>
+  <div class="row"><div class="sub" id="compsHint"></div></div>
+  <div class="row"><button class="ud-btn" id="compsClose">关闭</button></div>
+</div>
 <div id="lib" class="ud">
   <h2>素材库</h2>
   <div class="sub" id="libSub">加载中…</div>
@@ -391,11 +398,13 @@
 <script src="src/core/text.js"></script>
 <script src="src/core/store.js"></script>
 <script src="src/core/vars.js"></script>
+<script src="src/core/components.js"></script>
 <script src="src/core/state.js"></script>
 <script src="src/core/history.js"></script>
 <script src="src/core/layout.js"></script>
 <script src="src/core/routing.js"></script>
 <script src="src/view/render.js"></script>
+<script src="src/view/render-components.js"></script>
 <script src="src/view/camera.js"></script>
 <script src="src/view/hit.js"></script>
 <script src="src/interact/editing.js"></script>
@@ -413,6 +422,7 @@
 <script src="src/app/document.js"></script>
 <script src="src/app/demo.js"></script>
 <script src="src/ui/settings.js"></script>
+<script src="src/ui/comps.js"></script>
 <script src="src/ui/library.js"></script>
 <script src="src/ui/toolbar.js"></script>
 <script src="src/app/main.js"></script>

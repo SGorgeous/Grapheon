@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单，支持多级子菜单。右键菜单和顶栏「新建」菜单共用。
@@ -122,6 +122,7 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
+    items.push(['组件…', 'C', () => openComps()]);
     if (isVarNode(n)){
       const v = normalizeVarDef(n.varDef);
       items.push(['控件：' + VAR_CONTROL_LABEL[v.control], '▶', null,
@@ -171,8 +172,8 @@ function showCtx(x, y, n, e, info){
     }
     items.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
     items.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '', () => toggleProgramNode(n)]);
-    items.push(['优先级：' + priorityOf(n), '▶', null, [10, 100, 1000, 0].map(v =>
-      [(priorityOf(n) === v ? '● ' : '   ') + (v === 0 ? '默认' : v), '', () => setPriority(n, v)])]);
+    // 优先级改到「组件…」面板里填了 —— 它现在是个可引用变量的组件，
+    // 这里再放一份子菜单就是两处维护同一个东西。
     items.push('hr');
     items.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
@@ -202,6 +203,7 @@ function showCtx(x, y, n, e, info){
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
       grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');
     })]);
+    items.push(['组件…', 'C', () => openComps()]);
     items.push([grp.isFunction ? '取消函数分组' : '设为函数分组', '', () => toggleFunctionGroup(grp)]);
     items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Space', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
@@ -211,7 +213,8 @@ function showCtx(x, y, n, e, info){
     items.push(['连线样式…', 'E', () => openEdgeBox()]);
     items.push(['编辑标签', '双击', () => startEdit('edge', e.id)]);
     items.push('hr');
-    items.push(['箭头', '', null, radioSub(
+    items.push(['组件…', 'C', () => openComps()]);
+  items.push(['箭头', '', null, radioSub(
       ARROW_KINDS.map(k => [k, ARROW_LABEL[k]]), e.arrow,
       (v) => { setEdgeStyle(e, { arrow:v }); pushHist(); say('* 箭头：' + ARROW_LABEL[v]); })]);
     items.push(['线型', '', null, radioSub(

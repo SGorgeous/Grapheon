@@ -311,3 +311,34 @@ body.no-heart .ud-btn::before{ content:none; }
 #lib .libacts{ display:flex; gap:4px; }
 #lib .libacts .ud-btn{ font-size:14px; padding:1px 6px; }
 #lib .libempty{ color:var(--g); padding:20px 0; }
+
+/* ---------------- 组件面板 ---------------- */
+#comps{
+  position:fixed; z-index:74; pointer-events:auto; display:none;
+  left:auto; right:24px; top:auto; transform:none;
+  bottom:calc(var(--dlg-h,132px) + 12px);
+  width:min(460px, calc(100vw - 60px));
+  max-height:calc(100vh - var(--dlg-h,132px) - 116px);
+  overflow:auto;
+}
+#comps .sec{ margin:14px 0 6px; color:var(--y); border-bottom:2px solid var(--d); padding-bottom:3px; }
+#comps .compcard{ border:2px solid var(--d); padding:6px 8px; margin-bottom:8px; }
+#comps .compcard.on{ border-color:var(--y); }
+#comps .comphead{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+#comps .comphead b{ color:var(--w); }
+#comps .compcard.on .comphead b{ color:var(--y); }
+#comps .comphead span{ color:var(--g); font-size:13px; }
+#comps .compline{ display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+#comps .complab{ color:var(--g); min-width:44px; flex:none; }
+#comps .compinput{
+  flex:1; min-width:120px; background:var(--bg); color:var(--w);
+  border:2px solid var(--d); font-family:var(--font); font-size:16px; padding:2px 6px;
+}
+#comps .compinput:focus{ border-color:var(--y); outline:none; }
+#comps .compref{ color:var(--y); font-size:14px; }
+#comps .opts{ display:flex; flex-wrap:wrap; gap:4px; }
+#comps .opts .opt{ padding:1px 6px; font-size:14px; }
+#comps .compbuiltins{ display:flex; flex-direction:column; gap:3px; }
+#comps .compbuiltin{ display:flex; gap:10px; }
+#comps .compbuiltin b{ color:var(--g); min-width:88px; font-weight:normal; }
+#comps .compbuiltin span{ color:var(--d); }

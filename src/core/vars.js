@@ -138,7 +138,15 @@ const switchOpen = (n) => isVarNode(n) && normalizeVarDef(n.varDef).control === 
 /* 节点的优先级：输出 > 变量 > 运算，其余看 n.priority，最后 0 */
 function priorityOf(n){
   if (!n) return 0;
-  if (typeof n.priority === 'number' && n.priority !== 0) return n.priority;
+  // ★ 优先级也可以填表达式（能引用变量）：{倍率} / 10 之类，走的是同一套作用域规则。
+  // 具体解析在 components.js 的 priorityOfRaw —— 放那边是因为它要用插值，
+  // 而插值又依赖 vars.js 里的东西，两边只能这样错开。
+  if (typeof priorityOfRaw === 'function'){
+    const v = priorityOfRaw(n);
+    if (v != null && v !== 0) return v;
+  } else if (typeof n.priority === 'number' && n.priority !== 0){
+    return n.priority;
+  }
   if (isVarNode(n)) return VAR_PRIORITY;
   if (isOutNode(n)) return OUT_PRIORITY;
   if (isOpNode(n))  return OP_PRIORITY;
