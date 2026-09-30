@@ -1796,6 +1796,240 @@
     dlgBoxEl.style.minHeight = '';
     syncDlgBox();
     updateMeta();
+  /* ==================== 程序化节点 ==================== */
+  T('Q01 建一个程序节点', () => {
+    fresh(); layoutMind();
+    const p = createProgramNode(0, 0);
+    ok('Q01 kind 是 program', p.kind === 'program' && isProgram(p));
+    ok('Q01b 带默认算符', p.program && p.program.op === 'style' && p.program.key === 'fsPx',
+      JSON.stringify(p.program));
+    ok('Q01c 标题就是算符描述', p.text === programLabel(p.program), p.text);
+    ok('Q01d 尺寸按标题量好了', p.w > 40 && p.h > 20, p.w + 'x' + p.h);
+  });
+  T('Q02 没连线时不生效', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const before = { fs:effFsPx(tgt), w:tgt.w };
+    createProgramNode(0, 0);
+    reindex(); sizeAll();
+    ok('Q02 目标没被改', effFsPx(tgt) === before.fs && tgt.w === before.w, effFsPx(tgt));
+    ok('Q02b 也没留下效果记录', !effOf(tgt));
+  });
+  T('Q03 连上之后算符叠到目标上（外观）', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const baseFs = effFsPx(tgt), baseH = tgt.h;
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:8 });
+    linkNodes(pg.id, tgt.id);
+    reindex(); sizeAll();
+    ok('Q03 有效字号 = 基础 + 8', effFsPx(tgt) === (baseFs || FS) + 8, effFsPx(tgt));
+    ok('Q03b 节点跟着变高了（行高按新字号算）', tgt.h > baseH, baseH + ' -> ' + tgt.h);
+    ok('Q03c 记了 1 个算符', effOf(tgt) && effOf(tgt).ops === 1);
+  });
+  T('Q04 效果是派生的：节点裸字段一个都没动', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const raw = { fsPx:tgt.fsPx, color:tgt.color, border:tgt.border, font:tgt.font,
+                  shape:tgt.shape, x:tgt.x, y:tgt.y, value:tgt.value };
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'color', mode:'set', value:'#ff0000' });
+    const pg2 = createProgramNode(0, 0);
+    setProgram(pg2, { op:'move', key:'x', mode:'add', value:40 });
+    const pg3 = createProgramNode(0, 0);
+    setProgram(pg3, { op:'shape', mode:'set', value:'diamond' });
+    const pg4 = createProgramNode(0, 0);
+    setProgram(pg4, { op:'value', mode:'add', value:5 });
+    for (const p of [pg, pg2, pg3, pg4]) linkNodes(p.id, tgt.id);
+    reindex(); sizeAll();
+    ok('Q04 字色：裸字段没改', tgt.color === raw.color, tgt.color);
+    ok('Q04b 字色：有效值变了', effColor(tgt) === '#ff0000', effColor(tgt));
+    ok('Q04c 位置：裸字段没改', tgt.x === raw.x && tgt.y === raw.y);
+    ok('Q04d 位置：有效盒子偏了', nodeBox(tgt).x === raw.x + 40, nodeBox(tgt).x);
+    ok('Q04e 形状：裸字段没改', tgt.shape === raw.shape, tgt.shape);
+    ok('Q04f 形状：有效形状变了', effShape(tgt) === 'diamond', effShape(tgt));
+    ok('Q04g 数值：裸字段没改', !(+tgt.value > 0), tgt.value);
+    ok('Q04h 数值：有效值 = 5', effValue(tgt) === 5, effValue(tgt));
+  });
+  T('Q05 删掉程序节点，目标立刻复原', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const baseFs = effFsPx(tgt), baseW = tgt.w, baseShape = effShape(tgt);
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:16 });
+    const pg2 = createProgramNode(0, 0);
+    setProgram(pg2, { op:'shape', mode:'set', value:'oval' });
+    linkNodes(pg.id, tgt.id); linkNodes(pg2.id, tgt.id);
+    reindex(); sizeAll();
+    ok('Q05 前置：确实生效了', effFsPx(tgt) === (baseFs || FS) + 16 && effShape(tgt) === 'oval');
+    // 删掉两个程序节点
+    doc.nodes = doc.nodes.filter(n => n.id !== pg.id && n.id !== pg2.id);
+    doc.edges = doc.edges.filter(e => e.s !== pg.id && e.s !== pg2.id);
+    reindex(); sizeAll();
+    ok('Q05b 字号复原', effFsPx(tgt) === baseFs, effFsPx(tgt) + ' vs ' + baseFs);
+    ok('Q05c 宽度复原', tgt.w === baseW, tgt.w + ' vs ' + baseW);
+    ok('Q05d 形状复原', effShape(tgt) === baseShape, effShape(tgt));
+    ok('Q05e 效果记录也清了', !effOf(tgt));
+  });
+  T('Q06 多个程序节点累加', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const baseFs = effFsPx(tgt) || FS;
+    for (const v of [8, 4, 8]){
+      const pg = createProgramNode(0, 0);
+      setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:v });
+      linkNodes(pg.id, tgt.id);
+    }
+    reindex(); sizeAll();
+    ok('Q06 累加 = 基础 + 8 + 4 + 8', effFsPx(tgt) === baseFs + 20, effFsPx(tgt) + ' vs ' + (baseFs + 20));
+    ok('Q06b 记了 3 个算符', effOf(tgt).ops === 3, effOf(tgt).ops);
+    // 数值也累加
+    const tgt2 = nodeByText('操作');
+    for (const v of [3, 4, 5]){
+      const pg = createProgramNode(0, 0);
+      setProgram(pg, { op:'value', mode:'add', value:v });
+      linkNodes(pg.id, tgt2.id);
+    }
+    reindex();
+    ok('Q06c 数值累加 = 12', effValue(tgt2) === 12, effValue(tgt2));
+  });
+  T('Q07 累加按连线的先后顺序', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const pgAdd = createProgramNode(0, 0);
+    setProgram(pgAdd, { op:'style', key:'fsPx', mode:'add', value:8 });
+    const pgSet = createProgramNode(0, 0);
+    setProgram(pgSet, { op:'style', key:'fsPx', mode:'set', value:32 });
+    linkNodes(pgAdd.id, tgt.id);
+    linkNodes(pgSet.id, tgt.id);
+    reindex(); sizeAll();
+    ok('Q07 「先+8 后覆盖32」= 32', effFsPx(tgt) === 32, effFsPx(tgt));
+    // 把两条线的顺序倒过来
+    doc.edges.reverse();
+    reindex(); sizeAll();
+    ok('Q07b 「先覆盖32 后+8」= 40', effFsPx(tgt) === 40, effFsPx(tgt));
+  });
+  T('Q08 程序节点不作用在另一个程序节点上', () => {
+    fresh(); layoutMind();
+    const a = createProgramNode(0, 0);
+    const b = createProgramNode(0, 0);
+    setProgram(a, { op:'style', key:'fsPx', mode:'add', value:8 });
+    linkNodes(a.id, b.id);
+    reindex(); sizeAll();
+    ok('Q08 程序节点之间不叠加', !effOf(b), JSON.stringify(effOf(b)));
+  });
+  T('Q09 路由与命中都用「有效位置」', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const src = nodeByText('连线');
+    const e = doc.edges.find(x => x.s === src.id && x.t === tgt.id) ||
+              linkNodes(src.id, tgt.id);
+    reindex(); sizeAll();
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'move', key:'x', mode:'add', value:120 });
+    linkNodes(pg.id, tgt.id);
+    reindex(); sizeAll();
+    const eb = nodeBox(tgt);
+    const ep = edgeEndpoints(e);
+    const P = anchorsFor(eb);
+    ok('Q09 连线端点接在偏移后的盒子上',
+      ['r','l','t','b'].some(k => Math.abs(ep.b.x - P[k].x) < 0.01 && Math.abs(ep.b.y - P[k].y) < 0.01),
+      JSON.stringify(ep.b) + ' vs ' + JSON.stringify(P));
+    ok('Q09b 命中测试也用偏移后的位置', (() => {
+      const c = { x:eb.x + eb.w / 2, y:eb.y + eb.h / 2 };
+      return hitNode(c) === tgt;
+    })());
+    ok('Q09c 旧位置已经点不到', (() => {
+      const old = { x:tgt.x + 4, y:tgt.y + tgt.h / 2 };
+      const hit = hitNode(old);
+      return hit !== tgt;
+    })());
+  });
+  T('Q10 转换 / 序列化往返', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    toggleProgramNode(n);
+    ok('Q10 转成了程序节点', isProgram(n));
+    setProgram(n, { op:'value', mode:'add', value:7 });
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    ok('Q10b 序列化里有 kind 和 program',
+      snap.nodes.find(x => x.id === n.id).kind === 'program' &&
+      snap.nodes.find(x => x.id === n.id).program.value === 7, JSON.stringify(snap.nodes.find(x => x.id === n.id)));
+    deserialize(snap);
+    const n2 = byId(n.id);
+    ok('Q10c 往返保留', isProgram(n2) && n2.program.op === 'value' && n2.program.value === 7,
+      JSON.stringify(n2.program));
+    toggleProgramNode(n2);
+    ok('Q10d 可以转回普通节点', !isProgram(n2) && n2.kind === 'node');
+  });
+  T('Q11 撤销会把程序节点一起回退', () => {
+    fresh(); layoutMind(); initHist();
+    const tgt = nodeByText('节点');
+    const before = effFsPx(tgt);
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:8 });
+    linkNodes(pg.id, tgt.id);
+    reindex(); sizeAll(); pushHist();
+    ok('Q11 生效了', effFsPx(tgt) === (before || FS) + 8, effFsPx(tgt));
+    undo();
+    ok('Q11b 撤销后连线没了', !doc.edges.some(e => e.s === pg.id));
+    ok('Q11c 效果也没了', effFsPx(tgt) === before, effFsPx(tgt));
+  });
+  T('Q12 面板：程序节点显示算符行', () => {
+    fresh(); layoutMind();
+    const pg = createProgramNode(0, 0);
+    selectOnly(pg.id);
+    openNodeBox(pg);
+    ok('Q12 算符区显示出来了', nbProgEl.style.display === 'block');
+    ok('Q12b 四组作用选项', nbOpEl.querySelectorAll('.opt').length === PROGRAM_OPS.length);
+    ok('Q12c 外观下有四个项目', nbKeyEl.querySelectorAll('.opt').length === PROGRAM_KEYS.style.length,
+      nbKeyEl.querySelectorAll('.opt').length);
+    ok('Q12d 按钮写的是「转回普通节点」', nbProgBtn.textContent === '转回普通节点', nbProgBtn.textContent);
+    // 切到「位置」：项目变两项、方式行隐藏
+    const opOpts = [...nbOpEl.querySelectorAll('.opt')];
+    opOpts[2].click();
+    ok('Q12e 位置的项目是横/纵', nbKeyEl.querySelectorAll('.opt').length === 2,
+      nbKeyEl.querySelectorAll('.opt').length);
+    ok('Q12f 位置没有「方式」', nbModeRowEl.style.display === 'none', nbModeRowEl.style.display);
+    ok('Q12g 数值给了预设按钮', nbValEl.querySelectorAll('.opt').length >= 4);
+    closeNodeBox();
+    // 普通节点不显示算符区
+    const n = nodeByText('节点');
+    openNodeBox(n);
+    ok('Q12h 普通节点不显示算符区', nbProgEl.style.display === 'none');
+    closeNodeBox();
+  });
+  T('Q13 面板显示的是有效外观', () => {
+    fresh(); layoutMind();
+    const tgt = nodeByText('节点');
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'color', mode:'set', value:'#00ffff' });
+    linkNodes(pg.id, tgt.id);
+    reindex(); sizeAll();
+    selectOnly(tgt.id);
+    openNodeBox(tgt);
+    ok('Q13 字色面板高亮的是被程序改过之后的颜色', (() => {
+      const sw = [...nbColorEl.querySelectorAll('.sw')];
+      const on = sw.filter(d => d.className.indexOf('on') >= 0);
+      return on.length === 1 && on[0].style.background === 'rgb(0, 255, 255)';
+    })(), [...nbColorEl.querySelectorAll('.sw')].findIndex(d => d.className.indexOf('on') >= 0));
+    ok('Q13b 底部说明写明了被几个程序节点作用',
+      nbHitsEl.textContent.indexOf('被 1 个程序节点作用') >= 0, nbHitsEl.textContent);
+    closeNodeBox();
+  });
+  T('Q14 程序节点的显示名会跟着算符自动更新', () => {
+    fresh(); layoutMind();
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:8 });
+    ok('Q14 标题跟着走', pg.text === '字号 +8', pg.text);
+    setProgram(pg, { value:16 });
+    ok('Q14b 改了数值标题也变', pg.text === '字号 +16', pg.text);
+    // 用户自己改过标题之后就不再自动覆盖
+    pg.text = '我的算符';
+    setProgram(pg, { value:24 });
+    ok('Q14c 用户改过的标题不动', pg.text === '我的算符', pg.text);
+  });
+
   });
 
   /* ==================== 收尾 ==================== */

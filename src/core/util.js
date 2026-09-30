@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/util.js
    全局常量、调色板、小工具函数。
@@ -34,8 +34,24 @@ const NODE_COLORS = [
 ];
 /* 节点的「种类」。目前只有普通节点；program 是给程序化节点预留的接缝。 */
 const NODE_KINDS = ['node', 'program'];
-const nodeFontFamily = (n) => NODE_FONTS[n && n.font] || FONT;
-const nodeFontSize   = (n) => (n && n.fsPx) ? n.fsPx : ((n && n.big) ? FS_BIG : FS);
+const SHAPES = ['rect', 'round', 'diamond', 'oval'];
+const SHAPE_LABEL = { rect:'矩形', round:'圆角矩形', diamond:'菱形', oval:'椭圆' };
+/* ---------------- 程序化节点 ----------------
+   程序节点通过「指向目标的那条线」把自己的算符叠到目标上，多个可以累加。 */
+const PROGRAM_OPS = ['style', 'shape', 'move', 'value'];
+const PROGRAM_OP_LABEL = { style:'外观', shape:'形状', move:'位置', value:'数值' };
+const PROGRAM_KEYS = {
+  style: [['fsPx', '字号'], ['color', '字色'], ['border', '外框色'], ['font', '字体']],
+  move:  [['x', '横向偏移'], ['y', '纵向偏移']],
+  shape: [['shape', '形状']],
+  value: [['value', '数值']]
+};
+const PROGRAM_MODES = ['add', 'set'];
+const PROGRAM_MODE_LABEL = { add:'累加', set:'覆盖' };
+const PROGRAM_DEFAULT = { op:'style', key:'fsPx', mode:'add', value:8 };
+/* 这两个读的是「有效外观」（含程序化节点叠加上来的算符），不是节点裸字段 */
+const nodeFontFamily = (n) => NODE_FONTS[effFont(n)] || FONT;
+const nodeFontSize   = (n) => effFsPx(n) || ((n && n.big) ? FS_BIG : FS);
 
 /* ---------------- 分组 ---------------- */
 const GROUP_PAD = 26;        // 外框离成员的边距

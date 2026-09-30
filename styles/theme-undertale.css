@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    GRAPHEON · 主题：Undertale
    全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
    加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
@@ -207,3 +207,8 @@ body.dsh-ready{cursor:none}
   max-height:calc(100vh - var(--dlg-h,132px) - 116px);
   overflow:auto;
 }
+
+/* ---------- 程序算符区 ---------- */
+#nodebox .progsec{border-left:3px solid var(--y);padding-left:14px;margin-bottom:6px}
+#nodebox .hr2{height:3px;background:#333;margin:12px 0}
+#nodebox .nbnum{flex:none;width:96px;text-align:center}

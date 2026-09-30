@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/pointer.js
    鼠标状态机：框选、平移、拖拽节点、缩放节点、端口拉新线、拖端点改接、拉拐点。
@@ -143,11 +143,13 @@ window.addEventListener('pointermove', (ev) => {
       for (const s of drag.starts){ const n = byId(s.id); if (n){ n.x = s.x + dx; n.y = s.y + dy; } }
       mark();
     } else if (drag.mode === 'resize'){
-      const box = drag.isGroup ? groupBox(byGroup(drag.targetId)) : byId(drag.targetId);
-      if (box){
-        if (drag.isGroup) setGroupSize(byGroup(drag.targetId), p.x - box.x, p.y - box.y);
-        else setNodeSize(box, p.x - box.x, p.y - box.y);
-        drag.moved = true;
+      if (drag.isGroup){
+        const grp = byGroup(drag.targetId);
+        if (grp){ const gb = groupBox(grp); setGroupSize(grp, p.x - gb.x, p.y - gb.y); drag.moved = true; }
+      } else {
+        const n = byId(drag.targetId);
+        // 手柄画在「有效位置」上（程序化节点可能挪过它），所以量尺寸也要用有效位置
+        if (n){ const eb = nodeBox(n); setNodeSize(n, p.x - eb.x, p.y - eb.y); drag.moved = true; }
       }
       mark();
     } else if (drag.mode === 'marquee'){
@@ -219,7 +221,8 @@ window.addEventListener('pointerup', (ev) => {
     sel.clear(); selEdgeId = null;
     for (const n of doc.nodes){
       if (isHidden(n.id)) continue;
-      if (n.x + n.w > x1 && n.x < x2 && n.y + n.h > y1 && n.y < y2) sel.add(n.id);
+      const b = nodeBox(n);
+      if (b.x + b.w > x1 && b.x < x2 && b.y + b.h > y1 && b.y < y2) sel.add(n.id);
     }
     if (sel.size) say('* 选中了 ' + sel.size + ' 个节点。');
   } else if (drag.mode === 'link'){

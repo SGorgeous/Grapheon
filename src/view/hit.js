@@ -8,15 +8,20 @@
 /* =========================================================================
    命中测试
    ========================================================================= */
+/* 形状命中：菱形按 |dx|/半宽 + |dy|/半高 <= 1 判定，其余按矩形 */
+function inBox(b, p){
+  if ((b.shape || 'rect') === 'diamond'){
+    const dx = Math.abs(p.x - (b.x + b.w / 2)) / (b.w / 2);
+    const dy = Math.abs(p.y - (b.y + b.h / 2)) / (b.h / 2);
+    return dx + dy <= 1;
+  }
+  return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+}
 function hitNode(p){
   for (let i = doc.nodes.length - 1; i >= 0; i--){
     const n = doc.nodes[i];
     if (isHidden(n.id)) continue;
-    if (n.shape === 'diamond'){
-      const dx = Math.abs(p.x - (n.x + n.w / 2)) / (n.w / 2);
-      const dy = Math.abs(p.y - (n.y + n.h / 2)) / (n.h / 2);
-      if (dx + dy <= 1) return n;
-    } else if (p.x >= n.x && p.x <= n.x + n.w && p.y >= n.y && p.y <= n.y + n.h) return n;
+    if (inBox(nodeBox(n), p)) return n;   // 用有效盒子：程序化节点可能挪过位置 / 改过形状
   }
   return null;
 }
@@ -110,7 +115,7 @@ function hitWaypoint(p){
 function hitResizeHandle(p){
   let box = null;
   const n = soleSel();
-  if (n && !isHidden(n.id)) box = n;
+  if (n && !isHidden(n.id)) box = nodeBox(n);
   else if (selGroupId){ const grp = byGroup(selGroupId); if (grp) box = groupBox(grp); }
   if (!box) return null;
   const r = resizeHandleRect(box);

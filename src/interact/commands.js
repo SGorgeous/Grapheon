@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/commands.js
    结构操作：子/兄弟/父节点、删除、折叠、形状、方向生成、连线样式。
@@ -426,4 +426,62 @@ function newEmptyGroup(cx, cy){
   pushHist();
   say('* 建了一个空分组框。把节点拖进去就会自动收纳，拖右下角可以改大小。');
   return grp;
+}
+
+/* =========================================================================
+   程序化节点
+   ========================================================================= */
+/* 把算符写成人看得懂的一行字，用来当程序节点的标题 */
+function programLabel(p){
+  const q = normalizeProgram(p);
+  const keyLabel = (PROGRAM_KEYS[q.op].find(k => k[0] === q.key) || ['', ''])[1];
+  if (q.op === 'shape') return '形状 → ' + (SHAPE_LABEL[q.value] || q.value);
+  if (q.op === 'value') return '数值 ' + (q.mode === 'add' ? '+=' : '=') + ' ' + q.value;
+  if (q.op === 'move')  return keyLabel + ' ' + (q.value >= 0 ? '+' : '') + q.value;
+  if (q.key === 'font') return '字体 → ' + (NODE_FONT_LABEL[q.value] || '默认');
+  if (q.key === 'fsPx') return '字号 ' + (q.mode === 'add' ? ((q.value >= 0 ? '+' : '') + q.value) : ('= ' + q.value));
+  const cn = (NODE_COLORS.find(c => c[0] === q.value) || [null, null])[1];
+  return keyLabel + ' → ' + (cn || '默认');
+}
+function createProgramNode(x, y){
+  const nn = addNodeAt('', x, y, 'round');
+  nn.kind = 'program';
+  nn.program = normalizeProgram(null);
+  nn.text = programLabel(nn.program);
+  sizeNode(nn);              // 标题是后填的，尺寸得按新标题重算
+  reindex();                 // 新节点要立刻进索引，否则 byId 找不到它
+  return nn;
+}
+/* 改算符。改完立刻重算派生效果并重新量尺寸（字号会被算符影响）。 */
+function setProgram(n, patch){
+  if (!isProgram(n)) return;
+  const before = programLabel(n.program);
+  n.program = normalizeProgram(Object.assign({}, n.program, patch));
+  // 标题还是自动生成的那份就跟着更新；用户自己改过就尊重用户
+  if (String(n.text).trim() === before) n.text = programLabel(n.program);
+  refreshEffects(); sizeAll(); mark();
+}
+/* 普通节点 ↔ 程序节点 */
+function toggleProgramNode(n){
+  if (!n) return;
+  if (isProgram(n)){
+    n.kind = 'node';
+    say('* 「' + (n.text || '节点') + '」已转回普通节点，它对目标的影响立刻消失。');
+  } else {
+    n.kind = 'program';
+    n.program = normalizeProgram(n.program);
+    if (!String(n.text).trim()) n.text = programLabel(n.program);
+    say('* 「' + (n.text || '节点') + '」已转成程序节点：把它连到目标节点上，算符就会叠加过去。');
+  }
+  refreshEffects(); sizeAll(); pushHist(); mark();
+}
+/* 一个节点身上叠了哪些算符（面板里列出来给人看） */
+function programHits(id){
+  const out = [];
+  for (const e of doc.edges){
+    if (e.t !== id) continue;
+    const src = byId(e.s);
+    if (src && isProgram(src)) out.push(src);
+  }
+  return out;
 }

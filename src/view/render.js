@@ -186,27 +186,62 @@ function roundRect(g, x, y, w, h, r){
 function drawNode(g, n){
   const selected = sel.has(n.id);
   const hov = hover && hover.id === n.id;
-  const stroke = selected ? C.yellow : (hov ? C.yellow : (n.border || C.white));
+  const prog = isProgram(n);
+  const eff = effOf(n);
+  // 位置/形状一律走「有效盒子」：程序化节点可能把目标挪走、或者改了它的形状
+  const b = nodeBox(n);
+  const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || (prog ? C.gray : C.white)));
   g.save();
   g.lineJoin = 'round';
   g.lineWidth = isRoot(n) ? 4 : 3;
   g.strokeStyle = stroke;
   g.fillStyle = C.bg;
-  pathShape(g, n);
+  pathShape(g, b);
   g.fill();
   g.stroke();
+  // 程序节点：再描一圈内框 + 左边一个 ▶，一眼和普通节点区分开
+  if (prog){
+    g.strokeStyle = C.gray;
+    g.lineWidth = 2;
+    if (b.shape === 'rect' || b.shape === 'round'){
+      pathShape(g, { x:b.x + 6, y:b.y + 6, w:b.w - 12, h:b.h - 12, shape:b.shape });
+      g.stroke();
+    }
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = C.yellow;
+    g.textAlign = 'left';
+    g.textBaseline = 'middle';
+    g.fillText('▶', b.x - 22, b.y + b.h / 2);
+  }
 
   setFont(g, n.fs, n.fw, n.fam);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = n.color || (selected ? C.yellow : C.white);
-  const startY = n.y + n.h / 2 - ((n.lines.length - 1) * n.lh) / 2;
-  for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], n.x + n.w / 2, startY + i * n.lh);
+  g.fillStyle = effColor(n) || (selected ? C.yellow : C.white);
+  const startY = b.y + b.h / 2 - ((n.lines.length - 1) * n.lh) / 2;
+  for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + b.w / 2, startY + i * n.lh);
+
+  // 被程序节点作用过的目标：右上角一个黄点，数值型再把累计结果显示在右下角
+  if (eff && eff.ops && !prog){
+    g.fillStyle = C.yellow;
+    g.beginPath();
+    const cx = b.x + b.w - 8, cy = b.y - 8;
+    g.moveTo(cx, cy - 6); g.lineTo(cx + 6, cy); g.lineTo(cx, cy + 6); g.lineTo(cx - 6, cy);
+    g.closePath(); g.fill();
+  }
+  if (eff && eff.value != null && !prog){
+    setFont(g, FS, 'normal', FONT);
+    g.fillStyle = C.yellow;
+    g.textAlign = 'right';
+    g.textBaseline = 'alphabetic';
+    g.fillText('= ' + eff.value, b.x + b.w - 8, b.y + b.h - 6);
+    g.textBaseline = 'middle';
+  }
 
   const kids = idx.children.get(n.id) || [];
   // 折叠时才显示「隐藏了 N 个」的标记；它同时也是展开按钮（点一下展开）
   if (kids.length && n.collapsed){
-    const r = collapseBadgeRect(n);
+    const r = collapseBadgeRect(b);
     g.lineWidth = 2.5; g.strokeStyle = C.white; g.fillStyle = C.bg;
     g.beginPath();
     g.rect(Math.round(r.x), Math.round(r.y), Math.round(r.w), r.h);
@@ -215,9 +250,9 @@ function drawNode(g, n){
     g.fillText(r.label, r.x + r.w / 2, r.y + r.h / 2 + 1);
   }
   if (selected){
-    drawHeart(g, n.x - 26, n.y + n.h / 2 - 6.5, 2);
+    drawHeart(g, b.x - 26, b.y + b.h / 2 - 6.5, 2);
     // 右下角缩放手柄
-    const r = resizeHandleRect(n);
+    const r = resizeHandleRect(b);
     g.fillStyle = C.bg; g.strokeStyle = C.yellow; g.lineWidth = 2.5;
     g.beginPath();
     g.rect(Math.round(r.x), Math.round(r.y), r.w, r.h);

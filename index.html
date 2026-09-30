@@ -91,6 +91,25 @@
 <div id="nodebox" class="ud">
   <h2>* 节点样式</h2>
   <div class="sub" id="nbSub"></div>
+  <div id="nbProg" class="progsec">
+    <div class="row">
+      <span class="lab">作用</span>
+      <div id="nbOp" class="opts"></div>
+    </div>
+    <div class="row" id="nbKeyRow">
+      <span class="lab">项目</span>
+      <div id="nbKey" class="opts"></div>
+    </div>
+    <div class="row" id="nbModeRow">
+      <span class="lab">方式</span>
+      <div id="nbMode" class="opts"></div>
+    </div>
+    <div class="row">
+      <span class="lab">数值</span>
+      <div id="nbVal" class="opts"></div>
+    </div>
+    <div class="hr2"></div>
+  </div>
   <div class="row">
     <span class="lab">字号</span>
     <div id="nbFs" class="opts"></div>
@@ -111,7 +130,9 @@
     <span class="lab">尺寸</span>
     <div id="nbSize" class="opts"></div>
   </div>
+  <div class="sub" id="nbHits" style="margin:6px 0 10px"></div>
   <div class="acts">
+    <button class="ud-btn" id="nbProgToggle">转成程序节点</button>
     <button class="ud-btn" id="nbReset">全部恢复默认</button>
     <button class="ud-btn" id="nbClose">完成</button>
   </div>
@@ -164,6 +185,14 @@
     <tr><td>Shift + 拖拽空白</td><td>框选</td></tr>
     <tr><td>双击空白</td><td>新建一个自由节点</td></tr>
     <tr><td>Esc</td><td>取消选择 / 关闭浮层</td></tr>
+    <tr><td class="sec" colspan="2">— 程序化节点 —</td></tr>
+    <tr><td>右键空白处 →「新建 ▶ 程序节点」</td><td>建一个程序节点（双线外框 + 左边 ▶）</td></tr>
+    <tr><td>右键任意节点 →「转成程序节点」</td><td>把普通节点变成程序节点，或转回来</td></tr>
+    <tr><td>从程序节点拉线到目标</td><td>算符就叠加到目标上（外观 / 形状 / 位置 / 数值）</td></tr>
+    <tr><td>多个程序节点指向同一目标</td><td>按连线先后依次累加，+8 再来个 +4 就是 +12</td></tr>
+    <tr><td>选中程序节点按 E</td><td>面板里选「作用 / 项目 / 方式 / 数值」</td></tr>
+    <tr><td>被作用的目标</td><td>右上角出黄点；数值型的右下角显示累计结果</td></tr>
+    <tr><td>删掉程序节点</td><td>目标立刻复原（算符从来没写回节点本身）</td></tr>
     <tr><td class="sec" colspan="2">— 分组 —</td></tr>
     <tr><td>选中多个节点 → Ctrl+G</td><td>成组（也可以右键空白处或用菜单）</td></tr>
     <tr><td>拖分组标题栏 / 边框</td><td>整体搬动这个框和组内所有节点，相对位置不变</td></tr>

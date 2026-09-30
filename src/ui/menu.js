@@ -122,7 +122,8 @@ function showCtx(x, y, n, e, info){
     items.push(['添加子节点', 'Tab', () => addChild()]);
     items.push(['添加兄弟节点', 'Enter', () => addSibling()]);
     pushCommonItems(items, n, 'node', 'F2');
-    items.push(['节点样式…', 'E', () => openNodeBox(n)]);
+    items.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
+    items.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '', () => toggleProgramNode(n)]);
     items.push('hr');
     items.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
@@ -186,7 +187,14 @@ function showCtx(x, y, n, e, info){
         reindex(); relayout(); settleGroups([nn.id]);
         selectOnly(nn.id); pushHist(); startEdit('node', nn.id, ''); mark();
       }],
-      ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)]
+      ['空分组框', '', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
+      ['程序节点', '会改变目标', () => {
+        const p = s2w(x, y);
+        const nn = createProgramNode(p.x - 70, p.y - 24);
+        reindex(); relayout();
+        selectOnly(nn.id); pushHist(); mark();
+        say('* 建了一个程序节点。从它拉一条线到目标节点，算符就会叠加过去。');
+      }]
     ]]);
     items.push(['全选', 'Ctrl+A', selectAll]);
     if (sel.size >= 2) items.push(['把选中的 ' + sel.size + ' 个节点加入分组', 'Ctrl+G', () => createGroup()]);

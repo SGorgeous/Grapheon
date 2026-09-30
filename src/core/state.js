@@ -42,7 +42,8 @@ function mkId(prefix, set){
   return id;
 }
 const uid = (p) => mkId(p || 'n', usedIds);
-let idx = { children:new Map(), parent:new Map(), byId:new Map(), groups:new Map(), hidden:new Set() };
+let idx = { children:new Map(), parent:new Map(), byId:new Map(), groups:new Map(), hidden:new Set(),
+            eff:new Map(), box:new Map() };   // eff = 程序化节点叠出来的派生效果
 let sel = new Set();
 let selEdgeId = null;          // 选中的连线（与节点选择互斥）
 let selGroupId = null;         // 选中的分组（同上）
@@ -101,6 +102,7 @@ function reindex(){
   for (const n of doc.nodes) usedIds.add(n.id);
   for (const e of doc.edges) usedIds.add(e.id);
   for (const g of doc.groups) usedIds.add(g.id);
+  refreshEffects();          // 程序节点的算符是派生的，索引建好后立刻算一遍
 }
 const isHidden = (id) => idx.hidden.has(id);
 /* 这条线整体可见吗（两端都没被折叠藏起来） */
@@ -109,7 +111,7 @@ const byGroup = (id) => idx.groups.get(id);
 /* 端点可以是节点、也可以是分组。统一按「有 id/x/y/w/h 的东西」对待，路由就不用分情况了。 */
 function anchorOf(id){
   const n = idx.byId.get(id);
-  if (n) return n;
+  if (n) return nodeBox(n);
   const g = idx.groups.get(id);
   if (g) return groupBox(g);
   return null;
@@ -124,8 +126,9 @@ function fitGroupToMembers(g){
   for (const id of (g.members || [])){
     const n = idx.byId.get(id);
     if (!n) continue;
-    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
-    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+    const b = nodeBox(n);
+    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
   }
   if (!isFinite(minX)){
     g.x = +g.x || 0; g.y = +g.y || 0;
@@ -149,8 +152,9 @@ function groupGrowToFit(grp){
   for (const id of (grp.members || [])){
     const n = idx.byId.get(id);
     if (!n) continue;
-    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
-    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+    const b = nodeBox(n);
+    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
   }
   if (!isFinite(minX)) return false;                 // 空框：保持你拉的样子
   const needX = minX - GROUP_PAD, needY = minY - GROUP_TITLE_H;
@@ -183,13 +187,112 @@ function groupMinSize(grp){
   for (const id of (grp.members || [])){
     const n = idx.byId.get(id);
     if (!n) continue;
-    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
-    maxX = Math.max(maxX, n.x + n.w); maxY = Math.max(maxY, n.y + n.h);
+    const b = nodeBox(n);
+    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
   }
   if (!isFinite(minX)) return { x:null, y:null, w:0, h:0 };
   return { x:minX - GROUP_PAD, y:minY - GROUP_TITLE_H,
            w:(maxX - minX) + GROUP_PAD * 2, h:(maxY - minY) + GROUP_TITLE_H + GROUP_PAD };
 }
+
+/* =========================================================================
+   程序化节点
+   -------------------------------------------------------------------------
+   程序节点通过「从它出发、指向目标的那条线」把自己的算符叠到目标上。
+   同一个目标被多条这样的线指到时，按边在 doc.edges 里的先后顺序依次叠加。
+
+   最要紧的一条约束：效果全是**派生**的 —— 只写进 idx.eff / nodeBox，
+   绝不写回节点本身。否则撤销栈会被污染，而且把程序节点删掉之后目标回不去。
+   ========================================================================= */
+function normalizeProgram(p){
+  const out = Object.assign({}, PROGRAM_DEFAULT, p || {});
+  if (PROGRAM_OPS.indexOf(out.op) < 0) out.op = 'style';
+  const keys = PROGRAM_KEYS[out.op].map(k => k[0]);
+  if (keys.indexOf(out.key) < 0) out.key = keys[0];
+  if (PROGRAM_MODES.indexOf(out.mode) < 0) out.mode = 'add';
+  if (out.op === 'style' && out.key === 'font'){
+    if (!NODE_FONTS[out.value]) out.value = 'auto';
+  } else if (out.op === 'style' && (out.key === 'color' || out.key === 'border')){
+    out.value = out.value || null;
+  } else if (out.op === 'shape'){
+    if (SHAPES.indexOf(out.value) < 0) out.value = 'rect';
+  } else {
+    out.value = Math.round(+out.value || 0);
+  }
+  return out;
+}
+/* 从零算一遍所有节点上的程序效果（reindex 末尾调用） */
+function refreshEffects(){
+  idx.eff = new Map();
+  for (const e of doc.edges){
+    const src = idx.byId.get(e.s), tgt = idx.byId.get(e.t);
+    if (!src || !tgt) continue;
+    if (src.kind !== 'program') continue;         // 只有程序节点会施加算符
+    if (tgt.kind === 'program') continue;         // 程序节点不作用在另一个程序节点上
+    let eff = idx.eff.get(tgt.id);
+    if (!eff){
+      eff = { dx:0, dy:0, shape:null, color:null, border:null,
+              font:null, fsPx:null, value:null, ops:0 };
+      idx.eff.set(tgt.id, eff);
+    }
+    applyProgram(eff, normalizeProgram(src.program), tgt);
+    eff.ops++;
+  }
+  // 失效的缓存扔掉
+  if (!idx.box) idx.box = new Map();
+  for (const id of [...idx.box.keys()]) if (!idx.byId.has(id)) idx.box.delete(id);
+}
+function applyProgram(eff, p, tgt){
+  if (p.op === 'move'){
+    if (p.key === 'y') eff.dy += p.value; else eff.dx += p.value;
+    return;
+  }
+  if (p.op === 'shape'){ eff.shape = p.value; return; }
+  if (p.op === 'value'){
+    const cur = (eff.value == null) ? (Math.round(+tgt.value) || 0) : eff.value;
+    eff.value = (p.mode === 'add') ? cur + p.value : p.value;
+    return;
+  }
+  // style
+  if (p.key === 'fsPx'){
+    const base = (eff.fsPx != null) ? eff.fsPx
+               : ((+tgt.fsPx > 0) ? +tgt.fsPx : (tgt.big ? FS_BIG : FS));
+    eff.fsPx = Math.max(8, (p.mode === 'add') ? base + p.value : p.value);
+  } else if (p.key === 'font'){
+    eff.font = NODE_FONTS[p.value] ? p.value : null;
+  } else {
+    eff[p.key] = p.value || null;
+  }
+}
+/* ---- 读有效值。全部是查表，不改任何数据 ---- */
+const effOf     = (n) => (n && idx.eff) ? (idx.eff.get(n.id) || null) : null;
+const effColor  = (n) => { const e = effOf(n); return (e && e.color)  ? e.color  : n.color; };
+const effBorder = (n) => { const e = effOf(n); return (e && e.border) ? e.border : n.border; };
+const effFont   = (n) => { const e = effOf(n); return (e && e.font)   ? e.font   : n.font; };
+const effFsPx   = (n) => { const e = effOf(n); return (e && e.fsPx)   ? e.fsPx   : n.fsPx; };
+const effShape  = (n) => { const e = effOf(n); return (e && e.shape)  ? e.shape  : n.shape; };
+const effValue  = (n) => { const e = effOf(n); return (e && e.value != null) ? e.value : (Math.round(+n.value) || 0); };
+const isProgram = (n) => !!n && n.kind === 'program';
+
+/* 节点的「有效盒子」：位置带上程序算符的位移，形状带上程序算符的形状。
+   盒子按 id 缓存并原地更新，所以渲染里反复调用也不会一直分配对象。 */
+function nodeBox(n){
+  if (!idx.box) idx.box = new Map();
+  let b = idx.box.get(n.id);
+  if (!b){
+    b = { id:n.id, isNode:true, node:n, x:0, y:0, w:0, h:0, shape:'rect' };
+    idx.box.set(n.id, b);
+  }
+  const e = idx.eff ? idx.eff.get(n.id) : null;
+  b.x = n.x + (e ? e.dx : 0);
+  b.y = n.y + (e ? e.dy : 0);
+  b.w = n.w;
+  b.h = n.h;
+  b.shape = (e && e.shape) ? e.shape : (n.shape || 'rect');
+  return b;
+}
+
 /* 分组标题栏的矩形（命中测试和绘制共用） */
 function groupTitleBox(g){
   const r = groupBox(g);
@@ -222,7 +325,9 @@ function serialize(){
     nodes: doc.nodes.map(n => ({ id:n.id, text:n.text, x:Math.round(n.x), y:Math.round(n.y), shape:n.shape,
       collapsed:!!n.collapsed, fixedW:n.fixedW || null, fixedH:n.fixedH || null,
       font:n.font || null, fsPx:n.fsPx || null, color:n.color || null, border:n.border || null,
-      kind:(n.kind === 'program' ? 'program' : 'node') })),
+      kind:(n.kind === 'program' ? 'program' : 'node'),
+      value:(Math.round(+n.value) || 0),
+      program:(n.kind === 'program') ? normalizeProgram(n.program) : null })),
     edges: doc.edges.map(e => ({
       id:e.id, s:e.s, t:e.t, label:e.label || '',
       arrow:e.arrow, dash:!!e.dash, route:e.route, aSide:e.aSide, bSide:e.bSide,
@@ -252,7 +357,8 @@ function deserialize(d){
       font:NODE_FONTS[n.font] ? n.font : null,
       fsPx:(+n.fsPx > 0) ? +n.fsPx : ((+n.fs > 0) ? +n.fs : null),   // 也认早期写成 fs 的档
       color:n.color || null, border:n.border || null,
-      kind:(n.kind === 'program') ? 'program' : 'node' });
+      kind:(n.kind === 'program') ? 'program' : 'node',
+      value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program) });
   }
   const ok = new Set(doc.nodes.map(n => n.id));
   for (const e of (d.edges || [])){
