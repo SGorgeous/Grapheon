@@ -23,6 +23,13 @@ const PORT_HIT_R = 12;                         // 命中半径（世界单位，
 const PORT_DOT_R = 4.5;
 const PORT_LABEL_GAP = 10;
 
+/* ★ 哪些节点**有**输入 / 输出端点：只有「有明确输入输出」的程序节点。
+   普通节点 / 图片 / 表格 / 嵌入 都不画端点 ——
+   它们靠边上的锚点连线就行，摆一堆小方块反而糊。
+   （分组另有一套四向锚点，不走这里。） */
+const PORTED_KINDS = ['var', 'broadcast', 'op', 'out', 'program'];
+const hasPorts = (n) => !!n && PORTED_KINDS.indexOf(n.kind) >= 0;
+
 /* 默认端点：左右进出、上下备用，位置都在那条边的正中。
    普通变量 / 输出 / 控件节点只要一个出口；运算符以后要两个入口。 */
 function defaultPorts(n){
@@ -42,6 +49,9 @@ function defaultPorts(n){
   }
   if (n && n.kind === 'broadcast'){
     return { ins:[{ id:1, side:'l', at:0.5, label:'取值' }], outs:[] };
+  }
+  if (n && n.kind === 'program'){
+    return { ins:[{ id:1, side:'l', at:0.5, label:'' }], outs:[] };
   }
   if (n && n.kind === 'cond'){
     return { ins:[{ id:1, side:'l', at:0.5, label:'条件' }],
@@ -332,6 +342,7 @@ function portHandleAt(p, node){
   if (typeof hover !== 'undefined') push(hover);
   for (const n of cands){
     if (!n || isHidden(n.id) || isEmbed(n)) continue;
+    if (!hasPorts(n)) continue;              // 非程序节点没有可拖的端点
     if (!portsShowLabel(n)) continue;
     for (const dir of ['ins', 'outs']){
       for (const q of portList(n)[dir]){
@@ -364,6 +375,10 @@ function editPort(n, dir, id){
 /* 端点小圆点。标签只在**悬停或选中**时画 —— 平时画会糊成一片。 */
 function drawPorts(g, n, showLabel){
   if (!n) return;
+  /* 只有「有明确输入输出」的程序节点才画端点。
+     普通 / 图片 / 表格节点不画 —— 但它们的端点模型还在，
+     所以照样能从边上拉线、线也照样接得上去。 */
+  if (!hasPorts(n)) return;
   const L = portList(n);
   const hl = (typeof hoverPort !== 'undefined' && hoverPort && hoverPort.node === n) ? hoverPort : null;
   g.save();

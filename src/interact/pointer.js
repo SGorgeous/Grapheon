@@ -22,6 +22,14 @@ canvas.addEventListener('pointerdown', (ev) => {
 
   if (ev.button === 1){ drag = { mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y }; return; }
 
+  // 表格节点右下角那对加号：在节点**外面**，得先判
+  const tb = (typeof hitTableButton === 'function') ? hitTableButton(p) : null;
+  if (tb){
+    selectOnly(tb.node.id);
+    if (tb.kind === 'row') tableAddRow(tb.node);
+    else tableAddCol(tb.node);
+    return;
+  }
   // 选中连线的端点手柄：它正好压在节点边框上，不先判会被 hitNode 抢走
   const handle = hitEdgeHandle(p);
   if (handle){

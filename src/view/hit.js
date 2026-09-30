@@ -105,6 +105,21 @@ function hitPort(p){
      以前这里是 anchorsFor(box) —— 老的四个边中点，和端点表毫无关系。
      结果是：从原来的中点能拉线，端点一旦被拖到别处就再也拉不动了。
      （「端点无法拉线」的真凶就是这个。） */
+  /* ★ 没有输入/输出端点的节点（普通 / 图片 / 表格）退回**老的四个边中点** ——
+     它们不画端点，但照样得能从边上拉线出去，不然连不了线。 */
+  // 非程序节点没有端点 UI，但连线判定还要能用 —— 用它们自己的端点（等于老的边中点）
+  if (node && (typeof hasPorts === 'function') && !hasPorts(node)){
+    const L0 = portList(node);
+    const tol0 = 9 / Math.max(0.2, view.z);
+    let b0 = null, d0 = Infinity;
+    for (const q of L0.ins.concat(L0.outs)){
+      const pt = portPoint(node, q);
+      const d = Math.hypot(pt.x - p.x, pt.y - p.y);
+      if (d <= tol0 && d < d0){ d0 = d; b0 = { node:id, side:q.side, dir:'ins', portId:q.id }; }
+    }
+    if (b0) return b0;
+  }
+  if (node && (typeof hasPorts === 'function') && !hasPorts(node)) node = null;
   if (node){
     const tol = 9 / Math.max(0.2, view.z);
     let best = null, bestD = Infinity;
