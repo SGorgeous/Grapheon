@@ -25,8 +25,8 @@ function demoDoc(){
     edges.push(e);
     return e;
   };
-  /* 一列：竖着排一串节点，返回它们 */
-  const column = (items, x, y) => items.map((t, i) => N(t, x, y + i * 58));
+  /* 一整组：竖着排一串节点，返回它们 */
+  const column = (items, x, y, step) => items.map((t, i) => N(t, x, y + i * (step || 58)));
   /* 一个功能分组：把这一列的成员装进去 */
   const groupOf = (title, color, members) => {
     const g = { id:'dg' + (groups.length + 1), title, members:members.map(m => m.id),
@@ -34,21 +34,29 @@ function demoDoc(){
     groups.push(g);
     return g;
   };
+  /* 一张小标题：用来给下面的活演示分区 */
+  const head = (text, x, y, color) => {
+    const n = N(text, x, y, { shape:'round', big:false });
+    n.headColor = color || null;
+    return n;
+  };
 
-  /* ---------- 根 ---------- */
-  const root = N('GRAPHEON\n节点与连线', -1180, -260, { w:0, h:0 });
+  /* ==================== 根 ==================== */
+  const root = N('GRAPHEON\n节点与连线', -1420, -300, { w:0, h:0 });
   root.big = true;
 
-  /* ---------- 六块功能，3 列 × 2 行 ---------- */
-  const COLW = 520, ROWH = 460, GAPX = 46, GAPY = 60;
-  const bandX = 340, bandY = -660;
+  /* ==================== 功能总览：3 列 × 2 行 ==================== */
+  const COLW = 560, ROWH = 470, GAPX = 50, GAPY = 70;
+  const bandX = 320, bandY = -720;
   const FEATURES = [
     ['节点与外观', '#ffd800', [
       '四种形状：矩形 / 圆角 / 菱形 / 椭圆',
       '拖右下角自由改尺寸',
       'E 打开样式面板：字体 / 字号 / 字色 / 外框色',
       '折叠子树：点右上角的小方块',
-      'Tab 加子节点，Enter 加兄弟节点'
+      'Tab 加子节点，Enter 加兄弟节点',
+      '方向键 / WASD 按方向生成',
+      '节点名和变量名是分开的两回事'
     ]],
     ['连线', '#00ffff', [
       '箭头：无 / 单向 / 双向',
@@ -56,40 +64,41 @@ function demoDoc(){
       '走线：正交折线 / 曲线',
       '拐点：拖线身中间就能弯折',
       '端点吸附：默认自动，可以钉死某一边',
-      '拖端点改接：把一头摘下来接到别的节点'
+      '拖端点改接：把一头摘下来接到别的节点',
+      '「设置 → 新建连线的默认类型」决定新线长什么样'
     ]],
     ['分组', '#00ff00', [
       '框可以手动拉伸，也会自动长大来容纳成员',
       '把节点拖进框里就自动收纳',
       '分组可以套娃',
       '折叠分组：成员一起藏起来，不留幽灵框',
-      '多选：Shift 追加，可以和节点混着选'
+      '双击分组：选中组内全部节点（不含外框）',
+      '三击分组：选中外框（改名走右键或 F2）'
+    ]],
+    ['对齐与排版', '#7fd4ff', [
+      '选中多个 → 视图 → 对齐与分布',
+      '六种对齐：左 / 水平居中 / 右 / 顶 / 垂直居中 / 底',
+      '横向 / 竖向等距分布（至少三个）',
+      '基准是整个选择的外接矩形',
+      '对齐之后**允许重叠**，不会被防重叠弹开',
+      '防止节点重叠：默认开，设置里能关'
     ]],
     ['程序化节点', '#b967ff', [
       '算符：外观 / 形状 / 位置 / 数值',
       '连到分组 = 整组一起变',
       '程序节点之间可以链式累加',
-      '优先级可调，决定叠加的先后'
-    ]],
-    ['变量系统', '#ff7f27', [
-      '变量定义节点：名字 + 值 + 作用域',
-      '别的节点文本里写 {名字} 就能引用',
-      '想打字的 {名字} 本身，前面加反斜杠',
-      '三种作用域：全局 / 局内（仅下游）/ 组内',
-      '运算节点：+ - * / 可以叠加',
-      '程序组：组内算完把结果吐出来',
-      '输出节点：声明本作用域的输出值',
-      '★ 任何文字都能引用：正文 / 描述 / 连线标签 / 分组标题',
-      '★ 勾选节点：随便加选项，输出一串列表',
-      '★ 滑条节点：上下限 + 步长，拖一下实时生效',
-      '★ 通路节点：关掉后这条连接逻辑上断开'
+      '数值也能引用变量：{倍数}',
+      '优先级可调，决定叠加的先后',
+      '改动是「派生的」，从不写回节点本身'
     ]],
     ['媒体与其它', '#3b7dff', [
       '图片节点：拖进来 / 粘贴 / 右键插入',
       '图片右上角命名，下面写描述',
+      '表格节点：行列可编辑，格子也能引用变量',
       '嵌入 Grapheon：整份文档当一个封闭节点',
       '导出 PNG：可选范围、可填标题',
-      '撤销重做 / 排版 / 居中 / 换主题 / 自定义快捷键'
+      '撤销重做 / 居中 / 换主题 / 自定义快捷键',
+      '主题：棋盘（默认）/ 樱花（飘落特效）/ Undertale'
     ]]
   ];
   FEATURES.forEach(([title, color, items], i) => {
@@ -97,73 +106,122 @@ function demoDoc(){
     const y = bandY + Math.floor(i / 3) * (ROWH + GAPY);
     groupOf(title, color, column(items, x, y));
   });
-  // 根 → 每个分组的连线。分组不在 nodes 里，所以直接给出分组 id
+  // 根 → 每个功能分组
   for (const g of groups){
     edges.push(normalizeEdge({ id:'de' + (++eid), s:root.id, t:g.id,
                                route:'curve', aSide:'r', bSide:'l' }));
   }
 
-  /* ---------- 活的功能演示 ---------- */
-  const demoY = bandY + 2 * (ROWH + GAPY) + 40;
-  const title = N('↓ 下面这组是活的：变量 / 运算 / 程序组 / 输出节点', -1180, demoY - 70, { shape:'round' });
+  /* ==================== 变量系统：整块往右挪，别和功能带撞 ==================== */
+  const LX = -1420;                   // 变量演示区的左边界
+  const demoY = bandY + 2 * (ROWH + GAPY) + 60;
 
-  // 变量 单价=12 → 运算 ×4 → 节点「合计 48 元」
-  const vPrice = N('单价', -1180, demoY, {
+  const vHead = head('① 变量 → 运算 → 引用', LX, demoY - 90);
+  /* ---- ① 变量 + 运算 + 引用 ---- */
+  const vPrice = N('单价', LX, demoY, {
     kind:'var', varDef:{ name:'单价', value:'12', type:'number', scope:'global' } });
-  const opMul = N('乘四', -1180, demoY + 130, { kind:'op', opDef:{ op:'*', operand:'4' } });
-  const total = N('合计 {单价} 元', -700, demoY + 130, { shape:'round' });
+  const opMul = N('乘四', LX, demoY + 150, { kind:'op', opDef:{ op:'*', operand:'4' } });
+  const total = N('合计 {单价} 元', LX + 520, demoY + 150, { shape:'round' });
   E(vPrice, opMul); E(opMul, total);
+  // 文档级输出节点：声明「本图的输出」
+  const docOut = N('本图输出', LX + 520, demoY + 10, { kind:'out', outDef:{ name:'summary' } });
+  E(total, docOut);
 
-  // 函数分组「折扣函数」：基数 100 → 减 15 → 输出节点 折后
+  /* ---- ② 变量的值也能引用变量 ---- */
+  const vHead2 = head('② 变量自己的值也能引用变量', LX, demoY + 330);
+  const vW = N('宽', LX, demoY + 420, {
+    kind:'var', varDef:{ name:'宽', value:'12', type:'number', scope:'global' } });
+  const vH = N('高', LX, demoY + 560, {
+    kind:'var', varDef:{ name:'高', value:'8', type:'number', scope:'global' } });
+  const vArea = N('面积', LX, demoY + 700, {
+    kind:'var', varDef:{ name:'面积', value:'{宽} × {高} = 96', type:'string', scope:'global' } });
+  const areaOut = N('算出来：{面积}', LX + 520, demoY + 700, { shape:'round' });
+  E(vArea, areaOut);
+  // 改宽/高，面积跟着变 —— 这里只连出来给人看，值本身是插值算的
+  E(vW, vArea); E(vH, vArea);
+
+  /* ==================== 程序组（原函数分组） ==================== */
+  const FX = LX + 1100;
+  const vHead3 = head('③ 程序组：组内算完，外面接结果', FX, demoY - 90);
   const fg = { id:'dg' + (groups.length + 1), title:'ƒ 折扣函数', members:[],
-               color:'#b967ff', x:200, y:demoY, w:10, h:10, collapsed:false, isFunction:true };
+               color:'#b967ff', x:FX, y:demoY, w:10, h:10, collapsed:false, isFunction:true };
   groups.push(fg);
-  const vBase = N('基数', 200, demoY + 60, {
+  const vBase = N('基数', FX, demoY, {
     kind:'var', varDef:{ name:'基数', value:'100', type:'number', scope:'global' } });
-  const opSub = N('减十五', 200, demoY + 190, { kind:'op', opDef:{ op:'-', operand:'15' } });
-  const outFn = N('折后', 200, demoY + 320, { kind:'out', outDef:{ name:'折后' } });
+  const opSub = N('减十五', FX, demoY + 150, { kind:'op', opDef:{ op:'-', operand:'15' } });
+  const outFn = N('折后', FX, demoY + 300, { kind:'out', outDef:{ name:'折后' } });
   E(vBase, opSub); E(opSub, outFn);
   fg.members = [vBase.id, opSub.id, outFn.id];
 
-  // 外层变量指向函数分组，拿到 85
-  const vDisc = N('折扣价', 700, demoY + 60, {
+  // 外面一个变量指向程序组 → 拿到组内算出来的 85
+  const vDisc = N('折扣价', FX + 560, demoY + 60, {
     kind:'var', varDef:{ name:'折扣价', value:'0', type:'number', scope:'global' } });
-  edges.push(normalizeEdge({ id:'de' + (++eid), s:vDisc.id, t:fg.id }));   // 变量 → 函数分组
-  const shown = N('折后 {折扣价} 元', 700, demoY + 190, { shape:'round' });
+  edges.push(normalizeEdge({ id:'de' + (++eid), s:vDisc.id, t:fg.id }));   // 变量 → 程序组
+  const shown = N('折后 {折扣价} 元', FX + 560, demoY + 300, { shape:'round' });
   E(vDisc, shown);
 
-  // 文档输出节点
-  const docOut = N('本图输出', 700, demoY + 320, { kind:'out', outDef:{ name:'summary' } });
-  E(total, docOut);
+  /* ==================== 三种控件 ==================== */
+  const CX = FX + 1100;
+  const vHead4 = head('④ 三种控件：勾选 / 滑条 / 通路', CX, demoY - 90);
 
-  // 三种特殊变量控件
-  const ck = N('配料', -1180, demoY + 400, {
+  const ck = N('配料', CX, demoY, {
     kind:'var', varDef:{ name:'配料', type:'string', scope:'global', control:'check',
       options:['牛肉', '香菜', '辣椒'], picked:[0, 2] } });
-  const ckOut = N('已选：{配料}', -700, demoY + 400, { shape:'round' });
+  const ckOut = N('已选：{配料}', CX + 520, demoY, { shape:'round' });
   E(ck, ckOut);
 
-  const sl = N('音量', -1180, demoY + 620, {
+  const sl = N('音量', CX, demoY + 260, {
     kind:'var', varDef:{ name:'音量', type:'number', scope:'global', control:'slider',
       value:'60', min:0, max:100, step:10 } });
-  const slOut = N('当前 {音量}', -700, demoY + 620, { shape:'round' });
+  const slOut = N('当前 {音量}', CX + 520, demoY + 260, { shape:'round' });
   E(sl, slOut);
 
-  // 开关：关着的时候值过不去，右边会变成 [未定义]
-  const gate = N('闸门', -1180, demoY + 840, {
+  /* 通路节点：关着的时候值过不去，下游变成 [未定义] */
+  const gateSrc = N('过闸源', CX, demoY + 520, {
+    kind:'var', varDef:{ name:'过闸源', value:'7', type:'number', scope:'global' } });
+  const gate = N('闸门', CX, demoY + 680, {
     kind:'var', varDef:{ name:'闸门', type:'string', scope:'global', control:'switch', on:false } });
-  const gateOut = N('过闸：{单价}', -700, demoY + 840, { shape:'round' });
-  const gateSrc = N('过闸源', -1180, demoY + 960, { kind:'var', varDef:{ name:'过闸源', value:'7', type:'number', scope:'global' } });
+  const gateOut = N('过闸：{过闸源}', CX + 520, demoY + 680, { shape:'round' });
   E(gateSrc, gate); E(gate, gateOut);
-  gateOut.text = '过闸：{过闸源}';
 
-  /* ---------- 一些小提示 ---------- */
+  /* ==================== 表格节点 ==================== */
+  const TX = CX + 1100;
+  const vHead5 = head('⑤ 表格节点：格子里的字也能引用变量', TX, demoY - 90);
+  const tbl = N('', TX, demoY, {
+    kind:'table',
+    tableDef:{ cols:3, rows:4, header:true, cells:[
+      ['项目', '数量', '小计'],
+      ['苹果', '{数量}', '{单价} × {数量}'],
+      ['香蕉', '3', '待算'],
+      ['合计', '', '—']
+    ] } });
+  const vQty = N('数量', TX + 620, demoY - 40, {
+    kind:'var', varDef:{ name:'数量', value:'5', type:'number', scope:'global' } });
+  const vUnit = N('单价2', TX + 620, demoY + 110, {
+    kind:'var', varDef:{ name:'单价2', value:'3', type:'string', scope:'global' } });
+  // 表格用的是外面那个「单价」，这里再放一个说明引用关系的节点
+  const tblNote = N('格子里写 {单价} / {数量}，变量一改表格跟着变', TX + 620, demoY + 260, { shape:'round' });
+
+  /* ==================== 组件 ==================== */
+  const MX = TX + 1500;
+  const vHead6 = head('⑥ 组件：挂上去就生效', MX, demoY - 90);
+  const cBadge = N('角标组件', MX, demoY, {
+    components:[{ type:'badge', props:{ text:'★ {数量} 件', color:'#ffd800' } }] });
+  const cOutline = N('自定义描边', MX, demoY + 150, {
+    components:[{ type:'outline', props:{ width:'4', color:'#00ffff' } }] });
+  const cTint = N('染色 + 透明度', MX, demoY + 300, {
+    components:[{ type:'tint', props:{ color:'#b967ff' } },
+                { type:'opacity', props:{ value:'0.5' } }] });
+  const cHide = N('条件隐藏：{数量} 一有值就把我藏起来（现在就是藏着的）', MX, demoY + 450, {
+    components:[{ type:'hideIf', props:{ when:'{数量}' } }] });
+
+  /* ==================== 小提示 ==================== */
   const tips = column([
-    '提示：按住 Shift 框选可以一次选中一片',
+    '提示：新建的内容在空白处右键 → 新建',
     '提示：拖空白处平移，滚轮缩放',
     '提示：右上角 ? 是完整操作指南',
     '提示：这份示例可以直接改，不会影响别的'
-  ], bandX + 3 * (COLW + GAPX), bandY + 20);   // 挪到功能带右边，别和分组撞上
+  ], bandX + 3 * (COLW + GAPX), bandY + 30, 58);
 
   return { v:2, nid, nodes, edges, groups };
 }
