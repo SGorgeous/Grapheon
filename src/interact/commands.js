@@ -88,14 +88,51 @@ function addParentOf(n){
   afterSpawn(np);
 }
 /* --- 方向键 / WASD：在该方向空间生成节点，自动避开同一行/列上的已有节点 --- */
+/* 生成方向和连接方向的对应：往哪边生成，就从哪边出去、从对面进来 */
+const SPAWN_SIDES = { right:['r','l'], left:['l','r'], up:['t','b'], down:['b','t'] };
+/* 确保节点在某条边上有端点，没有就现加一个。返回那个端点。
+   ⚠ addPort 是自己挑边的（挑用得最少的），所以加完要把 side 改过来。 */
+function ensurePortOn(node, side){
+  if (!node || !side) return null;
+  const L = portList(node);
+  const hit = L.ins.concat(L.outs).filter(p => p.side === side)[0];
+  if (hit) return hit;
+  const dir = (side === 'r' || side === 't') ? 'outs' : 'ins';
+  const p = addPort(node, dir);
+  if (!p) return null;
+  p.side = side;
+  p.at = 0.5;
+  const L2 = normalizePorts(node.ports);
+  if (L2){ spreadPorts(L2, side); }
+  reindex();
+  return p;
+}
+/* 把「往 dir 生成」这件事真正落到边上：aSide/bSide + 两端各自的端点 */
+function applySpawnDir(e, from, to, dir){
+  if (!e) return;
+  const pair = SPAWN_SIDES[dir];
+  if (!pair) return;
+  e.aSide = pair[0]; e.bSide = pair[1];
+  e.aPort = null; e.bPort = null;
+  reindex(); sizeAll();
+  const pa = ensurePortOn(from, pair[0]);
+  const pb = ensurePortOn(to, pair[1]);
+  if (pa) pinEdgePort(e, 'a', from, pa);
+  if (pb) pinEdgePort(e, 'b', to, pb);
+  reindex(); sizeAll();
+}
 function spawnInDirection(dir){
   const n = soleSel();
   if (!n){ say('* 先选中一个节点，再按方向键（或 WASD）。'); return; }
   const nn = addNodeAt('', n.x, n.y, 'rect');
-  linkNodes(n.id, nn.id);
+  const ne = linkNodes(n.id, nn.id);
   reindex(); sizeAll();
   const pos = spawnPos(n, dir, nn.w, nn.h, nn);
   nn.x = pos.x; nn.y = pos.y;
+  /* ★ 必须把方向告诉连线。
+     以前这里只调了 linkNodes、什么都不说 —— 线只能自动挑边，
+     于是往下生成却从右边连出来。 */
+  applySpawnDir(ne, n, nn, dir);
   afterSpawn(nn);
   say('* 已在' + ({ up:'上', down:'下', left:'左', right:'右' })[dir] + '方生成新节点。');
 }

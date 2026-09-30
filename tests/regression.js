@@ -7911,6 +7911,45 @@
     ok('TB10l 待确认状态存在', 'pendingTableDel' in window || typeof pendingTableDel !== 'undefined');
     ok('TB10m 画得出来', (dirty = true, draw(), true));
   });
+
+  T('SP01 方向键生成子节点：连接方向要跟着走', () => {
+    const CASES = [['right','r','l'], ['left','l','r'], ['up','t','b'], ['down','b','t']];
+    for (const [dir, as, bs] of CASES){
+      fresh(); layoutMind();
+      const n = nodeByText('节点');
+      selectOnly(n.id); reindex(); sizeAll();
+      spawnInDirection(dir);
+      skipDlg();
+      reindex(); sizeAll();
+      const nn = doc.nodes[doc.nodes.length - 1];
+      const e = doc.edges[doc.edges.length - 1];
+      ok('SP01 ' + dir + '：边记下的方向对', e.aSide === as && e.bSide === bs,
+        'aSide=' + e.aSide + ' bSide=' + e.bSide);
+      // ★ 真正的验收：锚点必须落在对应的那条边上（用户看的是这个）
+      const pa = portById(byId(n.id), e.aPort) || portList(byId(n.id)).outs.concat(portList(byId(n.id)).ins).filter(p => p.side === as)[0];
+      const pb = portById(byId(nn.id), e.bPort) || portList(byId(nn.id)).ins.concat(portList(byId(nn.id)).outs).filter(p => p.side === bs)[0];
+      ok('SP01' + dir + 'b ' + dir + '：两端都钉在' + as + '/' + bs + ' 边上',
+        !!pa && !!pb && pa.side === as && pb.side === bs,
+        (pa ? pa.side : '?') + ' / ' + (pb ? pb.side : '?'));
+      const ep = edgeEndpoints(e);
+      const b1 = nodeBox(byId(n.id)), b2 = nodeBox(byId(nn.id));
+      const onSide = (pt, b, s) => {
+        if (s === 'r') return Math.abs(pt.x - (b.x + b.w)) < 2;
+        if (s === 'l') return Math.abs(pt.x - b.x) < 2;
+        if (s === 't') return Math.abs(pt.y - b.y) < 2;
+        return Math.abs(pt.y - (b.y + b.h)) < 2;
+      };
+      ok('SP01' + dir + 'c 起点锚点贴在节点' + as + '边', onSide(ep.a, b1, as),
+        JSON.stringify(ep.a) + ' node=' + JSON.stringify(b1));
+      ok('SP01' + dir + 'd 终点锚点贴在节点' + bs + '边', onSide(ep.b, b2, bs),
+        JSON.stringify(ep.b) + ' node=' + JSON.stringify(b2));
+      // 新节点确实在那个方向上
+      const dx = (b2.x + b2.w / 2) - (b1.x + b1.w / 2);
+      const dy = (b2.y + b2.h / 2) - (b1.y + b1.h / 2);
+      const want = { right:dx > 0, left:dx < 0, up:dy < 0, down:dy > 0 }[dir];
+      ok('SP01' + dir + 'e 新节点确实在' + dir + '边', want, 'dx=' + Math.round(dx) + ' dy=' + Math.round(dy));
+    }
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
