@@ -5372,6 +5372,129 @@
       controlValue(byId(area.id).varDef, area.id));
   });
 
+
+  /* ==================== 作用域合并：局内 = 下游 ∪ 指到的分组 ==================== */
+  T('SC01 只剩两种作用域，老存档的「组内」自动并进「局内」', () => {
+    ok('SC01 只有全局和局内', VAR_SCOPES.length === 2 && VAR_SCOPES.join(',') === 'global,local',
+      VAR_SCOPES.join(','));
+    ok('SC01b 标签表里没有组内了', !VAR_SCOPE_LABEL.group && VAR_SCOPE_LABEL.global && VAR_SCOPE_LABEL.local,
+      JSON.stringify(VAR_SCOPE_LABEL));
+    ok('SC01c 提示语里说明了分组那条路', /\{?下游|分组/.test(VAR_SCOPE_HINT.local)
+      && /分组/.test(VAR_SCOPE_HINT.local), VAR_SCOPE_HINT.local);
+    // 老存档迁移
+    ok('SC01d 老存档的 group 读进来变成 local',
+      normalizeVarDef({ scope:'group' }).scope === 'local',
+      normalizeVarDef({ scope:'group' }).scope);
+    ok('SC01e 两种都认，非法值退回全局',
+      normalizeVarDef({ scope:'global' }).scope === 'global'
+      && normalizeVarDef({ scope:'外星' }).scope === 'global'
+      && normalizeVarDef({}).scope === 'global');
+    // 存读往返
+    fresh(); layoutMind();
+    const v = mkVar('x', '1', { scope:'local' });
+    reindex();
+    ok('SC01f 存档里写的是 local', serialize().nodes.find(n => n.id === v.id).varDef.scope === 'local');
+    ok('SC01g 老文档也能正常打开', (() => {
+      const snap = serialize();
+      snap.nodes.find(n => n.id === v.id).varDef.scope = 'group';   // 假装是个老文件
+      deserialize(snap);
+      return normalizeVarDef(byId(v.id).varDef).scope === 'local';
+    })(), normalizeVarDef(byId(v.id).varDef).scope);
+  });
+  T('SC02 局内的两条路：下游、以及指到的分组', () => {
+    fresh(); layoutMind();
+    const v = mkVar('lv', '5', { scope:'local' });
+    ok('SC02 前置：示例节点都在',
+      !!(nodeByText('操作') && nodeByText('连线')
+        && nodeByText('矩形 / 圆角 / 菱形 / 椭圆') && nodeByText('Tab 加子节点')),
+      ['操作','连线','矩形 / 圆角 / 菱形 / 椭圆','Tab 加子节点'].map(t => t + '=' + !!nodeByText(t)).join(' '));
+    const down  = nodeByText('操作');          // 会被连成下游
+    const side  = nodeByText('连线');          // 不连，也不在分组里
+    // ⚠ 这两个必须**不在** down 的下游，否则「下游」那条路就先通了，验不到分组那条
+    const inGrp = nodeByText('矩形 / 圆角 / 菱形 / 椭圆');   // 不连，但在分组里
+    const nested = nodeByText('Tab 加子节点');              // 在子分组里（套娃）
+    linkNodes(v.id, down.id);
+    // 直接建分组（createGroup 至少要选中两个节点，这里用不上那套）
+    const outer = newEmptyGroup(0, 0);
+    const inner = newEmptyGroup(0, 0);
+    outer.members = [inGrp.id, inner.id];      // inner 是 outer 的子分组（套娃）
+    inner.members = [nested.id];
+    linkNodes(v.id, outer.id);                 // 变量 → 分组
+    reindex(); sizeAll();
+    ok('SC02 下游那条路通', resolveVar('lv', down.id) === '5', String(resolveVar('lv', down.id)));
+    ok('SC02b 分组那条路通', resolveVar('lv', inGrp.id) === '5', String(resolveVar('lv', inGrp.id)));
+    ok('SC02c 套娃里的成员也算（对全组有效）', resolveVar('lv', nested.id) === '5',
+      String(resolveVar('lv', nested.id)));
+    ok('SC02d 两条路都不沾的看不到', resolveVar('lv', side.id) === null,
+      String(resolveVar('lv', side.id)));
+    ok('SC02e 下游的下游也算', (() => {
+      const deeper = nodeByText('空格折叠子树') || nodeByText('折叠子树');
+      linkNodes(down.id, deeper.id);
+      reindex();
+      return resolveVar('lv', deeper.id) === '5';
+    })());
+    // 把分组那条边撤掉，组内的就看不到了（但下游还在）
+    doc.edges = doc.edges.filter(e => !(e.s === v.id && e.t === outer.id));
+    reindex();
+    ok('SC02f 撤掉「指向分组」那条边，组内就看不到了',
+      resolveVar('lv', inGrp.id) === null, String(resolveVar('lv', inGrp.id)));
+    ok('SC02g 但下游那条路不受影响', resolveVar('lv', down.id) === '5',
+      String(resolveVar('lv', down.id)));
+  });
+  T('SC03 合并之后，全局和局内的区别只有「要不要连线」', () => {
+    fresh(); layoutMind();
+    const far = nodeByText('拖端点改接');
+    const g = mkVar('G', '1', { scope:'global' });
+    const l = mkVar('L', '2', { scope:'local'  });
+    reindex();
+    ok('SC03 全局：零连线可取', resolveVar('G', far.id) === '1', String(resolveVar('G', far.id)));
+    ok('SC03b 局内：零连线取不到', resolveVar('L', far.id) === null, String(resolveVar('L', far.id)));
+    linkNodes(l.id, far.id);
+    reindex();
+    ok('SC03c 连上就能取', resolveVar('L', far.id) === '2', String(resolveVar('L', far.id)));
+    // 面板上的选项也只剩两个
+    fresh(); layoutMind();
+    selectOnly(nodeByText('节点').id);
+    openNodeBox(byId([...sel][0]));
+    const scopeEl = document.getElementById('nbVarScope');
+    // 换成变量节点再看
+    const vn = mkVar('q', '1');
+    selectOnly(vn.id);
+    openNodeBox(byId(vn.id));
+    ok('SC03d 面板里就两个作用域选项',
+      scopeEl.querySelectorAll('.opt').length === 2,
+      scopeEl.querySelectorAll('.opt').length + '：' + scopeEl.textContent);
+    ok('SC03e 选项文字是「全局」「局内」',
+      /全局/.test(scopeEl.textContent) && /局内/.test(scopeEl.textContent)
+      && !/组内/.test(scopeEl.textContent), scopeEl.textContent);
+    closeNodeBox();
+  });
+  T('SC04 函数分组的隔离不受合并影响', () => {
+    fresh(); layoutMind();
+    const fg = newEmptyGroup(0, 0); fg.isFunction = true;
+    const inner = mkVar('IN', '9', { scope:'global' });
+    const m1 = nodeByText('点选连线改样式');
+    fg.members = [inner.id, m1.id];
+    reindex();
+    ok('SC04 组内的全局，组内能用', resolveVar('IN', m1.id) === '9', String(resolveVar('IN', m1.id)));
+    ok('SC04b 组外看不到', (() => {
+      const out = nodeByText('拖端点改接');
+      return resolveVar('IN', out.id) === null;
+    })(), String(resolveVar('IN', nodeByText('拖端点改接').id)));
+    // 组内的局内变量，走「指向分组」那条路，也只有组内能用
+    ok('SC04c 组内的局内 + 指向分组，也只在组内生效', (() => {
+      const lv = mkVar('GL', '3', { scope:'local' });
+      const sub = newEmptyGroup(0, 0);
+      sub.members = [m1.id];
+      fg.members.push(lv.id, sub.id);
+      linkNodes(lv.id, sub.id);
+      reindex();
+      const insideOK = resolveVar('GL', m1.id) === '3';
+      const outsideOK = resolveVar('GL', nodeByText('拖端点改接').id) !== null;
+      return insideOK && !outsideOK;
+    })());
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -20,12 +20,16 @@
 const VAR_PRIORITY = 1000;        // 变量定义节点的默认优先级（最高）
 const OP_PRIORITY  = 100;         // 运算节点的默认优先级
 const OUT_PRIORITY = 900;         // 输出节点仅次于变量定义
-const VAR_SCOPES = ['global', 'local', 'group'];
-const VAR_SCOPE_LABEL = { global:'全局', local:'局内', group:'组内' };
+/* 作用域只有两种：
+     全局  同作用域内到处能用，不用连线
+     局内  范围有限 —— **下游**，或者**这个变量节点指到的那个分组内部**
+   以前「组内」是单独一种，现在并进局内了：两者本来就是「范围有限」的两种形态，
+   分成两个只是让人多做一道选择题。老存档里的 'group' 会在 normalizeVarDef 里并过来。 */
+const VAR_SCOPES = ['global', 'local'];
+const VAR_SCOPE_LABEL = { global:'全局', local:'局内' };
 const VAR_SCOPE_HINT = {
-  global:'本作用域内到处都能用',
-  local:'只有它的下游能用',
-  group:'把它连到一个分组，组内才能用'
+  global:'本作用域内到处都能用，不用连线',
+  local:'只有它的下游能用；把它连到一个分组，那个分组里也就能用了'
 };
 const VAR_TYPES = ['number', 'string'];
 const VAR_TYPE_LABEL = { number:'数字', string:'字符串' };
@@ -88,6 +92,7 @@ function normalizeVarDef(v){
   out.on = !!out.on;
   out.name = String(out.name == null ? '' : out.name).replace(/[{}.\s]/g, '') || 'x';
   if (VAR_TYPES.indexOf(out.type) < 0) out.type = 'number';
+  if (out.scope === 'group') out.scope = 'local';      // 老存档：组内已并入局内
   if (VAR_SCOPES.indexOf(out.scope) < 0) out.scope = 'global';
   out.value = String(out.value == null ? '' : out.value);
   return out;
@@ -278,12 +283,13 @@ function varVisibleIn(ctx, def, fromId){
   if (def.id === fromId) return true;
   const scopeId = scopeKeyOfIn(ctx, def.id);
   if (v.scope === 'global') return true;                  // 「全局」= 本作用域内全局
-  if (v.scope === 'local') return downstreamOfIn(ctx, def.id, scopeNodesIn(ctx, scopeId)).has(fromId);
-  // 组内：这个变量节点连到哪个分组，那个分组里的节点才能用
+  // 局内 = 「下游」或者「指到的那个分组内部」，两条路任一条走通就算可见
+  if (downstreamOfIn(ctx, def.id, scopeNodesIn(ctx, scopeId)).has(fromId)) return true;
   for (const e of ctx.edges){
     if (e.s !== def.id) continue;
     const grp = ctx.byGrp.get(e.t);
     if (!grp) continue;
+    // 指向分组 = 对全组有效（套娃里的成员也算）
     if (ctxGroupNodes(ctx, grp.id).indexOf(fromId) >= 0) return true;
   }
   return false;
