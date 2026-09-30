@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · 主题：Undertale
    全部颜色都走 CSS 变量（:root 里的 --w/--y/--r/... ），
    加新主题 = 复制这个文件改 :root 里的变量 + 在 src/core/theme.js 注册调色板。
@@ -55,7 +55,12 @@ body.dsh-ready{cursor:none}
 #brand{
   position:absolute;left:16px;top:16px;
   font-size:16px;letter-spacing:1px;
+  display:flex;align-items:flex-start;gap:10px;   /* 标识在左，文字在右 */
 }
+/* 标识里的 G：用主题变量上色（.mk 里的 stroke 是 var(--w)/var(--y)），
+   所以换主题它会跟着变色 —— 樱花主题下就是粉色。 */
+#brand .mk{ width:30px; height:30px; flex:none; display:block; margin-top:-2px; }
+#brand .tx{ min-width:0; }
 #brand small{display:block;font-size:16px;color:var(--g);letter-spacing:1px;margin-top:2px}
 #topbar{
   position:absolute;right:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;

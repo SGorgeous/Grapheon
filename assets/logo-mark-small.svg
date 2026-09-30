@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"
+     role="img" aria-label="Grapheon">
+  <title>Grapheon</title>
+  <path d="M28.00 4.00 H4.00 V28.00 H28.00 V18.22 H18.22" transform="translate(0,0)" fill="none" stroke="#ffffff"
+        stroke-width="4.89" stroke-linecap="butt" stroke-linejoin="miter"
+        shape-rendering="crispEdges"/>
+  <path d="M28.00 4.00 H13.33" transform="translate(0,0)" fill="none" stroke="#ffd800"
+        stroke-width="4.89" stroke-linecap="butt" shape-rendering="crispEdges"/>
+</svg>
