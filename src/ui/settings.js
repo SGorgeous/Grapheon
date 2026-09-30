@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · ui/settings.js
    设置面板：主题 / 背景 / 默认节点外观 / 新连线样式 / 快捷键。
@@ -74,6 +74,15 @@ function renderSettings(){
     setGridPref(s);
     renderSettings();
   });
+  // 背景特效开关（目前只有樱花）
+  const hasFx = themeEffect() === 'sakura';
+  setFxEl.parentElement.style.display = hasFx ? 'flex' : 'none';
+  if (hasFx){
+    buildOpts(setFxEl, [[true, '飘落的樱花'], [false, '关掉（省电）']], sakuraEnabled(), (v) => {
+      setSakuraEnabled(v === true || v === 'true');
+      renderSettings();
+    });
+  }
   // 默认字体 / 字号
   buildOpts(setFontEl, fontChoices(), defaults.font, (k) => {
     defaults.font = k; saveDefaults(); renderSettings();
@@ -180,6 +189,7 @@ setFontForgetEl.onclick = () => {
 };
 
 /* ---------------- 素材库（用户文件夹） ---------------- */
+const setFxEl = document.getElementById('setFx');
 const setUserDirEl = document.getElementById('setUserDir');
 const setUserNoteEl = document.getElementById('setUserNote');
 setUserDirEl.value = Store.dirName;

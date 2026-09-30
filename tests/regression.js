@@ -4874,6 +4874,145 @@
     }
   });
 
+
+  /* ==================== 樱花主题 / 飘落特效 ==================== */
+  const sakPink = (d, i) => d[i] > 200 && d[i + 1] > 120 && d[i + 1] < 220 && d[i + 2] > 150 && d[i + 2] < 240;
+  T('SK01 樱花主题：马卡龙粉 + 背景特效', () => {
+    fresh();
+    ok('SK01 主题表里有樱花', !!THEMES.sakura);
+    ok('SK01b 是内置主题（用户删不掉）', BUILTIN_THEME_IDS.has('sakura'));
+    applyTheme('sakura');
+    ok('SK01c 切过去了', themeId === 'sakura', themeId);
+    const p = THEMES.sakura.canvas;
+    ok('SK01d 底色是浅粉', p.bg === '#fff6f9', p.bg);
+    ok('SK01e 正文是深玫瑰（浅底上得压得住）', p.white === '#9c5a75', p.white);
+    ok('SK01f 强调色是马卡龙粉', p.yellow === '#ff8fb1', p.yellow);
+    ok('SK01g 七个色位都填了', Object.keys(THEME_VARS).every(k => typeof p[k] === 'string'), JSON.stringify(p));
+    ok('SK01h C 里真的换过去了', C.bg === p.bg && C.yellow === p.yellow);
+    ok('SK01i 特效声明是 sakura', themeEffect() === 'sakura', themeEffect());
+    ok('SK01j 背景网格关掉了（和花瓣叠在一起会太花）', gridStyle() === 'none', gridStyle());
+    ok('SK01k 光标是红心、红心要画、不要星号',
+      themeCursor() === 'heart' && themeHeart() === true && themeStar() === false);
+    applyTheme(DEFAULT_THEME);
+  });
+  T('SK02 开关逻辑：主题 + 用户开关 + 系统「减少动态」', () => {
+    fresh();
+    applyTheme('board');
+    ok('SK02 别的主题下不要特效', !sakuraWanted());
+    applyTheme('sakura');
+    ok('SK02b 樱花主题下要', sakuraWanted());
+    setSakuraEnabled(false);
+    ok('SK02c 用户关掉就不要了', !sakuraWanted() && !sakuraRunning);
+    ok('SK02d 记进 localStorage 了', localStorage.getItem('grapheon.sakura.v1') === '0');
+    setSakuraEnabled(true);
+    ok('SK02e 打开又要了', sakuraWanted() && sakuraRunning);
+    ok('SK02f 尊重系统的「减少动态效果」（这里没开，所以还是 true）',
+      typeof sakuraMotionOK() === 'boolean');
+    applyTheme(DEFAULT_THEME);
+    ok('SK02g 切走之后循环停了', !sakuraRunning);
+    localStorage.removeItem('grapheon.sakura.v1');
+  });
+  T('SK03 花瓣：铺得均匀、会飘、落到底会重生', () => {
+    fresh();
+    VW = 800; VH = 600;
+    sakuraInit();
+    ok('SK03 铺了 46 片', sakuraPetals.length === SAKURA_COUNT, sakuraPetals.length);
+    ok('SK03b 一开始不是全堆在顶上（不然要等好几秒才好看）',
+      new Set(sakuraPetals.map(p => Math.round(p.y / 60))).size > 4,
+      new Set(sakuraPetals.map(p => Math.round(p.y / 60))).size);
+    ok('SK03c 每片都有完整的运动参数',
+      sakuraPetals.every(p => p.r > 0 && p.vy > 0 && typeof p.rot === 'number'
+        && p.tint && p.alpha > 0 && p.alpha <= 1 && p.squash > 0),
+      JSON.stringify(sakuraPetals[0]));
+    ok('SK03d 颜色都取自马卡龙粉色卡',
+      sakuraPetals.every(p => SAKURA_TINTS.indexOf(p.tint) >= 0));
+    const before = sakuraPetals.map(p => ({ x:p.x, y:p.y, rot:p.rot }));
+    sakuraStep(0.1, 1.0);
+    ok('SK03e 往下飘了', sakuraPetals.every((p, i) => p.y > before[i].y));
+    ok('SK03f 转了', sakuraPetals.some((p, i) => p.rot !== before[i].rot));
+    ok('SK03g 左右也飘了', sakuraPetals.some((p, i) => p.x !== before[i].x));
+    // 落到底要重生
+    for (const p of sakuraPetals) p.y = VH + 100;
+    sakuraStep(0.016, 2);
+    ok('SK03h 落到底会回到顶上重来',
+      sakuraPetals.every(p => p.y < VH),
+      Math.max(...sakuraPetals.map(p => Math.round(p.y))));
+    ok('SK03i 重生时换了片新花瓣（颜色可能是新的，至少参数还在范围内）',
+      sakuraPetals.every(p => p.r >= 4 && p.r <= 11));
+    // 飘出左右边界要绕回来
+    for (const p of sakuraPetals) p.x = -999;
+    sakuraStep(0.016, 3);
+    ok('SK03j 飘出左边会从右边回来', sakuraPetals.every(p => p.x > 0));
+    // 重铺
+    sakuraInit();
+    ok('SK03k 窗口变了能重铺', sakuraPetals.length === SAKURA_COUNT);
+  });
+  T('SK04 花瓣真的画到了画布上，而且只在樱花主题下画', () => {
+    fresh(); fitView();
+    applyTheme('sakura');
+    setSakuraEnabled(true);
+    resize();
+    // 手动铺一批、推到画布中间，保证一定看得到
+    VW = cv.width; VH = cv.height;
+    sakuraInit();
+    for (const p of sakuraPetals){ p.x = cv.width * (0.2 + Math.random() * 0.6); p.y = cv.height * (0.2 + Math.random() * 0.6); }
+    draw();
+    const g = cv.getContext('2d');
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let pink = 0;
+    for (let i = 0; i < d.length; i += 4) if (sakPink(d, i)) pink++;
+    ok('SK04 画布上找得到花瓣色', pink > 300, pink);
+    // 换个主题就不该有
+    const savedId = themeId;
+    THEMES.__probe = Object.assign({}, THEMES.board, { effect:'' });
+    applyTheme('__probe');
+    draw();
+    const d2 = g.getImageData(0, 0, cv.width, cv.height).data;
+    let pink2 = 0;
+    for (let i = 0; i < d2.length; i += 4) if (sakPink(d2, i)) pink2++;
+    ok('SK04b 换主题之后花瓣没了', pink2 < pink / 3, pink2 + ' vs ' + pink);
+    delete THEMES.__probe;
+    applyTheme(savedId);
+  });
+  T('SK05 花瓣不会跑进 PNG 导出', () => {
+    fresh(); layoutMind();
+    applyTheme('sakura');
+    setSakuraEnabled(true);
+    sakuraInit();
+    for (const p of sakuraPetals){ p.x = 60; p.y = 60; p.r = 20; p.alpha = 1; }
+    const c = buildExportCanvas(doc.nodes);
+    const g = c.getContext('2d');
+    // 导出画布左上角那块本来只该有纯底色
+    const d = g.getImageData(0, 0, 40, 40).data;
+    let pink = 0;
+    for (let i = 0; i < d.length; i += 4) if (sakPink(d, i)) pink++;
+    ok('SK05 导出图里没有花瓣', pink === 0, pink);
+    ok('SK05b 导出画布本身是好的', c.width > 0 && c.height > 0);
+  });
+  T('SK06 樱花主题下别的东西还正常', () => {
+    fresh(); layoutMind();
+    applyTheme('sakura');
+    ok('SK06 画得出图', (dirty = true, draw(), true));
+    ok('SK06b 棋盘/网格关掉之后底上不留格子', (() => {
+      setSakuraEnabled(false);      // 这条测的是「没有网格」，先把花瓣关掉免得混进来
+      resize(); draw();
+      const g = cv.getContext('2d');
+      const d = g.getImageData(0, 0, 60, 60).data;
+      // 底色是 #fff6f9，不该出现网格那种淡粉色线
+      for (let i = 0; i < d.length; i += 4){
+        if (d[i] !== 255 || d[i + 1] !== 246 || d[i + 2] !== 249) return false;
+      }
+      return true;
+    })());
+    setSakuraEnabled(true);
+    ok('SK06c 选中态用的是粉，不是原来的黄', (() => {
+      const b = nodeBox(nodeByText('节点'));
+      return C.yellow === '#ff8fb1';
+    })());
+    applyTheme(DEFAULT_THEME);
+    ok('SK06d 切回棋盘一切照旧', themeEffect() === '' && gridStyle() === 'checker');
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

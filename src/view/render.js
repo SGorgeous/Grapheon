@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -21,6 +21,7 @@ function draw(){
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, VW, VH);
   drawGrid();
+  if (typeof drawSakura === 'function') drawSakura(ctx);   // 背景特效（樱花主题）
   ctx.save();
   ctx.translate(view.x, view.y);
   ctx.scale(view.z, view.z);

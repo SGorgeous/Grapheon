@@ -33,6 +33,25 @@ const THEMES = {
       grid:  '#1b1b1b'
     }
   },
+  /* 马卡龙粉：浅色底 + 深玫瑰字。背景交给飘落的樱花（effect:'sakura'），
+     所以网格关掉 —— 两者叠在一起会很花。 */
+  sakura: {
+    label: '樱花',
+    grid: 'none',
+    cursor: 'heart',
+    heart: true,
+    star: false,
+    effect: 'sakura',
+    canvas: {
+      bg:    '#fff6f9',
+      white: '#9c5a75',
+      yellow:'#ff8fb1',
+      red:   '#ff5f8d',
+      gray:  '#c1849b',
+      dim:   '#f2cfdc',
+      grid:  '#fbe6ee'
+    }
+  },
   undertale: {
     label: 'Undertale',
     grid: 'lines',
@@ -64,6 +83,8 @@ const themeHeart = () => currentTheme().heart !== false;
 const themeStar  = () => currentTheme().star  !== false;
 /* 光标外观：heart（红心）/ cross（十字准心） */
 const themeCursor = () => currentTheme().cursor || 'heart';
+/* 背景特效：目前只有 'sakura' */
+const themeEffect = () => currentTheme().effect || '';
 
 /* 背景样式：用户选过就用用户的，没选过跟随主题 */
 const GRID_STYLES = ['theme', 'lines', 'checker', 'dots', 'none'];
@@ -97,6 +118,7 @@ function applyTheme(id){
   document.body.classList.toggle('no-heart', !themeHeart());
   try { localStorage.setItem(THEME_KEY, themeId); } catch (e) {}
   if (typeof refreshCursorDom === 'function') refreshCursorDom();   // 换主题立刻换光标
+  if (typeof syncSakura === 'function') syncSakura();                // 樱花特效跟着开/关
   if (typeof mark === 'function') mark();
   return themeId;
 }
@@ -134,7 +156,7 @@ function normalizeThemeObject(o, fallbackLabel){
   return out;
 }
 /* 内置主题的 id，用户主题不许占用 */
-const BUILTIN_THEME_IDS = new Set(['board', 'undertale']);
+const BUILTIN_THEME_IDS = new Set(['board', 'undertale', 'sakura']);
 function makeUserThemeId(){
   let id;
   do { id = 'u_' + Math.random().toString(36).slice(2, 8); } while (THEMES[id]);

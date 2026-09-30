@@ -13,6 +13,7 @@ function boot(){
   loadTheme();          // 再定调色板，避免首帧闪一下
   loadBindings();       // 自定义快捷键
   loadOverlapPref();    // 防止节点重叠，默认开
+  loadSakuraPref();     // 樱花特效开关（跟随主题 / 用户关掉）
   loadDefaults();      // 新节点的默认外观 / 新连线样式
   loadExportPrefs();    // 上次用过的文件名 / 标题 / 导出范围
   resize();
@@ -43,7 +44,10 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-window.addEventListener('resize', () => { resize(); });
+window.addEventListener('resize', () => {
+  resize();
+  if (typeof sakuraResize === 'function') sakuraResize();   // 窗口变了重新铺花瓣
+});
 window.addEventListener('beforeunload', () => {
   if (insideEmbed()) return;      // 同上：别让内层覆盖外层存档
   try { localStorage.setItem(LS_KEY, JSON.stringify(serialize())); } catch(e){}
