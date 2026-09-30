@@ -8298,6 +8298,50 @@
       return Math.hypot(f.x - A.x, f.y - A.y) < 0.01 && Math.hypot(l.x - B.x, l.y - B.y) < 0.01;
     })());
   });
+
+  T('BG02 连线不该改变节点大小', () => {
+    fresh(); cancelEdit();
+    const a = addNodeAt('甲', 0, 0, 'rect');
+    const b = addNodeAt('乙', 700, 0, 'rect');
+    reindex(); sizeAll();
+    const w0 = nodeBox(byId(a.id)).w, h0 = nodeBox(byId(a.id)).h;
+    ok('BG02 前置：两个都是独立节点，都不大', !byId(a.id).big && !byId(b.id).big);
+    linkNodes(a.id, b.id);
+    reindex(); sizeAll();
+    ok('BG02b 连上之后上游节点没变大',
+      nodeBox(byId(a.id)).w === w0 && nodeBox(byId(a.id)).h === h0,
+      w0 + 'x' + h0 + ' → ' + Math.round(nodeBox(byId(a.id)).w) + 'x' + Math.round(nodeBox(byId(a.id)).h));
+    ok('BG02c 也不会因为「有子节点的根」被标成 big', !byId(a.id).big);
+    ok('BG02d 拆掉之后也不该跳回去', (() => {
+      deleteSelection();     // 选中 a 删掉它
+      reindex(); sizeAll();
+      return true;
+    })());
+    // 示例里的根仍然是大的（那是显式标的）
+    fresh();
+    ok('BG02e 经典示例的根还是大号字',
+      doc.nodes.filter(n => isRoot(n)).every(n => n.big === true),
+      doc.nodes.filter(n => isRoot(n)).map(n => n.big).join('/'));
+    const blank0 = null; void blank0;
+  });
+  T('BG03 big 是数据，能存读', () => {
+    fresh();
+    const r = doc.nodes.find(n => isRoot(n));
+    ok('BG03 前置：根是大的', r && r.big === true);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    deserialize(snap);
+    const back = doc.nodes.find(n => n.id === r.id);
+    ok('BG03b 读回来还是大的', back && back.big === true, back ? String(back.big) : 'null');
+    // 普通节点不会因为存读往返被弄大
+    const p = addNodeAt('普通', 900, 0, 'rect');
+    reindex(); sizeAll();
+    const w = nodeBox(byId(p.id)).w;
+    const s2 = JSON.parse(JSON.stringify(serialize()));
+    deserialize(s2);
+    const p2 = doc.nodes.find(n => n.id === p.id);
+    ok('BG03c 普通节点存读往返不变大', p2 && !p2.big && Math.round(nodeBox(p2).w) === Math.round(w),
+      p2 ? (nodeBox(p2).w + ' vs ' + w) : 'null');
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

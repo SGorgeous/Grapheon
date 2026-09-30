@@ -275,6 +275,7 @@ function frameDemoSection(i){
 function classicDoc(){
   const N = (text, shape) => ({ id:uid('n'), text, x:0, y:0, w:0, h:0, shape:shape || 'rect', collapsed:false, lines:[''] });
   const root = N('GRAPHEON');
+  root.big = true;              // 根用大号字（以前靠 reindex 的拓扑规则算出来）
   const a = N('节点');
   const b = N('连线');
   const c = N('操作');

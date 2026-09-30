@@ -152,12 +152,11 @@ function reindex(){
     idx.parent.set(e.t, e.s);
     idx.children.get(e.s).push(e.t);
   }
-  // 根 = 没有父节点；有子节点的根才用大号字
-  // （空白新文档里只有一个光杆中心节点，那个也当根处理，否则它是小号字，很怪）
-  for (const n of doc.nodes){
-    n.big = !idx.parent.has(n.id) &&
-            ((idx.children.get(n.id) || []).length > 0 || doc.nodes.length === 1);
-  }
+  /* ★ big 是**数据**，不在这里按拓扑重算。
+     以前是「有子节点的根就用大号字」，听起来合理，实际很难受：
+     用户随手把两个独立节点连起来，上游那个就突然从 148×48 变成 210×68
+     （sizeNode 对 big 节点有 w≥210 / h≥68 的下限）。
+     现在谁想大谁自己标 —— 两份示例都标好了。 */
   // 折叠：算一遍这个文档里所有「被藏起来」的东西（节点和分组都可能被藏）
   idx.hidden = computeHidden();
   // 选中集里不该留着看不见的东西
@@ -590,6 +589,7 @@ function serialize(){
       ports:normalizePorts(n.ports),
       priority:(n.priority == null || n.priority === '') ? null : n.priority,
       components:normalizeComponents(n.components),
+      big:!!n.big,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null })),
     edges: doc.edges.map(e => ({
@@ -641,6 +641,7 @@ function deserialize(d){
       ports:normalizePorts(n.ports),
       priority:(n.priority == null || n.priority === '') ? null : n.priority,
       components:normalizeComponents(n.components),
+      big:!!n.big,
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
         ? { doc:n.embed.doc } : null });
   }

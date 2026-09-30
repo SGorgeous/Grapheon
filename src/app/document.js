@@ -14,7 +14,9 @@ function newDocument(kind){
     loadDemo(kind === 'classic' ? 'classic' : 'all');
   } else {
     doc = { v:2, nodes:[], edges:[] };
-    const n = { id:uid('n'), text:'中心主题', x:0, y:0, w:0, h:0, shape:'rect', collapsed:false, lines:[''] };
+    // 光杆中心节点也用大号字 —— 显式标，不靠拓扑规则
+    const n = { id:uid('n'), text:'中心主题', x:0, y:0, w:0, h:0, shape:'rect',
+                collapsed:false, lines:[''], big:true };
     doc.nodes.push(n);
     sel.clear(); selEdgeId = null; editing = null; hideEditor();
     reindex(); sizeAll();
