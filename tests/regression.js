@@ -5013,6 +5013,188 @@
     ok('SK06d 切回棋盘一切照旧', themeEffect() === '' && gridStyle() === 'checker');
   });
 
+
+  /* ==================== 全局变量：定义后全作用域直接可用，无需连线 ==================== */
+  T('GX01 全局变量零连线，在所有能写字的地方都取得到', () => {
+    fresh(); layoutMind();
+    // 一个孤零零的全局变量节点，一条边都不连
+    const v = mkVar('总数', '42', { scope:'global' });
+    v.text = '全局：总数';
+    reindex(); sizeAll();
+    ok('GX01 前置：它真的没有任何连线',
+      !doc.edges.some(e => e.s === v.id || e.t === v.id),
+      doc.edges.filter(e => e.s === v.id || e.t === v.id).length + ' 条');
+
+    // 挑几个离它很远、也互不相连的节点
+    const a = nodeByText('节点'), b = nodeByText('折叠子树') || nodeByText('空格折叠子树');
+    const c = nodeByText('操作');
+    ok('GX01b 前置：这些节点和变量之间也没有连线',
+      [a, c].every(n => !doc.edges.some(e =>
+        (e.s === n.id && e.t === v.id) || (e.t === n.id && e.s === v.id))));
+
+    // ① 节点正文
+    a.text = '看板 {总数}';
+    // ② 连线标签
+    const e0 = doc.edges[0];
+    e0.label = '标签 {总数}';
+    // ③ 分组标题
+    sel.clear(); sel.add(a.id); sel.add(c.id);
+    const grp = createGroup();
+    grp.title = '组 {总数}';
+    // ④ 组件属性（文字 / 数字 / 颜色三种都试）
+    setComponent(a, 'badge', { text:'角标 {总数}' });
+    setComponent(a, 'outline', { width:'{总数}', color:'#00ff00' });
+    setComponent(c, 'opacity', { value:'{总数}' });
+    // ⑤ 优先级
+    c.priority = '{总数}';
+    // ⑥ 程序节点的数值
+    const pg = createProgramNode(0, 0);
+    setProgram(pg, { op:'move', key:'x', mode:'add', value:'{总数}' });
+    linkNodes(pg.id, b.id);
+    // ⑦ 输出节点（名字本身是标识符，不插值；但它按名字找变量时要能找到）
+    const out = addOutNode('总数', 0, 0);
+    reindex(); sizeAll();
+
+    ok('GX01c 节点正文：拿到 42', displayTextOf(byId(a.id)) === '看板 42', displayTextOf(byId(a.id)));
+    ok('GX01d 连线标签：拿到 42', displayLabelOf(doc.edges.find(x => x.id === e0.id)) === '标签 42',
+      displayLabelOf(doc.edges.find(x => x.id === e0.id)));
+    ok('GX01e 分组标题：拿到 42', displayTitleOf(byGroup(grp.id)) === '组 42',
+      displayTitleOf(byGroup(grp.id)));
+    ok('GX01f 组件的文字属性：拿到 42',
+      compText(byId(a.id), 'badge', 'text', 'node') === '角标 42',
+      compText(byId(a.id), 'badge', 'text', 'node'));
+    ok('GX01g 组件的数字属性：拿到 42',
+      compNumber(byId(a.id), 'outline', 'width', 'node', 0) === 42,
+      compNumber(byId(a.id), 'outline', 'width', 'node', 0));
+    ok('GX01h 组件的透明度：42 → 0.42', Math.abs(compOpacityOf(byId(c.id), 'node') - 0.42) < 1e-6,
+      compOpacityOf(byId(c.id), 'node'));
+    ok('GX01i 优先级：拿到 42', priorityOf(byId(c.id)) === 42, priorityOf(byId(c.id)));
+    ok('GX01j 程序节点的数值：位移真的加了 42', (() => {
+      const bb = nodeBox(byId(b.id));
+      return Math.abs(bb.x - (byId(b.id).x + 42)) < 0.01;
+    })(), JSON.stringify(nodeBox(byId(b.id))) + ' / 原始 x=' + byId(b.id).x);
+    ok('GX01k 输出节点按名字找到它，值就是 42',
+      outputValueIn(liveCtx(), byId(out.id)) === '42',
+      String(outputValueIn(liveCtx(), byId(out.id))));
+    ok('GX01l 上面这些地方，一个连线都没用到变量',
+      !doc.edges.some(e => e.s === v.id || e.t === v.id));
+
+    // 变量一改，上面所有地方一起跟着变
+    setVarDef(byId(v.id), { value:'7' });
+    reindex(); sizeAll();
+    ok('GX01m 改一次，全都跟着变',
+      displayTextOf(byId(a.id)) === '看板 7'
+      && displayLabelOf(doc.edges.find(x => x.id === e0.id)) === '标签 7'
+      && displayTitleOf(byGroup(grp.id)) === '组 7'
+      && priorityOf(byId(c.id)) === 7,
+      [displayTextOf(byId(a.id)), displayLabelOf(doc.edges.find(x => x.id === e0.id)),
+       displayTitleOf(byGroup(grp.id)), priorityOf(byId(c.id))].join(' | '));
+  });
+  T('GX02 全局变量的边界：普通分组不挡它，函数分组才挡', () => {
+    fresh(); layoutMind();
+    const v = mkVar('g', '5', { scope:'global' });
+    const far = nodeByText('点选连线改样式');
+    // 放进一个**普通**分组里，组外的还能用
+    sel.clear(); sel.add(far.id);
+    const g1 = newEmptyGroup(0, 0);
+    g1.members = [far.id];
+    reindex();
+    ok('GX02 普通分组不隔断全局变量', resolveVar('g', far.id) === '5', String(resolveVar('g', far.id)));
+    // 放进**函数分组**里，里面就看不到外面定义的了（这是之前定下的隔离规则）
+    g1.isFunction = true;
+    reindex();
+    ok('GX02b 函数分组内看不到外面定义的全局变量',
+      resolveVar('g', far.id) === null, String(resolveVar('g', far.id)));
+    ok('GX02c 但组内自己定义的全局变量，组内到处都能用', (() => {
+      const inner = mkVar('h', '9', { scope:'global' });
+      g1.members.push(inner.id);
+      reindex();
+      const r = resolveVar('h', far.id);
+      return r === '9';
+    })(), String(resolveVar('h', far.id)));
+    ok('GX02d 组内定义的不会漏到外面', (() => {
+      const outside = nodeByText('拖端点改接');
+      return resolveVar('h', outside.id) === null;
+    })());
+  });
+  T('GX03 只有「局内 / 组内」才需要连线，全局不需要', () => {
+    fresh(); layoutMind();
+    const far = nodeByText('拖端点改接');       // 离谁都远，也不相连
+    const gv = mkVar('G', '1', { scope:'global'  });
+    const lv = mkVar('L', '2', { scope:'local'   });
+    const pv = mkVar('P', '3', { scope:'group'   });
+    reindex();
+    ok('GX03 全局：不连线也能用', resolveVar('G', far.id) === '1', String(resolveVar('G', far.id)));
+    ok('GX03b 局内：不连线就看不到（它本来就是「仅下游」）',
+      resolveVar('L', far.id) === null, String(resolveVar('L', far.id)));
+    ok('GX03c 组内：没连到分组就看不到（它本来就要求连）',
+      resolveVar('P', far.id) === null, String(resolveVar('P', far.id)));
+    // 连上之后局内就能用了
+    linkNodes(lv.id, far.id);
+    reindex();
+    ok('GX03d 局内连上就能用了', resolveVar('L', far.id) === '2', String(resolveVar('L', far.id)));
+    // 组内连一个包含它的分组
+    sel.clear(); sel.add(far.id);
+    const g = newEmptyGroup(0, 0);
+    g.members = [far.id];
+    linkNodes(pv.id, g.id);
+    reindex();
+    ok('GX03e 组内连上分组就能用了', resolveVar('P', far.id) === '3', String(resolveVar('P', far.id)));
+  });
+  T('GX04 程序节点的数值：除了变量，普通数字和表达式混用也对', () => {
+    fresh(); layoutMind();
+    const v = mkVar('倍', '3');
+    const t1 = nodeByText('节点'), t2 = nodeByText('操作'), t3 = nodeByText('连线');
+    const pg = createProgramNode(0, 0);
+    // 先来一个纯数字的
+    setProgram(pg, { op:'style', key:'fsPx', mode:'add', value:16 });
+    linkNodes(pg.id, t1.id);
+    reindex();
+    const base = effFsPx(byId(t1.id));
+    ok('GX04 纯数字照旧（16 + 16 = 32）', base === FS + 16, base);
+    // 换成表达式
+    setProgram(byId(pg.id), { value:'{倍}' });
+    reindex();
+    ok('GX04b 表达式生效（16 + 3 = 19）', effFsPx(byId(t1.id)) === FS + 3, effFsPx(byId(t1.id)));
+    // 链式累加只在「数值」算符上生效（applyEdge 里就是那么写的），外貌算符不吃这一套
+    const pg2 = createProgramNode(0, 0);
+    setProgram(pg2, { op:'style', key:'fsPx', mode:'add', value:10 });
+    linkNodes(pg2.id, pg.id);
+    reindex();
+    ok('GX04b2 外貌算符之间不会互相加成', effFsPx(byId(t1.id)) === FS + 3, effFsPx(byId(t1.id)));
+    const vTarget = addNodeAt('带值', 0, 0, 'rect');
+    const pv1 = createProgramNode(0, 0);
+    setProgram(pv1, { op:'value', mode:'set', value:'{倍}' });     // 3
+    linkNodes(pv1.id, vTarget.id);
+    const pv2 = createProgramNode(0, 0);
+    setProgram(pv2, { op:'value', mode:'add', value:'10' });
+    linkNodes(pv2.id, pv1.id);                                      // 改它的操作数：3 + 10
+    reindex();
+    // pv2 改的是 pv1 的**操作数**（{倍}=3 变成 3+10=13），pv1 再把 13 set 给目标 —— 
+    // 不是「加两次」。applyEdge 里 reward 就是只改操作数。
+    ok('GX04b3 数值算符之间才链式累加（操作数 3 → 13，再 set 给目标）',
+      effValue(byId(vTarget.id)) === 13, String(effValue(byId(vTarget.id))));
+    ok('GX04c 表达式解析不出来时退回 0，不炸', (() => {
+      setProgram(byId(pg.id), { value:'{不存在的}' });
+      reindex();
+      return typeof effFsPx(byId(t1.id)) === 'number';
+    })(), effFsPx(byId(t1.id)));
+    ok('GX04d 形状 / 字体这类字符串值不受影响', (() => {
+      const pg3 = createProgramNode(0, 0);
+      setProgram(pg3, { op:'shape', mode:'set', value:'diamond' });
+      linkNodes(pg3.id, t2.id);
+      reindex();
+      return effShape(byId(t2.id)) === 'diamond';
+    })());
+    ok('GX04e 还能存读', (() => {
+      setProgram(byId(pg.id), { value:'{倍}' });
+      reindex();
+      const snap = JSON.parse(JSON.stringify(serialize()));
+      const raw = snap.nodes.find(n => n.id === pg.id).program;
+      return raw.value === '{倍}';
+    })(), JSON.stringify(serialize().nodes.find(n => n.id === pg.id).program));
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -80,7 +80,11 @@ const BUILTIN_COMPONENT_DEFS = [
   { id:'badge',   label:'角标',       scopes:ALL_SCOPES,          effect:'badge' },
   { id:'hideIf',  label:'条件隐藏',   scopes:ALL_SCOPES,          effect:'hideIf' },
   { id:'outline', label:'自定义描边', scopes:['node', 'group'],   effect:'outline' },
-  { id:'width',   label:'线宽',       scopes:['edge'],            effect:'width' }
+  { id:'width',   label:'线宽',       scopes:['edge'],            effect:'width' },
+  // 这两个效果本来只给「用户自定义组件」用，但既然有效果就该有直接的开关，
+  // 不然用户得自己拼一个组件才能染个色 —— 太绕。
+  { id:'tint',    label:'染色',       scopes:ALL_SCOPES,          effect:'tint' },
+  { id:'opacity', label:'透明度',     scopes:ALL_SCOPES,          effect:'opacity' }
 ];
 
 /* =========================================================================

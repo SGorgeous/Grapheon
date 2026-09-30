@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -388,6 +388,11 @@ function normalizeProgram(p){
   const keys = PROGRAM_KEYS[out.op].map(k => k[0]);
   if (keys.indexOf(out.key) < 0) out.key = keys[0];
   if (PROGRAM_MODES.indexOf(out.mode) < 0) out.mode = 'add';
+  // ★ 数值也可以是能引用变量的表达式（{倍数} 之类），那种要原样留着，
+  //   不能被下面的 Math.round(+value) 吃掉。真正的解析在 applyEdge 里做，
+  //   因为那里才知道这个程序节点是谁、作用域该锚在哪。
+  const isExpr = (typeof out.value === 'string' && out.value.indexOf('{') >= 0);
+  if (isExpr) return out;
   if (out.op === 'style' && out.key === 'font'){
     if (!NODE_FONTS[out.value]) out.value = 'auto';
   } else if (out.op === 'style' && (out.key === 'color' || out.key === 'border')){
@@ -398,6 +403,21 @@ function normalizeProgram(p){
     out.value = Math.round(+out.value || 0);
   }
   return out;
+}
+/* 把程序节点的数值解析成真正要用的值。
+   可引用的走插值，作用域锚在这个程序节点自己身上 ——
+   和「这个节点正文里直接写 {名字}」是同一套规则。
+   能解析成数字就用数字，否则保留字符串（形状 / 字体那些本来就吃字符串）。 */
+function resolveProgramValue(src, p){
+  if (typeof p.value !== 'string' || p.value.indexOf('{') < 0) return p.value;
+  const t = interpolateIn(liveCtx(), p.value, src.id);
+  const s = String(t).trim();
+  const n = Number(s);
+  if (s !== '' && !isNaN(n)) return n;
+  // 字符串类的算符（形状 / 字体 / 颜色）原样返回；
+  // 数值类的必须退回 0 —— 漏一个 NaN 进去，后面 Math.max(8, NaN) 会一路烂掉。
+  const strOp = (p.op === 'shape') || (p.op === 'style' && (p.key === 'font' || p.key === 'color' || p.key === 'border'));
+  return strOp ? t : 0;
 }
 function blankEff(){
   return { dx:0, dy:0, shape:null, color:null, border:null,
@@ -414,6 +434,8 @@ function applyEdge(e, bonus, eff){
                 : (tgtGrp ? groupAllNodes(tgtGrp.id).map(id => idx.byId.get(id)).filter(Boolean) : []);
   if (!targets.length) return false;
   const p = normalizeProgram(src.program);
+  // 数值可以是表达式（{倍数}），在这儿解析 —— 此时才知道锚点是这个程序节点
+  p.value = resolveProgramValue(src, p);
   // 程序节点之间可以链式累加：别的程序节点用「数值」算符改它的操作数
   if (bonus && bonus.has(src.id) && p.op === 'value') p.value = p.value + bonus.get(src.id);
   for (const tgt of targets){
