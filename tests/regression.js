@@ -7323,6 +7323,82 @@
     } else ok('LK06h 分组盒子也没被动过', true, '（没有分组）');
   });
 
+
+  T('LK07 锚点的方向 d 必须是 [dx,dy] 数组（线画不出来的真凶）', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('操作');
+    // 锚点形状：老的四向锚点长什么样，钉端点的就得长什么样
+    const plain = anchorsFor(nodeBox(byId(a.id)));
+    ok('LK07 老锚点的 d 是数组', Array.isArray(plain.r.d) && plain.r.d.length === 2,
+      JSON.stringify(plain.r.d));
+    // 钉端点的锚点
+    selectOnly(a.id);
+    const bn = nodeBox(byId(a.id));
+    const port = portList(byId(a.id)).outs[0];
+    movePort(byId(a.id), 'outs', port.id, { x:bn.x + bn.w * 0.3, y:bn.y + 2 });
+    reindex(); sizeAll();
+    const e = linkNodes(a.id, b.id, portList(byId(a.id)).outs[0].id, null);
+    reindex();
+    ok('LK07b 前置：钉上了端点', e && e.aPort != null);
+    // 直接看内部算出来的强制锚点
+    const fa = forcedAnchorOf(a.id, e.aPort);
+    ok('LK07c 强制锚点算得出来', !!fa, JSON.stringify(fa));
+    ok('LK07d ★ 它的 d 是数组 [dx,dy]', Array.isArray(fa.d) && fa.d.length === 2,
+      JSON.stringify(fa.d) + ' （是 ' + (typeof fa.d) + '）');
+    ok('LK07e d 两个分量都是有限数', isFinite(fa.d[0]) && isFinite(fa.d[1]),
+      JSON.stringify(fa.d));
+    ok('LK07f d 不是零向量', Math.hypot(fa.d[0], fa.d[1]) > 0.5, JSON.stringify(fa.d));
+    ok('LK07g 坐标也是有限数', isFinite(fa.x) && isFinite(fa.y), JSON.stringify(fa));
+    // ★ 几何里**不能有 NaN** —— NaN 会让整条路径画不出来
+    ok('LK07h 边的几何里没有 NaN', (() => {
+      const gg = edgeGeomFor(byId(e.id) ? e : e);
+      const pts = gg.pts || [gg.p0, gg.p1, gg.p2, gg.p3].filter(Boolean);
+      return pts.every(q => q && isFinite(q.x) && isFinite(q.y));
+    })(), JSON.stringify(edgeGeomFor(e).pts || edgeGeomFor(e).p0));
+    // 每条边、每种路线都不能有 NaN
+    ok('LK07i 所有边都算得出有限坐标', doc.edges.every(ee => {
+      const gg = edgeGeomFor(ee);
+      if (!gg) return false;
+      const pts = gg.pts || [gg.p0, gg.p1, gg.p2, gg.p3].filter(Boolean);
+      return pts.length >= 2 && pts.every(q => q && isFinite(q.x) && isFinite(q.y));
+    }), doc.edges.filter(ee => {
+      const gg = edgeGeomFor(ee);
+      if (!gg) return true;
+      const pts = gg.pts || [gg.p0, gg.p1, gg.p2, gg.p3].filter(Boolean);
+      return !(pts.length >= 2 && pts.every(q => q && isFinite(q.x) && isFinite(q.y)));
+    }).length + ' 条有问题');
+    // 曲线走线也走一遍
+    setEdgeStyle(byId(e.id), { route:'curve' });
+    reindex();
+    ok('LK07j 曲线走线的两端也是有限坐标', (() => {
+      const gg = edgeGeomFor(e);
+      const en = geomEndpoints(gg);
+      return !!en && isFinite(en.a.x) && isFinite(en.a.y) && isFinite(en.b.x) && isFinite(en.b.y);
+    })(), (() => { const en = geomEndpoints(edgeGeomFor(e)); return JSON.stringify(en); })());
+    // 钉了端点的边，起点必须真的是那个端点
+    setEdgeStyle(byId(e.id), { route:'ortho' });
+    reindex();
+    ok('LK07k 钉了端点的边起点就在端点上', (() => {
+      const en = geomEndpoints(edgeGeomFor(e));
+      const wp = portPoint(byId(a.id), portList(byId(a.id)).outs[0]);
+      return Math.hypot(en.a.x - wp.x, en.a.y - wp.y) < 1.5;
+    })());
+    ok('LK07l 整张图画得出来', (dirty = true, draw(), true));
+    // 真的画上去了：画布上找得到连线（白色描边）
+    const g = cv.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = C.bg; g.fillRect(0, 0, VW, VH);
+    g.save(); g.translate(view.x, view.y); g.scale(view.z, view.z);
+    drawEdge(g, byId(e.id) ? e : e);
+    g.restore();
+    const d2 = g.getImageData(0, 0, cv.width, cv.height).data;
+    let lit = 0;
+    for (let i = 0; i < d2.length; i += 4){
+      if (d2[i] > 200 && d2[i+1] > 200 && d2[i+2] > 200) lit++;
+    }
+    ok('LK07m 画布上真的看得到这条线', lit > 60, lit);
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

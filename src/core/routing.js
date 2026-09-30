@@ -19,7 +19,9 @@ function anchorsFor(n){
      出来的都是同一个端点的真实位置。
      光靠「哪条边」表达不了同一条边上的两个端点 —— 必须靠端点 id。 */
   if (n && n.__forced){
-    const f = { x:n.__forced.x, y:n.__forced.y, d:n.__forced.d || [1, 0] };
+    const dd = n.__forced.d;
+    const f = { x:n.__forced.x, y:n.__forced.y,
+                d:(Array.isArray(dd) && isFinite(dd[0]) && isFinite(dd[1])) ? dd : [1, 0] };
     return { r:f, l:f, t:f, b:f };
   }
   return A;
@@ -118,7 +120,11 @@ function forcedAnchorOf(nodeId, portId){
   const p = portById(n, portId);
   if (!p) return null;
   const pt = portPoint(n, p);
-  return { x:pt.x, y:pt.y, d:(typeof PORT_OUT === 'object' && PORT_OUT[p.side]) || [1, 0] };
+  // ⚠ d 必须是**数组 [dx,dy]** —— anchorsFor 里就是这个形状，
+  //   下游用 A.d[0] / A.d[1] 取方向。把 PORT_OUT 的 {x,y} 直接塞进去
+  //   会让方向变成 undefined、坐标变 NaN，线就画不出来了。
+  const o = (typeof PORT_OUT === 'object' && PORT_OUT[p.side]) || { x:1, y:0 };
+  return { x:pt.x, y:pt.y, d:[o.x, o.y] };
 }
 function edgeGeomFor(e){
   const wg = waypointGeom(e);
