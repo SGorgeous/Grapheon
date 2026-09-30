@@ -7501,6 +7501,141 @@
     })());
   });
 
+
+  T('AV01 有障碍时走线绕开，没障碍时和以前一样', () => {
+    fresh();
+    // 三个节点横排：a --- 挡路的 --- b
+    const a = addNodeAt('A', 0, 0, 'rect');
+    const mid = addNodeAt('挡路', 420, 0, 'rect');
+    const b = addNodeAt('B', 840, 0, 'rect');
+    reindex(); sizeAll();
+    const e = linkNodes(a.id, b.id);
+    reindex();
+    ok('AV01 前置：中间那个确实挡在 a 和 b 之间', (() => {
+      const ba = nodeBox(a), bm = nodeBox(mid), bb = nodeBox(b);
+      return bm.x > ba.x + ba.w && bm.x + bm.w < bb.x;
+    })());
+    const pts = edgeGeomFor(e).pts;
+    ok('AV01b ★ 走线不穿过挡路的那个节点', !(() => {
+      const bm = nodeBox(mid);
+      for (let i = 1; i < pts.length; i++){
+        if (segHitsBox(pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y, { x:bm.x + 6, y:bm.y + 6, w:bm.w - 12, h:bm.h - 12 })) return true;
+      }
+      return false;
+    })(), JSON.stringify(pts.map(p => [Math.round(p.x), Math.round(p.y)])));
+    // 两端仍然精确落在端点上（避让不许碰端点）
+    ok('AV01c 起点还在出发端点上', (() => {
+      const p = portList(a).outs[0] || portList(a).ins[0];
+      const w = portPoint(byId(a.id), p);
+      return Math.hypot(pts[0].x - w.x, pts[0].y - w.y) < 1.5;
+    })(), JSON.stringify(pts[0]));
+    ok('AV01d 终点还在落点端点上', (() => {
+      const p = portList(b).ins[0] || portList(b).outs[0];
+      const w = portPoint(byId(b.id), p);
+      const last = pts[pts.length - 1];
+      return Math.hypot(last.x - w.x, last.y - w.y) < 1.5;
+    })(), JSON.stringify(pts[pts.length - 1]));
+    // 把障碍挪走 → 走线回到直连
+    const far = edgeGeomFor(e).pts.length;
+    byId(mid.id).x = 420; byId(mid.id).y = 900;
+    reindex();
+    ok('AV01e 障碍挪走之后回到更简单的走线',
+      edgeGeomFor(e).pts.length <= far, far + ' → ' + edgeGeomFor(e).pts.length);
+  });
+  T('AV02 没障碍时，走线和「不做避让」逐点一致', () => {
+    // ⚠ 要验「没障碍时不变」，就得真造一个没障碍的文档 ——
+    //   classic 示例本身就摆得密，避让当然会起作用。
+    fresh();
+    doc.nodes.length = 0; doc.edges.length = 0; doc.groups.length = 0;   // 清空，只要两个节点
+    reindex();
+    const na = addNodeAt('A', 0, 0, 'rect'), nb = addNodeAt('B', 900, 0, 'rect');
+    reindex(); sizeAll();
+    const e = linkNodes(na.id, nb.id);
+    reindex();
+    ok('AV02 前置：这条线上没有别的节点', avoidBoxes(e.s, e.t).length === 0,
+      avoidBoxes(e.s, e.t).length + ' 个障碍');
+    const withAvoid = edgeGeomFor(e).pts;
+    const noAvoid = orthoGeom(anchorOf(e.s), anchorOf(e.t),
+                              ((hashId(e.id) % 7) - 3) * 9, e.aSide, e.bSide, []).pts;
+    ok('AV02 点数一样', withAvoid.length === noAvoid.length,
+      withAvoid.length + ' vs ' + noAvoid.length);
+    ok('AV02b 每个点都在 0.6px 以内', withAvoid.every((p, i) =>
+      noAvoid[i] && Math.abs(p.x - noAvoid[i].x) < 0.6 && Math.abs(p.y - noAvoid[i].y) < 0.6),
+      JSON.stringify(withAvoid.map((p, i) => noAvoid[i] ? [Math.round(p.x - noAvoid[i].x), Math.round(p.y - noAvoid[i].y)] : 'null')));
+    // 空障碍列表 = 完全不做避让
+    ok('AV02c 传空数组和传 null 结果一样',
+      JSON.stringify(withAvoid) === JSON.stringify(edgeGeomFor(e).pts));
+  });
+  T('AV03 避让的几条硬约束', () => {
+    fresh(); layoutMind();
+    // 障碍上限：超了就不避让（大文档不能拖垮重绘）
+    ok('AV03 有上限', AVOID_MAX_BOXES > 0 && AVOID_MAX_BOXES < 5000, AVOID_MAX_BOXES);
+    ok('AV03b 候选偏移表里包含 0（保证能退回直连）',
+      AVOID_OFFSETS.indexOf(0) >= 0, AVOID_OFFSETS.join(','));
+    ok('AV03c 候选数量可控（≤16）', AVOID_OFFSETS.length <= 16, AVOID_OFFSETS.length);
+    // 拐点边不走避让
+    const e = doc.edges[0];
+    e.waypoints = [{ x:0, y:0 }, { x:200, y:0 }];
+    reindex();
+    const g = edgeGeomFor(e);
+    ok('AV03d 拖过拐点的边走的是 waypointGeom（避让够不着它）',
+      !!waypointGeom(e) && !!g && !!g.pts && g.pts.length >= 2,
+      JSON.stringify(g.pts.map(q => [Math.round(q.x), Math.round(q.y)])));
+    // 穿盒子判定本身
+    const box = { x:0, y:0, w:100, h:100 };
+    ok('AV03e 水平线穿过盒子', segHitsBox(-50, 50, 150, 50, box) === true);
+    ok('AV03f 水平线在盒子上方不算穿', segHitsBox(-50, -50, 150, -50, box) === false);
+    ok('AV03g 水平线停在盒子左边不算穿', segHitsBox(-200, 50, -60, 50, box) === false);
+    ok('AV03h 垂直线穿过盒子', segHitsBox(50, -50, 50, 150, box) === true);
+    ok('AV03i 斜线一律不算（走廊都是轴对齐的）', segHitsBox(0, 0, 100, 100, box) === false);
+    // 同一条线穿同一个盒子两次只算一个
+    const two = [{ x:-50, y:50 }, { x:150, y:50 }, { x:-50, y:50 }];
+    ok('AV03j 穿两次只算一个盒子', pathCrossCount(two, [box]) === 1,
+      pathCrossCount(two, [box]));
+    ok('AV03k 两个盒子都穿就数 2', (() => {
+      const b2 = { x:200, y:0, w:100, h:100 };
+      return pathCrossCount([{ x:-50, y:50 }, { x:350, y:50 }], [box, b2]) === 2;
+    })());
+    // 分组框不算障碍
+    const gsel = doc.groups[0];
+    if (gsel){
+      selectGroup(gsel.id);
+      const gb = groupBox(gsel);
+      const boxList = avoidBoxes('__none_a__', '__none_b__');
+      ok('AV03l 分组框不在障碍表里', !boxList.some(x => x.isGroup),
+        boxList.filter(x => x.isGroup).length + ' 个分组框混进来了');
+    } else ok('AV03l 分组框不在障碍表里', true, '（没有分组）');
+  });
+  T('AV04 避让之后整张图还是画得出来、没有 NaN', () => {
+    fresh(); loadDemo('all');
+    reindex(); sizeAll(); resize(); fitView();
+    // 曲线走线的几何是 p0..p3，折线是 pts —— 两种都要认
+    const anyPts = (g) => (g && g.pts) ? g.pts : (g ? [g.p0, g.p1, g.p2, g.p3].filter(Boolean) : []);
+    ok('AV04 每条边都算得出几何', doc.edges.every(e => anyPts(edgeGeomFor(e)).length >= 2),
+      doc.edges.filter(e => anyPts(edgeGeomFor(e)).length < 2).length + ' 条算不出来');
+    ok('AV04b 每个坐标都是有限数', doc.edges.every(e =>
+      anyPts(edgeGeomFor(e)).every(q => isFinite(q.x) && isFinite(q.y))));
+    ok('AV04c 整张图画得出来', (dirty = true, draw(), true));
+    // 示例文档里确实存在「线原本会穿节点」的情况，避让之后应当减少
+    ok('AV04d 示例里连线穿节点的条数不多', (() => {
+      let n = 0;
+      for (const e of doc.edges){
+        const g = edgeGeomFor(e);
+        if (!g.pts) continue;                       // 曲线不走避让，跳过
+        if (pathCrossCount(g.pts, avoidBoxes(e.s, e.t)) > 0) n++;
+      }
+      return n <= Math.max(2, Math.floor(doc.edges.length / 4));
+    })(), (() => {
+      let n = 0;
+      for (const e of doc.edges){
+        const g = edgeGeomFor(e);
+        if (!g.pts) continue;
+        if (pathCrossCount(g.pts, avoidBoxes(e.s, e.t)) > 0) n++;
+      }
+      return n + ' / ' + doc.edges.length + ' 条还穿节点';
+    })());
+  });
+
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

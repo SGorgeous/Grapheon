@@ -47,7 +47,69 @@ function cub(p0, p1, p2, p3, t){
   const u = 1 - t, a = u*u*u, b = 3*u*u*t, c = 3*u*t*t, d = t*t*t;
   return { x:a*p0.x + b*p1.x + c*p2.x + d*p3.x, y:a*p0.y + b*p1.y + c*p2.y + d*p3.y };
 }
-function orthoGeom(a, b, bias, ka, kb){
+/* =========================================================================
+   走线避让：候选走廊打分
+   -------------------------------------------------------------------------
+   以前走廊偏移是「按边 id 哈希」算的，纯粹为了让平行线不重叠 ——
+   **完全不看节点在哪**，所以线会直接从别的节点身上穿过去。
+
+   现在改成：拿若干条候选走廊，逐条数它穿过几个障碍盒子，取最少的。
+   并列时取偏移最小的（尽量贴原来的走廊，视觉上稳）。
+
+   ★ 几条硬约束：
+     · 端点是钉死的，避让**只能改中间那段** —— 两端保持朝外方向不变
+     · 障碍只算节点，**分组框不算**（它套着节点，算进去会绕得离谱）
+     · 盒子太多就直接退回直连（大文档里逐条边避让会把重绘拖垮）
+     · 用户拖过拐点的边根本不走这儿（waypointGeom 在前面就返回了）
+   ========================================================================= */
+const AVOID_MAX_BOXES = 400;          // 障碍超过这个数就不避让了
+const AVOID_PAD = 6;                  // 离盒子多远算「擦到」
+const AVOID_OFFSETS = [0, 45, -45, 100, -100, 170, -170, 250, -250];
+let avoidBoxesCache = null, avoidBoxesKey = '';
+
+/* 当前文档里所有可以当障碍的盒子。按位置签名缓存 —— 没动就不重算。 */
+function avoidBoxes(excludeA, excludeB){
+  const list = [];
+  if (!idx.box) return list;
+  for (const b of idx.box.values()){
+    if (!b || b.id === excludeA || b.id === excludeB) continue;
+    if (isHidden(b.id)) continue;
+    list.push(b);
+    if (list.length > AVOID_MAX_BOXES) return list;      // 够多了，触发退回
+  }
+  return list;
+}
+/* 一条轴对齐线段是否穿过盒子 */
+function segHitsBox(x1, y1, x2, y2, box){
+  const bx0 = box.x - AVOID_PAD, bx1 = box.x + box.w + AVOID_PAD;
+  const by0 = box.y - AVOID_PAD, by1 = box.y + box.h + AVOID_PAD;
+  if (Math.abs(y1 - y2) < 0.5){                          // 水平段
+    if (y1 < by0 || y1 > by1) return false;
+    const a0 = Math.min(x1, x2), a1 = Math.max(x1, x2);
+    return !(a1 < bx0 || a0 > bx1);
+  }
+  if (Math.abs(x1 - x2) < 0.5){                          // 垂直段
+    if (x1 < bx0 || x1 > bx1) return false;
+    const a0 = Math.min(y1, y2), a1 = Math.max(y1, y2);
+    return !(a1 < by0 || a0 > by1);
+  }
+  return false;
+}
+/* 这条路径穿过几个**不同的**盒子（同一条线穿两次只算一个） */
+function pathCrossCount(pts, boxes){
+  if (!boxes.length) return 0;
+  let n = 0;
+  for (const box of boxes){
+    let hit = false;
+    for (let i = 1; i < pts.length && !hit; i++){
+      if (segHitsBox(pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y, box)) hit = true;
+    }
+    if (hit) n++;
+  }
+  return n;
+}
+
+function orthoGeom(a, b, bias, ka, kb, obstacles){
   bias = bias || 0;
   const ac = { x:a.x + a.w / 2, y:a.y + a.h / 2 };
   const bc = { x:b.x + b.w / 2, y:b.y + b.h / 2 };
@@ -74,19 +136,56 @@ function orthoGeom(a, b, bias, ka, kb){
   const p3 = { x:B.x, y:B.y };
   const p2 = { x:B.x + B.d[0] * STUB, y:B.y + B.d[1] * STUB };
   const h1 = A.d[0] !== 0, h2 = B.d[0] !== 0;
-  const pts = [p0, p1];
-  if (h1 && h2){
-    const mx = (p1.x + p2.x) / 2 + bias;
-    pts.push({ x:mx, y:p1.y }, { x:mx, y:p2.y });
-  } else if (!h1 && !h2){
-    const my = (p1.y + p2.y) / 2 + bias;
-    pts.push({ x:p1.x, y:my }, { x:p2.x, y:my });
-  } else if (h1 && !h2){
-    pts.push({ x:p2.x + (Math.abs(p1.y - p2.y) < 1 ? bias : 0), y:p1.y });
-  } else {
-    pts.push({ x:p1.x, y:p2.y + (Math.abs(p1.x - p2.x) < 1 ? bias : 0) });
+  /* 给一个走廊偏移，造出这条折线。避让只动中间那一段 ——
+     两端 p0→p1、p2→p3 是端点朝外的固定短桩，永远不变，
+     否则线会从端点上斜着飞出去。 */
+  const buildPts = (off) => {
+    const q = [p0, p1];
+    if (h1 && h2){
+      const mx = (p1.x + p2.x) / 2 + off;
+      q.push({ x:mx, y:p1.y }, { x:mx, y:p2.y });
+    } else if (!h1 && !h2){
+      const my = (p1.y + p2.y) / 2 + off;
+      q.push({ x:p1.x, y:my }, { x:p2.x, y:my });
+    } else if (h1 && !h2){
+      q.push({ x:p2.x + (Math.abs(p1.y - p2.y) < 1 ? off : 0), y:p1.y });
+    } else {
+      q.push({ x:p1.x, y:p2.y + (Math.abs(p1.x - p2.x) < 1 ? off : 0) });
+    }
+    q.push(p2, p3);
+    return q;
+  };
+  let pts = buildPts(bias);
+  const boxes = (obstacles && obstacles.length <= AVOID_MAX_BOXES) ? obstacles : null;
+  if (boxes && boxes.length){
+    /* 两类候选：
+       ① 挪走廊 —— 偏移中间那段的位置
+       ② 绕行   —— 障碍正挡在两端之间时，① 是没用的
+                   （两端都朝左右时，挪走廊只动竖直那段，
+                     水平那一段该穿还是穿），得整个绕上去 / 绕下去 */
+    const cands = [];
+    for (const d of AVOID_OFFSETS) cands.push({ pts:buildPts(bias + d), d });
+    const my1 = p1.y + bias, my2 = p2.y + bias;
+    for (const d of AVOID_OFFSETS){
+      if (d === 0) continue;
+      const my = (my1 + my2) / 2 + d;
+      const q = [p0, p1];
+      if (h1 && h2) q.push({ x:p1.x, y:my }, { x:p2.x, y:my });
+      else if (!h1 && !h2) q.push({ x:p1.x + d, y:p1.y }, { x:p1.x + d, y:p2.y });
+      else break;
+      q.push(p2, p3);
+      cands.push({ pts:q, d });
+    }
+    let bestC = null;
+    for (const c of cands){
+      const cross = pathCrossCount(c.pts, boxes);
+      // 穿过几个盒子是首要的（权重远大于偏移）；并列时取偏移小的
+      const score = cross * 10000 + Math.abs(c.d);
+      if (!bestC || score < bestC.score) bestC = { score, pts:c.pts, cross, d:c.d };
+      if (cross === 0 && c.d === 0) break;               // 直连就干净，不用再试
+    }
+    if (bestC) pts = bestC.pts;
   }
-  pts.push(p2, p3);
   const clean = [pts[0]];
   for (let i = 1; i < pts.length; i++){
     const q = pts[i], p = clean[clean.length - 1];
@@ -177,7 +276,9 @@ function edgeGeomFor(e){
   const fb = forcedAnchorOf(e.t, pb); if (fb) b.__forced = fb;
   if (e.route === 'curve') return bezierGeom(a, b, e.aSide, e.bSide);
   // 正交折线：按 id 哈希给每条线一点走廊偏移，避免平行线完全重叠
-  return orthoGeom(a, b, ((hashId(e.id) % 7) - 3) * 9, e.aSide, e.bSide);
+  // 障碍：除两端之外的所有节点盒子（分组框不算 —— 它套着节点，算进去会绕得离谱）
+  return orthoGeom(a, b, ((hashId(e.id) % 7) - 3) * 9, e.aSide,
+                   e.bSide, avoidBoxes(e.s, e.t));
 }
 /* 几何的两端（用于拖拽端点、画箭头） */
 function geomEndpoints(geom){
