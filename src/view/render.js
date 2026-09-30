@@ -667,6 +667,8 @@ function drawNode(g, n){
   }
   // 组件（角标 / 自定义描边）—— 画在选中态之前，免得盖住手柄
   if (typeof drawEntityComponents === 'function') drawEntityComponents(g, n, b, 'node');
+  // 端点小圆点：悬停 / 选中时带标签
+  if (typeof drawPorts === 'function' && !isEmbed(n)) drawPorts(g, n, portsShowLabel(n));
   if (selected){
     if (themeHeart()) drawHeart(g, b.x - 26, b.y + b.h / 2 - 6.5, 2);   // 主题说不画就不画
     // 右下角缩放手柄

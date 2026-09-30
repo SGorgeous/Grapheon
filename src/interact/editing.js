@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ==========================================================================
    GRAPHEON · interact/editing.js
    行内编辑（浮层 textarea）：节点文本 / 连线标签 / 分组标题。
@@ -24,6 +24,8 @@ const editValue = (kind, t) => {
   if (kind === 'outName') return normalizeOutDef(t.outDef).name;
   if (kind === 'checkOpts') return normalizeVarDef(t.varDef).options.join(', ');
   if (kind === 'cell') return (tableOf(t).cells[editing.row] || [])[editing.col] || '';
+  if (kind === 'portLabel') return (portById(t, editing.portId) || {}).label || '';
+  if (kind === 'portId') return String(editing.portId);
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
   if (/^opVal[0-9]+$/.test(kind)) return normalizeOpDef(t.opDef).operands[+kind.slice(5)] || '';
   return t.text;
@@ -37,6 +39,10 @@ function editSetValue(kind, t, v){
   else if (kind === 'outName') t.outDef = normalizeOutDef({ name:v });
   else if (kind === 'checkOpts') setCheckOptions(t, v);
   else if (kind === 'cell') setTableCell(t, editing.row, editing.col, v.trim());
+  else if (kind === 'portLabel') setPortLabel(t, editing.dir, editing.portId, v.trim());
+  else if (kind === 'portId'){
+    if (setPortId(t, editing.dir, editing.portId, v.trim())) editing.portId = Math.round(+v.trim());
+  }
   else if (kind === 'opVal' || /^opVal[0-9]+$/.test(kind)){
     const i = kind === 'opVal' ? 0 : +kind.slice(5);
     const args = normalizeOpDef(t.opDef).operands.slice();
@@ -86,6 +92,7 @@ function positionEditor(){
     editor.style.textAlign = 'left';
   } else if (editing.kind === 'varName' || editing.kind === 'varValue'
              || editing.kind === 'outName' || editing.kind === 'checkOpts' || editing.kind === 'cell'
+             || editing.kind === 'portLabel' || editing.kind === 'portId'
              || editing.kind === 'opOp' || /^opVal[0-9]?$/.test(editing.kind)){
     // 变量 / 运算节点里那一个个小框：直接把编辑框盖上去
     const n = byId(editing.id);

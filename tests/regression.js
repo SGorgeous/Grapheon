@@ -1829,7 +1829,7 @@
     cv.dispatchEvent(new MouseEvent('contextmenu', { clientX:c.x, clientY:c.y, bubbles:true, cancelable:true }));
     ok('M01 根菜单打开', ctxEl.style.display === 'block');
     const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
-    ok('M01b 根菜单收短了（≤10 项）', tops.length <= 10, tops.length + ' 项: ' + tops.join(' | '));
+    ok('M01b 根菜单收短了（≤11 项（加「端点」之后放宽一格））', tops.length <= 11, tops.length + ' 项: ' + tops.join(' | '));
     ok('M01c 有「形状」子菜单', tops.indexOf('形状') >= 0, tops.join(' | '));
     ok('M01d 顶层不再平铺四个形状', tops.indexOf('矩形') < 0 && tops.indexOf('菱形（判断）') < 0, tops.join(' | '));
     ok('M01e 子菜单项右边有 ▶', !!document.querySelector('.menu .item.sub .k'));
@@ -6647,6 +6647,221 @@
       String(valueFromUpstream(liveCtx(), dst.id)));
     ok('FA06b 输出节点自己有值', outputValueIn(liveCtx(), byId(out.id)) === 85,
       String(outputValueIn(liveCtx(), byId(out.id))));
+  });
+
+
+  /* ==================== B 期：端点模型 ==================== */
+  T('PB01 默认端点：位置和以前那套四向中点完全一致', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const L = portList(n);
+    ok('PB01 默认一个输入一个输出', L.ins.length === 1 && L.outs.length === 1,
+      L.ins.length + '/' + L.outs.length);
+    ok('PB01b 输入在左边、输出在右边', L.ins[0].side === 'l' && L.outs[0].side === 'r');
+    ok('PB01c 都在正中', L.ins[0].at === 0.5 && L.outs[0].at === 0.5);
+    ok('PB01d id 是正整数且不重复',
+      L.ins[0].id > 0 && L.outs[0].id > 0 && L.ins[0].id !== L.outs[0].id,
+      L.ins[0].id + ' / ' + L.outs[0].id);
+    // ★ 关键：默认端点的坐标必须和老的 portPos 一样
+    const b = nodeBox(n);
+    ok('PB01e 输入点在左边中点',
+      (() => { const p = portPoint(byId(n.id), L.ins[0]); return p.x === b.x && Math.abs(p.y - (b.y + b.h/2)) < 1e-6; })(),
+      JSON.stringify(portPoint(byId(n.id), L.ins[0])));
+    ok('PB01f 输出点在右边中点',
+      (() => { const p = portPoint(byId(n.id), L.outs[0]); return p.x === b.x + b.w && Math.abs(p.y - (b.y + b.h/2)) < 1e-6; })());
+    ok('PB01g 没有 ports 字段就是默认（老存档零改动）',
+      byId(n.id).ports === undefined || byId(n.id).ports === null);
+  });
+  T('PB02 规矩：id 纯数字、正整数、节点内不重复', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    ok('PB02 改 id 成功', setPortId(byId(n.id), 'ins', 1, 7) === true);
+    ok('PB02b 改成 7 了', portList(byId(n.id)).ins[0].id === 7, portList(byId(n.id)).ins[0].id);
+    ok('PB02c 撞已有 id 会被拒绝', setPortId(byId(n.id), 'outs', 3, 7) === false);
+    skipDlg();
+    ok('PB02d 拒绝时说清楚了', /已经用过/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+    ok('PB02e 被拒绝后原来的没被偷改', portList(byId(n.id)).outs[0].id === 3,
+      portList(byId(n.id)).outs[0].id);
+    ok('PB02f 0 / 负数 / 小数都不行', (() => {
+      const ok0 = setPortId(byId(n.id), 'ins', 7, 0) === false;
+      skipDlg();
+      const okNeg = setPortId(byId(n.id), 'ins', 7, -3) === false;
+      skipDlg();
+      const okFrac = setPortId(byId(n.id), 'ins', 7, '8.6') === true;   // 取整成 9（3 被输出端点占了）
+      return ok0 && okNeg && okFrac && portList(byId(n.id)).ins[0].id === 9;
+    })(), String(portList(byId(n.id)).ins[0].id));
+    skipDlg();
+    ok('PB02g 非数字不行', (() => { skipDlg(); return setPortId(byId(n.id), 'ins', 3, 'abc') === false; })());
+    skipDlg();
+    ok('PB02h 恢复默认', (() => { resetPorts(byId(n.id)); return portList(byId(n.id)).ins[0].id === 1; })(),
+      String(portList(byId(n.id)).ins[0].id));
+  });
+  T('PB03 标签：能改，默认空', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    ok('PB03 默认标签是空的', portList(byId(n.id)).ins[0].label === '');
+    ok('PB03b 能改', setPortLabel(byId(n.id), 'ins', 1, '系数') === true);
+    ok('PB03c 改上了', portList(byId(n.id)).ins[0].label === '系数',
+      portList(byId(n.id)).ins[0].label);
+    ok('PB03d 只影响指定的那个',
+      portList(byId(n.id)).outs[0].label === '', portList(byId(n.id)).outs[0].label);
+    ok('PB03e 引用作用域外的东西不炸', setPortLabel(byId(n.id), 'ins', 999, 'x') === false);
+  });
+  T('PB04 加 / 删端点：同一路上会均匀铺开', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    const a = addPort(byId(n.id), 'ins');
+    ok('PB04 加了一个输入端点', a && portList(byId(n.id)).ins.length === 2,
+      portList(byId(n.id)).ins.length);
+    ok('PB04b 新 id 不和已有的撞',
+      usedPortIds(byId(n.id)).size === 3, usedPortIds(byId(n.id)).size);
+    // 再加两个，凑到 4 个输入，看 at 会不会排开
+    addPort(byId(n.id), 'ins'); addPort(byId(n.id), 'ins');
+    const ins = portList(byId(n.id)).ins;
+    ok('PB04c 凑到 4 个', ins.length === 4, ins.length);
+    ok('PB04d 同一条路上的 at 互不相同', (() => {
+      const bySide = {};
+      for (const p of ins) (bySide[p.side] = bySide[p.side] || []).push(p.at);
+      for (const s in bySide){
+        if (new Set(bySide[s]).size !== bySide[s].length) return false;
+      }
+      return true;
+    })(), JSON.stringify(ins.map(p => p.side + ':' + p.at.toFixed(2))));
+    ok('PB04e at 都在 0..1 内', ins.every(p => p.at > 0 && p.at < 1));
+    ok('PB04f 按 id 排的顺序稳定', (() => {
+      const before = ins.map(p => p.id).join(',');
+      spreadPorts(portList(byId(n.id)), ins[0].side);
+      return portList(byId(n.id)).ins.map(p => p.id).join(',') === before;
+    })());
+    // 删
+    const last = portList(byId(n.id)).ins[portList(byId(n.id)).ins.length - 1];
+    ok('PB04g 能删', removePort(byId(n.id), 'ins', last.id) === true);
+    ok('PB04h 删掉了', portList(byId(n.id)).ins.length === 3);
+    // 删到只剩一个就拒绝
+    ok('PB04i 至少留一个', (() => {
+      let guard = 0;
+      while (portList(byId(n.id)).ins.length > 1 && guard++ < 10){
+        const l = portList(byId(n.id)).ins;
+        removePort(byId(n.id), 'ins', l[l.length - 1].id);
+      }
+      const one = portList(byId(n.id)).ins.length === 1;
+      skipDlg();
+      const refused = removePort(byId(n.id), 'ins', portList(byId(n.id)).ins[0].id) === false;
+      return one && refused;
+    })());
+    skipDlg();
+    ok('PB04j 超过上限会被挡', (() => {
+      let guard = 0;
+      while (portList(byId(n.id)).outs.length < PORT_MAX_PER_DIR && guard++ < 20) addPort(byId(n.id), 'outs');
+      skipDlg();
+      return portList(byId(n.id)).outs.length === PORT_MAX_PER_DIR && addPort(byId(n.id), 'outs') === null;
+    })(), portList(byId(n.id)).outs.length);
+  });
+  T('PB05 id 决定汇合顺序（所以它是求值依据，不只是标识）', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    addPort(byId(n.id), 'ins');
+    const ins = portList(byId(n.id)).ins.slice().sort((a, b) => a.id - b.id);
+    ok('PB05 端点能按 id 排出稳定顺序', ins.length === 2 && ins[0].id < ins[1].id,
+      ins.map(p => p.id).join('<'));
+    // 改小 id 之后顺序跟着变
+    const big = ins[1];
+    setPortId(byId(n.id), 'ins', big.id, 1) === false
+      ? null
+      : null;
+    // 1 被占了，先把它挪走
+    const small = ins[0];
+    setPortId(byId(n.id), 'ins', small.id, 50);
+    ok('PB05b 挪开之后能占住 1', setPortId(byId(n.id), 'ins', big.id, 1) === true,
+      portList(byId(n.id)).ins.map(p => p.id).join(','));
+    ok('PB05c 排序结果真的变了',
+      portList(byId(n.id)).ins.slice().sort((a, b) => a.id - b.id)[0].id === 1,
+      portList(byId(n.id)).ins.slice().sort((a, b) => a.id - b.id).map(p => p.id).join('<'));
+  });
+  T('PB06 显示规则：悬停或选中才显示标签', () => {
+    fresh(); layoutMind();
+    const a = nodeByText('节点'), b = nodeByText('连线');
+    ok('PB06 什么都没选中时不显示标签', !portsShowLabel(byId(a.id)));
+    selectOnly(a.id);
+    ok('PB06b 选中就显示', portsShowLabel(byId(a.id)));
+    ok('PB06c 没选中的那个不显示', !portsShowLabel(byId(b.id)));
+    // 多选：都显示
+    sel.add(b.id);
+    reindex();
+    ok('PB06d 多选时每个都显示',
+      portsShowLabel(byId(a.id)) && portsShowLabel(byId(b.id)));
+    selectOnly(null);
+    ok('PB06e 取消选中又不显示了', !portsShowLabel(byId(a.id)));
+  });
+  T('PB07 端点画得出来，而且不改变原有几何', () => {
+    fresh(); layoutMind(); resize(); fitView();
+    const n = nodeByText('节点');
+    const b0 = nodeBox(n);
+    const p0 = portPoint(byId(n.id), portList(n).ins[0]);
+    // 加了端口表之后，盒子和端点位置都不该变
+    ok('PB07 加了端口模型之后盒子没变',
+      nodeBox(byId(n.id)).x === b0.x && nodeBox(byId(n.id)).w === b0.w);
+    ok('PB07b 端点位置也没变',
+      portPoint(byId(n.id), portList(byId(n.id)).ins[0]).x === p0.x);
+    ok('PB07c 整个画布画得出来（不抛异常）', (dirty = true, draw(), true));
+    selectOnly(n.id);
+    ok('PB07d 选中时也画得出来', (draw(), true));
+    // 真的画上去了：端点圆点用的是 C.yellow，找一找
+    const g = cv.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = C.bg; g.fillRect(0, 0, VW, VH);
+    g.save(); g.translate(view.x, view.y); g.scale(view.z, view.z);
+    drawPorts(g, byId(n.id), true);
+    g.restore();
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let hit = 0;
+    for (let i = 0; i < d.length; i += 4){
+      if (d[i] > 200 && d[i+1] > 180 && d[i+2] < 120) hit++;
+    }
+    ok('PB07e 画布上找得到端点的颜色', hit > 20, hit);
+  });
+  T('PB08 端点表能存读往返', () => {
+    fresh(); layoutMind();
+    const n = nodeByText('节点');
+    setPortLabel(byId(n.id), 'ins', 1, '左进');
+    addPort(byId(n.id), 'ins');
+    setPortId(byId(n.id), 'ins', portList(byId(n.id)).ins[1].id, 9);
+    const snap = JSON.parse(JSON.stringify(serialize()));
+    const saved = snap.nodes.find(x => x.id === n.id);
+    ok('PB08 存档里带上 ports 了', !!saved.ports, JSON.stringify(saved.ports));
+    ok('PB08b 标签存下来了', saved.ports.ins.some(p => p.label === '左进'));
+    ok('PB08c id 存下来了', saved.ports.ins.some(p => p.id === 9));
+    deserialize(snap);
+    ok('PB08d 读回来还是两个输入', portList(byId(n.id)).ins.length === 2);
+    ok('PB08e 标签还在', portList(byId(n.id)).ins.some(p => p.label === '左进'));
+    ok('PB08f 老存档（没 ports）读回来是默认', (() => {
+      const s2 = JSON.parse(JSON.stringify(serialize()));
+      delete s2.nodes.find(x => x.id === n.id).ports;
+      deserialize(s2);
+      return portList(byId(n.id)).ins.length === 1 && portList(byId(n.id)).ins[0].side === 'l';
+    })(), JSON.stringify(portList(byId(n.id))));
+  });
+  T('PB09 非法端点表会被规整，不会让文档打不开', () => {
+    ok('PB09 空对象 → 空表（不是崩）', (() => {
+      const r = normalizePorts({ ins:[], outs:[] });
+      return r && r.ins.length === 0 && r.outs.length === 0;
+    })());
+    ok('PB09b id 重复会自动让开', (() => {
+      const r = normalizePorts({ ins:[{ id:2 }, { id:2 }, { id:2 }], outs:[] });
+      return new Set(r.ins.map(p => p.id)).size === 3;
+    })(), JSON.stringify(normalizePorts({ ins:[{ id:2 }, { id:2 }, { id:2 }], outs:[] }).ins.map(p => p.id)));
+    ok('PB09c 缺字段补默认', (() => {
+      const r = normalizePorts({ ins:[{}], outs:[{}] });
+      return r.ins[0].id > 0 && PORT_SIDES.indexOf(r.ins[0].side) >= 0 && r.ins[0].at === 0.5;
+    })());
+    ok('PB09d 非法 side 退回 r', normalizePorts({ ins:[{ id:1, side:'乱写' }], outs:[] }).ins[0].side === 'r');
+    ok('PB09e at 超范围夹回 0.5',
+      normalizePorts({ ins:[{ id:1, at:9 }], outs:[] }).ins[0].at === 0.5);
+    ok('PB09f 不是对象 → 用默认', normalizePorts(null) === null && normalizePorts('x') === null);
+    ok('PB09g 超量的会被截断', (() => {
+      const many = []; for (let i = 1; i <= 20; i++) many.push({ id:i });
+      return normalizePorts({ ins:many, outs:[] }).ins.length === PORT_MAX_PER_DIR;
+    })());
   });
 
   /* ==================== 收尾 ==================== */

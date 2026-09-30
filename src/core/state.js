@@ -582,6 +582,7 @@ function serialize(){
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       tableDef:(n.kind === 'table') ? normalizeTableDef(n.tableDef) : null,
+      ports:normalizePorts(n.ports),
       priority:(n.priority == null || n.priority === '') ? null : n.priority,
       components:normalizeComponents(n.components),
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))
@@ -631,6 +632,7 @@ function deserialize(d){
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       tableDef:(n.kind === 'table') ? normalizeTableDef(n.tableDef) : null,
+      ports:normalizePorts(n.ports),
       priority:(n.priority == null || n.priority === '') ? null : n.priority,
       components:normalizeComponents(n.components),
       embed:(n.kind === 'embed' && n.embed && n.embed.doc && Array.isArray(n.embed.doc.nodes))

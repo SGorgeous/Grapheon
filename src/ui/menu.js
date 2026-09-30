@@ -139,6 +139,35 @@ function showCtx(x, y, n, e, info){
         ['竖向等距分布', '至少三个', () => distributeSelection('y')]
       ]]);
     }
+    // 端点：加 / 删 / 改 id / 改标签 / 恢复默认
+    if (!isEmbed(n)){
+      const PL = portList(n);
+      const dirLabel = (d) => d === 'ins' ? '输入' : '输出';
+      const portItems = [];
+      for (const dir of ['ins', 'outs']){
+        const list = PL[dir];
+        portItems.push([dirLabel(dir) + '端点（' + list.length + '）', '', null,
+          list.map(p => ['#' + p.id + (p.label ? ' ' + p.label : ''),
+            p.side === 't' ? '上' : p.side === 'b' ? '下' : p.side === 'l' ? '左' : '右',
+            () => startEdit('portLabel', n.id, p.label, { dir, portId:p.id })])
+          .concat([
+            'hr',
+            ['加一个' + dirLabel(dir) + '端点', '最多 ' + PORT_MAX_PER_DIR + ' 个',
+              () => addPort(n, dir)],
+            ['删掉最后一个', '至少留一个',
+              () => removePort(n, dir, list[list.length - 1].id)]
+          ])]);
+      }
+      portItems.push('hr');
+      portItems.push(['端点 ID…', '纯数字，不能重复，决定汇合顺序', null,
+        portList(n).ins.concat(portList(n).outs).map(p => [
+          '#' + p.id, p.side === 't' ? '上' : p.side === 'b' ? '下' : p.side === 'l' ? '左' : '右',
+          () => startEdit('portId', n.id, String(p.id),
+            { dir: portList(n).ins.indexOf(p) >= 0 ? 'ins' : 'outs', portId:p.id })
+        ])]);
+      portItems.push(['恢复默认端点', '回到左右各一个', () => resetPorts(n)]);
+      items.push(['端点', '点一下改标签', null, portItems]);
+    }
     // 表格节点：行列的增删
     if (isTableNode(n)){
       const tt = tableOf(n);
