@@ -579,7 +579,9 @@ function drawVarNode(g, n, b, selected, hov){
     // 右上角一个 wifi 符号 —— 一看就知道这个节点的值是「广播出去」的
     drawWifiIcon(g, b.x + b.w - 18, b.y + 14, 14,
                  entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white));
-    g.restore();
+    /* ⚠ 这里**不能** restore —— 上面 573 行已经配平过了。
+       多这一次会把 draw() 里 save 的**世界变换**提前弹掉，
+       之后画的东西全落到屏幕坐标上（症状：节点悬浮、缩放不动）。 */
     return;
   }
   if (v.control === 'check')       drawCheckControl(g, L, v);

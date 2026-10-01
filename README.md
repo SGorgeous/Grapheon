@@ -717,7 +717,7 @@ src/
     demo.js                首次打开时的示例文档
     main.js                启动引导与主循环
 tests/
-  regression.js            1878 项断言
+  regression.js            1883 项断言
   run.mjs                  在真实 Edge 里跑断言：node tests/run.mjs
 ```
 
@@ -849,7 +849,7 @@ GP.keys.rows();                          // 列出所有绑定（带中文标签
 ## 测试
 
 ```bash
-node tests/run.mjs          # 在真实 Edge 里跑 1878 项断言；退出码 0 = 全过
+node tests/run.mjs          # 在真实 Edge 里跑 1883 项断言；退出码 0 = 全过
 node tests/run.mjs --keep   # 保留临时页面，方便手动打开看控制台
 ```
 

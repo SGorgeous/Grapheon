@@ -8399,6 +8399,43 @@
       String(resolveProgramValue(byId(pg.id), normalizeProgram(byId(pg.id).program))));
     closeNodeBox();
   });
+
+  T('BAL01 绘制里的 save / restore 必须配平', () => {
+    /* 多一次 restore 会把 draw() 里 save 的**世界变换**提前弹掉，
+       之后画的东西全落到屏幕坐标上 —— 症状是「节点悬浮、缩放不动」，
+       没有任何报错，只能靠配平检查发现。 */
+    const g = ctx;
+    const os = g.save, or = g.restore;
+    const count = (fn) => {
+      let s = 0, r = 0;
+      g.save = function(){ s++; return os.apply(g, arguments); };
+      g.restore = function(){ r++; return or.apply(g, arguments); };
+      try { fn(); } finally { g.save = os; g.restore = or; }
+      return { s, r };
+    };
+    fresh();
+    const c1 = count(() => draw());
+    ok('BAL01 空白文档：save 和 restore 次数相等', c1.s === c1.r, c1.s + ' / ' + c1.r);
+    const m = ctx.getTransform();
+    ok('BAL01b 画完变换回到基准（世界变换没被弹掉）',
+      Math.abs(m.a - DPR) < 1e-6 && Math.abs(m.d - DPR) < 1e-6
+      && Math.abs(m.e) < 1e-6 && Math.abs(m.f) < 1e-6,
+      [m.a, m.b, m.c, m.d, m.e, m.f].map(x => Math.round(x * 1000) / 1000).join(','));
+    // 各种节点都过一遍 —— 广播节点以前就是在这里多 restore 一次
+    loadDemo('all'); reindex(); sizeAll();
+    const c2 = count(() => draw());
+    ok('BAL01c 示例文档（含广播 / 表格 / 条件 / 滑条）也配平', c2.s === c2.r,
+      c2.s + ' / ' + c2.r);
+    // 选中 + 悬停 + 正在拖端点，这几条路径各有自己的 save/restore
+    const someNode = doc.nodes.find(n => n.kind === 'var');
+    selectOnly(someNode.id); reindex();
+    const c3 = count(() => draw());
+    ok('BAL01d 选中节点时也配平', c3.s === c3.r, c3.s + ' / ' + c3.r);
+    // 存读往返之后再画一次，确保没有状态残留
+    deserialize(JSON.parse(JSON.stringify(serialize())));
+    const c4 = count(() => draw());
+    ok('BAL01e 存读往返之后还配平', c4.s === c4.r, c4.s + ' / ' + c4.r);
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
