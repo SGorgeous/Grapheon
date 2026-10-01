@@ -8342,6 +8342,63 @@
     ok('BG03c 普通节点存读往返不变大', p2 && !p2.big && Math.round(nodeBox(p2).w) === Math.round(w),
       p2 ? (nodeBox(p2).w + ' vs ' + w) : 'null');
   });
+
+  T('SU01 滑条节点的上下限 / 步长是填空，能引用变量', () => {
+    fresh(); cancelEdit();
+    const w = addVarNode('宽', 0, 0, { name:'宽', value:'40' });
+    const s = addVarNode('音量', 500, 0,
+      { name:'音量', value:'50', type:'number', control:'slider',
+        min:'{宽}', max:'200', step:'{宽}' });
+    reindex(); sizeAll(); selectOnly(byId(s.id));
+    openNodeBox(byId(s.id)); renderNodeBox();
+    const mi = document.getElementById('nbSlideMin');
+    const ma = document.getElementById('nbSlideMax');
+    const st = document.getElementById('nbSlideStep');
+    ok('SU01 三个框都是填空（不是 number）',
+      [mi, ma, st].every(e => e && e.type === 'text'),
+      [mi, ma, st].map(e => e && e.type).join('/'));
+    ok('SU01b 框里显示的是**原始字段**（{宽} 原样显示）',
+      mi.value === '{宽}' && st.value === '{宽}' && ma.value === '200',
+      mi.value + ' / ' + ma.value + ' / ' + st.value);
+    // 在框里改成另一个变量引用 —— 必须原样存住
+    mi.value = '{倍}'; mi.onchange();
+    ok('SU01c 改成 {倍} 之后原样存住字符串',
+      normalizeVarDef(byId(s.id).varDef).min === '{倍}',
+      JSON.stringify(normalizeVarDef(byId(s.id).varDef).min));
+    // 改回数字也要能存成数字
+    ma.value = '999'; ma.onchange();
+    ok('SU01d 填数字还是数字', normalizeVarDef(byId(s.id).varDef).max === 999,
+      typeof normalizeVarDef(byId(s.id).varDef).max);
+    closeNodeBox();
+  });
+  T('SU02 外观节点的字号：一条滑条 + 一个能写 {变量} 的框', () => {
+    fresh(); cancelEdit();
+    const pg = createProgramNode(0, 0);
+    reindex(); sizeAll(); selectOnly(byId(pg.id));
+    openNodeBox(byId(pg.id)); renderNodeBox();
+    const box = document.getElementById('nbVal');
+    const rg = box.querySelector('input[type=range]');
+    const tx = box.querySelector('input[type=text]');
+    ok('SU02 值那一行有滑条', !!rg);
+    ok('SU02b 也有能写字的框', !!tx && tx.type === 'text');
+    ok('SU02c 滑条的范围覆盖正负（增/设两种模式）', rg && +rg.min < 0 && +rg.max > 0,
+      rg ? (rg.min + '~' + rg.max) : 'null');
+    // 拖滑条 → 存数字
+    rg.value = '30'; rg.oninput();
+    ok('SU02d 拖滑条存的是数字', byId(pg.id).program.value === 30,
+      JSON.stringify(byId(pg.id).program.value));
+    ok('SU02e 拖动时框里跟着变', tx.value === '30', tx.value);
+    // 框里写 {变量} → 存字符串
+    tx.value = '{倍数}'; tx.onchange();
+    ok('SU02f 框里写 {变量} 原样存住', byId(pg.id).program.value === '{倍数}',
+      JSON.stringify(byId(pg.id).program.value));
+    // 而且求值时真的解析得出来
+    const bs = addVarNode('倍数', 700, 0, { name:'倍数', value:'12', type:'number' });
+    reindex(); sizeAll();
+    ok('SU02g 求值时解析成数字', resolveProgramValue(byId(pg.id), normalizeProgram(byId(pg.id).program)) === 12,
+      String(resolveProgramValue(byId(pg.id), normalizeProgram(byId(pg.id).program))));
+    closeNodeBox();
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

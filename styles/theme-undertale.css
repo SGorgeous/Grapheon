@@ -393,3 +393,10 @@ body.no-heart .ud-btn::before{ content:none; }
 #comps .compuserdef b{ color:var(--w); min-width:88px; font-weight:normal; }
 #comps .compuserdef span{ color:var(--g); flex:1; font-size:14px; }
 #comps .compuserdef .ud-btn{ font-size:14px; padding:1px 6px; }
+/* 程序节点里的数值滑条（字号 / 偏移量）。只出数字 ——
+   想引用变量就填它上面那个输入框，两条路并存。 */
+.nbval-range{
+  width:100%; margin:6px 0 2px; height:18px;
+  accent-color:var(--y);
+  background:transparent;
+}

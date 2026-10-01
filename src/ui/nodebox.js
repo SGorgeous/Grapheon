@@ -193,9 +193,39 @@ function renderProgRows(n){
   const inp = el('input', 'ud-input nbnum');
   inp.type = 'text';
   inp.value = String(p.value);
-  inp.title = '也可以直接填一个数';
-  inp.onchange = () => { setProgram(n, { value:Math.round(+inp.value) || 0 }); afterNodeEdit(); };
+  inp.title = '填数字，或者写 {变量}';
+  inp.onchange = () => {
+    const raw = String(inp.value).trim();
+    /* ★ 含 { } 就**原样存字符串** —— 解析交给 resolveProgramValue 在求值时做。
+       以前这里无条件 Math.round(+v)，{变量} 会被吃成 0。 */
+    if (raw.indexOf('{') >= 0) setProgram(n, { value:raw });
+    else setProgram(n, { value:Math.round(+raw) || 0 });
+    afterNodeEdit();
+  };
   nbValEl.appendChild(inp);
+
+  /* ★ 数值类再来一条**滑条**（字号 / 偏移量）。滑条只出数字，
+     想引用变量就填它左边那个框 —— 两条路并存。 */
+  const isDelta = (p.mode === 'add');
+  const numNow = (typeof p.value === 'number')
+    ? p.value : (Number(String(p.value).trim()) || 0);
+  const lo = isDelta ? -32 : 8, hi = isDelta ? 32 : 72;
+  const rg = el('input', 'nbval-range');
+  rg.type = 'range';
+  rg.min = String(Math.min(lo, numNow));
+  rg.max = String(Math.max(hi, numNow));
+  rg.step = '1';
+  rg.value = String(numNow);
+  rg.title = isDelta ? '拖动改增量（-32 ~ +32）' : '拖动改字号（8 ~ 72）';
+  /* 拖动时**只重画不进历史** —— 一次拖动会触发几百下，进历史就没法撤销了。
+     松手（change）才算一次编辑。 */
+  rg.oninput = () => {
+    inp.value = rg.value;
+    setProgram(n, { value:+rg.value });
+    reindex(); mark();
+  };
+  rg.onchange = () => afterNodeEdit();
+  nbValEl.appendChild(rg);
 }
 
 function afterNodeEdit(){
