@@ -20,215 +20,204 @@ function demoDoc(){
     nodes.push(n);
     return n;
   };
-  const E = (a, b, extra) => {
-    const e = normalizeEdge(Object.assign({ id:'de' + (++eid), s:a.id, t:b.id }, extra || {}));
+  const E = (a, b) => {
+    const e = normalizeEdge({ id:'de' + (++eid), s:a.id, t:b.id });
     edges.push(e);
     return e;
   };
-  /* 一个变量 / 控件节点 */
-  const V = (text, x, y, def) => N(text, x, y, { kind:'var', varDef:def });
+  const V = (text, x, y, def) => N(text, x, y, { kind:'var', varDef:normalizeVarDef(def) });
   const OP = (text, x, y, op, operand) => N(text, x, y, { kind:'op', opDef:{ op, operand } });
-  const OUT = (text, x, y, name) => N(text, x, y, { kind:'out', outDef:{ name } });
-  /* 一条竖列的说明文字 */
-  const notes = (items, x, y, step) =>
-    items.map((t, i) => N(t, x, y + i * (step || 46), { shape:'rect' }));
-  /* 一个功能组：把成员装进去 */
-  const groupOf = (title, color, members) => {
+  const OUT = (text, x, y, name) => N(text, x, y, { kind:'out', outDef:normalizeOutDef({ name }) });
+  /* 程序节点（外观算符） */
+  const PG = (text, x, y, op, key, mode, value) =>
+    N(text, x, y, { kind:'program', program:normalizeProgram({ op, key, mode, value }) });
+  const groupOf = (title, color, members, isFn) => {
     const g = { id:'dg' + (groups.length + 1), title, members:members.map(m => m.id),
-                color, x:0, y:0, w:10, h:10, collapsed:false, isFunction:false };
+                color, x:0, y:0, w:10, h:10, collapsed:false, isFunction:!!isFn };
     groups.push(g);
     return g;
   };
-  /* 分区小标题 */
   const head = (text, x, y) => N(text, x, y, { shape:'round' });
-  void 0;
 
-  /* ==================== 根 ==================== */
-  const root = N('GRAPHEON\n节点与连线', -2050, -720, { w:0, h:0 });
+  /* ---------------- 版面 ---------------- */
+  /* ⚠ 列距要比「一格往两边伸出去的总宽」还大：
+       左边那一列（x - DX）和右边那一列（x + DX + 节点宽）都要算进去。
+       一格实际占用 ≈ 2*460 + 420 = 1340，所以列距 1150 还不够 ——
+       实测 1000 的时候「变量节点」和「运算符节点」的框直接叠上了。
+       现在把「往左偏的那一列」限制在 ±(DX+140) 以内，列距 1150 才够。 */
+  const CX = [-1150, 0, 1150];
+  const RY = [-620, 200, 1020];
+  const DX = 460;                   // 一格之内「结果」那一列相对左边那列的偏移
+  const DY = 155;                   // 格内行距
+
+  const root = N('GRAPHEON\n节点与连线', CX[0], RY[0] - 140, { w:0, h:0 });
   root.big = true;
 
-  /* 版面：3 列，每列一个分区 */
-  // 版面：3 列。间距留得很宽 —— 程序节点本身带盒子，挤在一起会互相压。
-  const CX = [-2150, -1080, -60];
-  const CW = 1020;
+  /* ============ ① 变量节点 ============ */
+  {
+    const x = CX[0], y = RY[0];
+    const h = head('① 变量节点：一格名字 · 一格值 · 一行作用域', x, y);
+    const k = V('宽', x, y + DY, { name:'宽', value:'40', type:'number', scope:'global' });
+    const area = V('面积', x, y + DY * 2,
+      { name:'面积', value:'{宽} × 8 = 320', type:'string', scope:'global' });
+    const show = N('引用它：{面积}', x + DX, y + DY * 2, { shape:'round' });
+    E(area, show);
+    const lc = V('局内', x, y + DY * 3,
+      { name:'局内', value:'只有下游看得到', type:'string', scope:'local' });
+    const down = N('下游：{局内}', x + DX, y + DY * 3, { shape:'round' });
+    const far = N('不是下游：{局内}', x + DX, y + DY * 4, { shape:'round' });
+    E(lc, down);
+    groupOf('变量节点 · 全局 / 局内 / 值里能引用变量', '#ff7f27',
+      [h, k, area, show, lc, down, far]);
+  }
 
-  /* ============================================================
-     ① 变量节点
-     ============================================================ */
-  const h1 = head('① 变量节点', CX[0], -700);
-  const n1a = N('一格名字 · 一格值 · 一行作用域', CX[0], -600);
-  const n1b = N('全局：同作用域里到处能用，不用连线', CX[0], -500, { shape:'round' });
-  const n1c = N('局内：只有下游能用', CX[0], -400, { shape:'round' });
-  const vWide = V('宽', CX[0], 0, { name:'宽', value:'12', type:'number', scope:'global' });
-  const vHigh = V('高', CX[0], 180, { name:'高', value:'8', type:'number', scope:'global' });
-  const vArea = V('面积', CX[0], 360,
-    { name:'面积', value:'{宽} × {高} = 96', type:'string', scope:'global' });
-  const areaOut = N('算出来：{面积}', CX[0] + 560, 360, { shape:'round' });
-  E(vArea, areaOut);
-  const vLocal = V('局内变量', CX[0], 560, { name:'局内', value:'只有下游看得到', type:'string', scope:'local' });
-  const localDown = N('下游：{局内}', CX[0] + 560, 560, { shape:'round' });
-  E(vLocal, localDown);
-  const localFar = N('不是下游：{局内}', CX[0] + 560, 660, { shape:'round' });
-  const g1 = groupOf('变量节点', '#ff7f27',
-    [n1a, n1b, n1c, vWide, vHigh, vArea, areaOut, vLocal, localDown, localFar]);
+  /* ============ ② 运算符节点 ============ */
+  {
+    const x = CX[1], y = RY[0];
+    const h = head('② 运算符节点：端点按 ID 升序各对一个操作数', x, y);
+    const price = V('单价', x, y + DY, { name:'单价', value:'12', type:'number', scope:'global' });
+    const mul = OP('乘四', x, y + DY * 2, '*', '4');
+    const total = N('合计 {单价} 元', x + DX, y + DY * 2, { shape:'round' });
+    E(price, mul); E(mul, total);
+    const ten = V('十', x - 320, y + DY * 3, { name:'十', value:'10', type:'number', scope:'global' });
+    const add = OP('加', x, y + DY * 3, '+', '5');
+    const both = N('两路都接：10 + 7', x + DX, y + DY * 3, { shape:'round' });
+    E(ten, add); E(add, both);
+    const note = N('第二路接上 → 格子里的 5 被顶掉', x, y + DY * 4, { shape:'round' });
+    groupOf('运算符节点 · 多输入汇合', '#00ffff',
+      [h, price, mul, total, ten, add, both, note]);
+  }
 
-  /* ============================================================
-     ② 运算符节点
-     ============================================================ */
-  const h2 = head('② 运算符节点', CX[1], -700);
-  const n2a = N('两个输入端点，各对一个操作数', CX[1], -600);
-  const n2b = N('按端点 ID 升序运算', CX[1], -500, { shape:'round' });
-  const vPrice = V('单价', CX[1], 0, { name:'单价', value:'12', type:'number', scope:'global' });
-  const opMul = OP('乘四', CX[1], 200, '*', '4');
-  const total = N('合计 {单价} 元', CX[1] + 620, 200, { shape:'round' });
-  E(vPrice, opMul); E(opMul, total);
-  // 第二路接上 → 顶掉格子里那个 4
-  const vSecond = V('第二路', CX[1] - 460, 700, { name:'第二路', value:'7', type:'number', scope:'global' });
-  const opAdd = OP('加', CX[1], 480, '+', '5');
-  const addOut = N('两路都接：10 + 7', CX[1] + 620, 480, { shape:'round' });
-  const vTen = V('十', CX[1] - 460, 480, { name:'十', value:'10', type:'number', scope:'global' });
-  E(vTen, opAdd); E(opAdd, addOut);
-  const eSecond = E(vSecond, opAdd);
-  // 把第二路钉到 2 号端点
-  if (eSecond){ eSecond.bPort = 2; eSecond.bSide = 'l'; }
-  const n2c = N('第二路接上 → 格子里那个 5 被顶掉', CX[1], 880, { shape:'round' });
-  const g2 = groupOf('运算符节点', '#00ffff',
-    [n2a, n2b, vPrice, opMul, total, vSecond, opAdd, addOut, vTen, n2c]);
+  /* ============ ③ 条件节点 ============ */
+  {
+    const x = CX[2], y = RY[0];
+    const h = head('③ 条件节点：输入为 1 → 所填的值，否则 →「无」', x, y);
+    const one = V('给 1', x, y + DY, { name:'开关一', value:'1', type:'number', scope:'global' });
+    const on = V('通', x + DX, y + DY,
+      { name:'通', value:'条件成立', type:'string', scope:'global', control:'cond' });
+    const onOut = N('收到：{通}', x + DX + 360, y + DY, { shape:'round' });
+    E(one, on); E(on, onOut);
+    const zero = V('给 0', x, y + DY * 2,
+      { name:'开关零', value:'0', type:'number', scope:'global' });
+    const off = V('不通', x + DX, y + DY * 2,
+      { name:'不通', value:'条件不成立', type:'string', scope:'global', control:'cond' });
+    const offOut = N('收到：{不通}', x + DX + 360, y + DY * 2, { shape:'round' });
+    E(zero, off); E(off, offOut);
+    groupOf('条件节点', '#7fd4ff', [h, one, on, onOut, zero, off, offOut]);
+  }
 
-  /* ============================================================
-     ③ 条件节点
-     ============================================================ */
-  const h3 = head('③ 条件节点', CX[2], -700);
-  const n3a = N('一个输入、一个输出', CX[2], -600);
-  const n3b = N('输入为 1 → 输出所填的值；否则 → 输出「无」', CX[2], -500, { shape:'round' });
-  const vOne = V('给 1', CX[2], 0, { name:'开关一', value:'1', type:'number', scope:'global' });
-  const cdOn = V('通', CX[2], 200,
-    { name:'通', value:'条件成立', type:'string', scope:'global', control:'cond' });
-  const onOut = N('收到：{通}', CX[2] + 560, 200, { shape:'round' });
-  E(vOne, cdOn); E(cdOn, onOut);
-  const vZero = V('给 0', CX[2] - 440, 480, { name:'开关零', value:'0', type:'number', scope:'global' });
-  const cdOff = V('不通', CX[2], 480,
-    { name:'不通', value:'条件不成立', type:'string', scope:'global', control:'cond' });
-  const offOut = N('收到：{不通}', CX[2] + 560, 480, { shape:'round' });
-  E(vZero, cdOff); E(cdOff, offOut);
-  const g3 = groupOf('条件节点', '#7fd4ff', [n3a, n3b, vOne, cdOn, onOut, vZero, cdOff, offOut]);
+  /* ============ ④ 勾选 / 滑条 ============ */
+  {
+    const x = CX[0], y = RY[1];
+    const h = head('④ 控件：勾选 / 滑条（上下限也能写 {变量}）', x, y);
+    const wide = V('宽', x, y + DY, { name:'宽', value:'40', type:'number', scope:'global' });
+    const pick = V('配料', x, y + DY * 2,
+      { name:'配料', type:'string', scope:'global', control:'check',
+        options:['牛肉', '香菜', '辣椒'], picked:[0, 2] });
+    const picked = N('已选：{配料}', x + DX, y + DY * 2, { shape:'round' });
+    E(pick, picked);
+    /* ★ 上下限 / 步长都引用变量 —— 改「宽」这里跟着变 */
+    const vol = V('音量', x, y + DY * 3,
+      { name:'音量', value:'50', type:'number', scope:'global', control:'slider',
+        min:'{宽}', max:'200', step:'{宽}' });
+    const volOut = N('当前 {音量}', x + DX, y + DY * 3, { shape:'round' });
+    E(vol, volOut);
+    groupOf('勾选 / 滑条 · 参数可引用变量', '#00ff00',
+      [h, wide, pick, picked, vol, volOut]);
+  }
 
-  /* ============================================================
-     ④ 广播节点
-     ============================================================ */
-  const Y2 = 1280;
-  const h4 = head('④ 广播节点', CX[0], Y2);
-  const n4a = N('把输入值变成全局变量 · 右上角那个 wifi 就是它', CX[0], Y2 + 80, { shape:'round' });
-  const vTemp = V('温度', CX[0] - 420, Y2 + 260, { name:'温度', value:'26', type:'number', scope:'global' });
-  const bc = N('广播', CX[0] + 220, Y2 + 240,
-    { kind:'broadcast', varDef:{ name:'温度广播', value:'', type:'string', scope:'global' } });
-  E(vTemp, bc);
-  const farUse = N('远处没连线也取得到：{温度广播}', CX[0] + 220, Y2 + 440, { shape:'round' });
-  const g4 = groupOf('广播节点', '#b967ff', [n4a, vTemp, bc, farUse]);
+  /* ============ ⑤ 广播 / 输出 ============ */
+  {
+    const x = CX[1], y = RY[1];
+    const h = head('⑤ 广播节点：输入值变全局变量（右上角 wifi）', x, y);
+    const temp = V('温度', x, y + DY, { name:'温度', value:'26', type:'number', scope:'global' });
+    const bc = N('广播', x + DX, y + DY,
+      { kind:'broadcast', varDef:normalizeVarDef({ name:'温度广播', value:'', type:'string', scope:'global' }) });
+    E(temp, bc);
+    const use = N('远处没连线也取得到：{温度广播}', x + DX, y + DY * 2, { shape:'round' });
+    const out2 = OUT('本图输出', x + DX, y + DY * 3, 'summary');
+    groupOf('广播 / 输出节点', '#b967ff', [h, temp, bc, use, out2]);
+  }
 
-  /* ============================================================
-     ⑤ 勾选 / 滑条
-     ============================================================ */
-  const h5 = head('⑤ 勾选 / 滑条', CX[1], Y2);
-  const n5a = N('点一下就改值，引用它的地方跟着变', CX[1], Y2 + 80, { shape:'round' });
-  const vPick = V('配料', CX[1], Y2 + 260,
-    { name:'配料', type:'string', scope:'global', control:'check',
-      options:['牛肉', '香菜', '辣椒'], picked:[0, 2] });
-  const pickOut = N('已选：{配料}', CX[1] + 620, Y2 + 260, { shape:'round' });
-  E(vPick, pickOut);
-  const vVol = V('音量', CX[1], Y2 + 520,
-    { name:'音量', type:'number', scope:'global', control:'slider',
-      value:'60', min:0, max:100, step:10 });
-  const volOut = N('当前 {音量}', CX[1] + 620, Y2 + 520, { shape:'round' });
-  E(vVol, volOut);
-  const g5 = groupOf('勾选 / 滑条', '#00ff00', [n5a, vPick, pickOut, vVol, volOut]);
+  /* ============ ⑥ 程序组 ============ */
+  {
+    const x = CX[2], y = RY[1];
+    const h = head('⑥ 程序组：组内算完，外面接结果', x, y);
+    const base = V('基数', x, y + DY, { name:'基数', value:'100', type:'number', scope:'global' });
+    const sub = OP('减十五', x, y + DY * 2, '-', '15');
+    const fnOut = OUT('折后', x, y + DY * 3, '折后');
+    E(base, sub); E(sub, fnOut);
+    /* ★ 外层是**分区框**，里面**嵌套**一个函数组。
+       以前这里放了两个平级分组（ƒ程序组 + 输出节点），两个框必然叠在一起 ——
+       分组本来就是能套娃的，用嵌套才说得清「这个函数组是这一区的一部分」。 */
+    const fg = groupOf('ƒ 折扣程序组', '#b967ff', [base, sub, fnOut], true);
+    const disc = V('折扣价', x + DX, y + DY,
+      { name:'折扣价', value:'0', type:'number', scope:'global' });
+    edges.push(normalizeEdge({ id:'de' + (++eid), s:disc.id, t:fg.id }));
+    const shown = N('折后 {折扣价} 元', x + DX, y + DY * 2, { shape:'round' });
+    E(disc, shown);
+    const outer = groupOf('⑥ 程序组 · 组内算完，外面接结果', '#3b7dff', [h, disc, shown]);
+    outer.members.push(fg.id);          // 嵌套：函数组是这一区的一部分
+  }
 
-  /* ============================================================
-     ⑥ 输出节点 + 程序组
-     ============================================================ */
-  const h6 = head('⑥ 输出节点 + 程序组', CX[2], Y2);
-  const n6a = N('组内算完，外面接它的结果', CX[2], Y2 + 80, { shape:'round' });
-  const fg = { id:'dg' + (groups.length + 1), title:'ƒ 折扣程序组', members:[],
-               color:'#b967ff', x:CX[2], y:Y2 + 150, w:10, h:10, collapsed:false, isFunction:true };
-  groups.push(fg);
-  const vBase = V('基数', CX[2], Y2 + 260, { name:'基数', value:'100', type:'number', scope:'global' });
-  const opSub = OP('减十五', CX[2], Y2 + 480, '-', '15');
-  const outFn = OUT('折后', CX[2], Y2 + 700, '折后');
-  E(vBase, opSub); E(opSub, outFn);
-  fg.members = [vBase.id, opSub.id, outFn.id];
-  const vDisc = V('折扣价', CX[2] + 640, Y2 + 340, { name:'折扣价', value:'0', type:'number', scope:'global' });
-  edges.push(normalizeEdge({ id:'de' + (++eid), s:vDisc.id, t:fg.id }));
-  const shown = N('折后 {折扣价} 元', CX[2] + 640, Y2 + 740, { shape:'round' });
-  E(vDisc, shown);
-  const docOut = OUT('本图输出', CX[2] + 640, Y2 + 900, 'summary');
+  /* ============ ⑦ 外观节点 ============ */
+  {
+    const x = CX[0], y = RY[2];
+    const h = head('⑦ 外观节点：从它拉线到目标，算符就叠过去', x, y);
+    const mult = V('倍数', x - 320, y + DY * 2,
+      { name:'倍数', value:'12', type:'number', scope:'global' });
+    const t1 = N('被改形状', x + DX, y + DY);
+    const p1 = PG('变菱形', x, y + DY, 'shape', 'shape', 'set', 'diamond');
+    E(p1, t1);
+    const t2 = N('被放大', x + DX, y + DY * 2);
+    /* ★ 字号也能写 {变量} —— 面板里那条滑条旁边就是输入框 */
+    const p2 = PG('字号 +{倍数}', x, y + DY * 2, 'style', 'fsPx', 'add', '{倍数}');
+    E(mult, p2); E(p2, t2);
+    const t3 = N('被染色', x + DX, y + DY * 3);
+    const p3 = PG('染成青', x, y + DY * 3, 'style', 'color', 'set', '#00ffff');
+    E(p3, t3);
+    groupOf('外观节点 · 数值参数可引用变量', '#ffd800', [h, mult, t1, p1, t2, p2, t3, p3]);
+  }
 
-  /* ============================================================
-     ⑦ 外观节点 + 优先级
-     ============================================================ */
-  const Y3 = 2560;
-  const h7 = head('⑦ 外观节点 + 优先级', CX[0], Y3);
-  const n7a = N('从它拉一条线到目标，算符就叠过去', CX[0], Y3 + 80, { shape:'round' });
-  const tgtShape = N('被改形状', CX[0] + 480, Y3 + 240);
-  const pgShape = N('变菱形', CX[0] - 420, Y3 + 240,
-    { kind:'program', program:{ op:'shape', key:'shape', mode:'set', value:'diamond' } });
-  E(pgShape, tgtShape);
-  const tgtColor = N('被染色', CX[0] + 480, Y3 + 460);
-  const pgColor = N('染成青', CX[0] - 420, Y3 + 460,
-    { kind:'program', program:{ op:'style', key:'color', mode:'set', value:'#00ffff' } });
-  E(pgColor, tgtColor);
-  const tgtFs = N('被放大', CX[0] + 480, Y3 + 680);
-  const pgFs = N('字号 +16', CX[0] - 420, Y3 + 680,
-    { kind:'program', program:{ op:'style', key:'fsPx', mode:'add', value:'16' } });
-  E(pgFs, tgtFs);
-  const n7b = N('优先级决定叠加顺序：数越大越晚算', CX[0], Y3 + 900, { shape:'round' });
-  const g7 = groupOf('外观节点', '#ffd800',
-    [n7a, tgtShape, pgShape, tgtColor, pgColor, tgtFs, pgFs, n7b]);
+  /* ============ ⑧ 普通节点 ============ */
+  {
+    const x = CX[1], y = RY[2];
+    const h = head('⑧ 普通节点：形状 / 尺寸 / 样式 / 组件', x, y);
+    const a = N('四种形状：矩形 · 圆角 · 菱形 · 椭圆', x, y + DY, { shape:'round' });
+    const b = N('拖右下角改尺寸', x, y + DY * 2, { shape:'ellipse' });
+    const c = N('挂了角标组件', x + DX, y + DY * 2,
+      { components:[{ type:'badge', props:{ text:'★ {音量}', color:'#ffd800' } }] });
+    const d = N('菱形 + 染色 + 半透明', x, y + DY * 3,
+      { shape:'diamond', components:[{ type:'tint', props:{ color:'#b967ff' } },
+                                     { type:'opacity', props:{ value:'0.6' } }] });
+    const e2 = N('自定义描边', x + DX, y + DY * 3,
+      { components:[{ type:'outline', props:{ width:'4', color:'#00ffff' } }] });
+    const note = N('四条边各一个连接端点（空心环）', x, y + DY * 4, { shape:'round' });
+    groupOf('普通节点', '#3b7dff', [h, a, b, c, d, e2, note]);
+  }
 
-  /* ============================================================
-     ⑧ 普通节点的功能（不放快捷键字样）
-     ============================================================ */
-  const h8 = head('⑧ 普通节点能做什么', CX[1], Y3);
-  const shapes = notes([
-    '四种形状：矩形 / 圆角 / 菱形 / 椭圆',
-    '拖右下角自由改尺寸',
-    '样式面板：字体 / 字号 / 字色 / 外框色',
-    '折叠子树：点右上角的小方块',
-    '优先级：和程序节点同一个字段',
-    '组件：角标 / 条件隐藏 / 描边 / 染色 / 透明度 / 线宽',
-    '节点名和变量名是分开的两回事'
-  ], CX[1], Y3 + 80, 100);
-  const cBadge = N('挂了角标组件', CX[1] + 700, Y3 + 80,
-    { components:[{ type:'badge', props:{ text:'★ {音量}', color:'#ffd800' } }] });
-  const cTint = N('染色 + 透明度', CX[1] + 700, Y3 + 280,
-    { components:[{ type:'tint', props:{ color:'#b967ff' } },
-                   { type:'opacity', props:{ value:'0.55' } }] });
-  const cOut = N('自定义描边', CX[1] + 700, Y3 + 480,
-    { components:[{ type:'outline', props:{ width:'4', color:'#00ffff' } }] });
-  const g8 = groupOf('普通节点', '#3b7dff',
-    shapes.concat([cBadge, cTint, cOut]));
+  /* ============ ⑨ 表格节点 ============ */
+  {
+    const x = CX[2], y = RY[2];
+    const h = head('⑨ 表格节点：格子里的字也能引用变量', x, y);
+    const tbl = N('', x, y + DY, {
+      kind:'table',
+      tableDef:normalizeTableDef({ cols:3, rows:4, header:true, cells:[
+        ['项目', '数量', '小计'],
+        ['苹果', '{音量}', '{单价} × {音量}'],
+        ['香蕉', '3', '待算'],
+        ['合计', '', '—']
+      ] }) });
+    const tip = N('选中它 → 行的右侧 / 列的下方亮出加减号', x + DX, y + DY * 3,
+      { shape:'round' });
+    groupOf('表格节点', '#7fd4ff', [h, tbl, tip]);
+  }
 
-  /* ============================================================
-     ⑨ 表格节点
-     ============================================================ */
-  const h9 = head('⑨ 表格节点', CX[2], Y3);
-  const n9a = N('格子里的字也能引用变量 · 每行每列外面各一对加减号', CX[2], Y3 + 80, { shape:'round' });
-  const tbl = N('', CX[2], Y3 + 300, {
-    kind:'table',
-    tableDef:{ cols:3, rows:4, header:true, cells:[
-      ['项目', '数量', '小计'],
-      ['苹果', '{音量}', '{单价} × {音量}'],
-      ['香蕉', '3', '待算'],
-      ['合计', '', '—']
-    ] } });
-  const n9b = N('选中它，行的右侧 / 列的下方会亮出加减号', CX[2], Y3 + 900, { shape:'round' });
-  const g9 = groupOf('表格节点', '#7fd4ff', [n9a, tbl, n9b]);
-
-  /* ==================== 根 → 各分区 ==================== */
+  /* ============ 根 → 各分区 ============ */
   for (const g of groups){
     edges.push(normalizeEdge({ id:'de' + (++eid), s:root.id, t:g.id,
                                route:'curve', aSide:'r', bSide:'l' }));
   }
-  void CW;
   return { v:2, nid, nodes, edges, groups };
 }
 
