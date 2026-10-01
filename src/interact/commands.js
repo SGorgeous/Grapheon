@@ -71,17 +71,33 @@ function afterSpawn(nn){
   pushHist(); mark();
   startEdit('node', nn.id, '');
 }
+/* 两个节点的相对位置属于哪个方向。给「加子 / 加兄弟」用 ——
+   它们以前只调 linkNodes、不说方向，边就只能事后自己猜，
+   而且猜的时候新节点还没 sizeAll，盒子是错的。 */
+function dirBetween(from, to){
+  const a = nodeBox(from), b = nodeBox(to);
+  const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
+  const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
+  return dy >= 0 ? 'down' : 'up';
+}
 function addChildOf(parent){
   if (parent.collapsed) parent.collapsed = false;
   const sib = idx.children.get(parent.id) || [];
   const nn = addNodeAt('', parent.x + parent.w + HGAP, parent.y + sib.length * (parent.h + VGAP), 'rect');
-  linkNodes(parent.id, nn.id);
+  const e = linkNodes(parent.id, nn.id);
+  reindex(); sizeAll();
+  /* ★ 大小算完再定方向 —— 不然是按「还没 sizeAll 的盒子」猜的，会猜错 */
+  applySpawnDir(e, parent, nn, 'right');
   afterSpawn(nn);
 }
 function addSiblingOf(p, ref, where){
   if (p.collapsed) p.collapsed = false;
   const nn = addNodeAt('', ref.x, ref.y + ref.h + VGAP, 'rect');
   const e = linkNodes(p.id, nn.id);
+  reindex(); sizeAll();
+  /* ★ 边是从**父节点 p** 出发的，不是从 ref —— 方向要按 p → nn 的实际位置算 */
+  applySpawnDir(e, p, nn, dirBetween(p, nn));
   // 兄弟顺序由 edges 里父节点出边的先后决定，插到 ref 的前/后（「排版」时的上下次序照这个来）
   if (e){
     const j = doc.edges.indexOf(e);
