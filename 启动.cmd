@@ -1,15 +1,14 @@
 @echo off
-chcp 65001 >nul
-title Grapheon —— 节点与连线
+title Grapheon
 setlocal
 set "HERE=%~dp0"
 
 if not exist "%HERE%index.html" (
   echo.
-  echo   [X] 这个文件夹里没有 index.html
+  echo   [X] No index.html in this folder.
   echo.
-  echo   启动器必须和 index.html 放在**同一个文件夹**里。
-  echo   如果你是从压缩包里解出来的，请先把整个文件夹解压出来再双击。
+  echo   This launcher must sit in the SAME folder as index.html.
+  echo   If you opened it from inside the .zip, extract the folder first.
   echo.
   pause
   exit /b 1
@@ -18,17 +17,18 @@ if not exist "%HERE%index.html" (
 echo.
 echo   ============================================
 echo      G R A P H E O N
-echo      节点与连线
+echo      nodes  .  connections
 echo   ============================================
 echo.
-echo   正在用默认浏览器打开...
+echo   Opening in your default browser ...
 echo.
-echo   · 这个黑窗口可以关掉，不影响画布
-echo   · 要退出就关掉浏览器的那个标签页
+echo   - You can close this window; the canvas stays open.
+echo   - To quit, just close the browser tab.
 echo.
 
 start "" "%HERE%index.html"
 
-rem 给浏览器一点启动时间，然后自己关掉
-timeout /t 2 /nobreak >nul
+rem give the browser a moment. (ping, not timeout -- timeout
+rem errors out when stdin is redirected.)
+ping -n 3 127.0.0.1 >nul
 endlocal
