@@ -19,8 +19,9 @@ const COPY = [
   ['styles', 'styles'],
   ['src', 'src'],
 ];
-/* 只带用得上的那几个素材（预览图不带） */
-const ASSETS = ['logo.svg', 'logo-mark.svg', 'logo-mark-small.svg'];
+/* 只有这个是运行时真要的（index.html 的 favicon）。
+   另外三个 SVG 是 make-logo.mjs 的输出、没被任何页面引用，已经归档到 archive/assets/。 */
+const ASSETS = ['logo-mark-small.svg'];
 
 /* 说明性的（带上，方便别人看懂这是什么） */
 const DOCS = [
