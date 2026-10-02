@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
-const VER = 'DEV003';
+const VER = 'DEV004';
 const OUT = join('dist', 'Grapheon-' + VER);
 
 /* 运行时真正要的东西 */
@@ -28,6 +28,11 @@ const DOCS = [
   ['README.md', 'README.md'],
   ['VERSION.md', 'VERSION.md'],
   ['启动.cmd', '启动.cmd'],
+  /* README 里引用到的图 —— 不带的话打开 README 图全是裂的。
+     只放被引用的那几张，其它界面快照已经归档到 archive/ 了。 */
+  ['docs-structure.png', 'docs-structure.png'],
+  ['docs-var-types.png', 'docs-var-types.png'],
+  ['docs-var-panel.png', 'docs-var-panel.png'],
 ];
 
 function walk(dir, out = []){
