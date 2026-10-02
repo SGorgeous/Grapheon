@@ -717,30 +717,82 @@ function resolveEmbedOutput(embedName, outName){
   return null;
 }
 
-/* ---------------- 文本插值 ---------------- */
-const VAR_TOKEN = /\\\{|\{([^}\n]*)\}/g;
+/* ---------------- 文本插值 ----------------
+   支持**嵌套**索引：{name1.{name2}}、{{a}.{b}}、{a.{b.{c}}} …
+   以前是一条正则 /\{|{([^}\n]*)}/g，它看见第一个 } 就收尾，
+   所以 {a.{b}} 被切成 "{a.{b" + "}" —— 嵌套进不去。
+   现在改成手写的配对扫描 + 递归下降。
+
+   两个小工具：matchBrace 找配对的右花括号，splitDot 在**第 0 层**找第一个点。
+   都跳过 \{ 转义。 */
+
+/* s[i] 必须是 '{'。返回配对的那个 '}' 的下标，没有就 -1。 */
+function matchBrace(s, i){
+  let d = 0;
+  for (let j = i; j < s.length; j++){
+    const c = s[j];
+    if (c === '\\'){ j++; continue; }
+    if (c === '{') d++;
+    else if (c === '}'){ d--; if (d === 0) return j; }
+  }
+  return -1;
+}
+/* 在**第 0 层**（不在任何 {} 里面）找第一个点，返回下标或 -1。 */
+function splitDot(s){
+  let d = 0;
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (c === '\\'){ i++; continue; }
+    if (c === '{') d++;
+    else if (c === '}') d--;
+    else if (c === '.' && d === 0) return i;
+  }
+  return -1;
+}
+/* 递归深度护栏：{a} 的值又是 {a} 这种会转不完。
+   和 controlValue 里那个 VAR_RESOLVING 是一个思路。 */
+const INTERP_MAX = 24;
+let interpDepth = 0;
 /* 把 {name} 换成变量值，{嵌入名.输出名} 换成嵌入文档的输出值。
    \{name} 转义成字面量；找不到就显示 [未定义]。 */
 function interpolateIn(ctx, text, fromId){
   const s = String(text == null ? '' : text);
   if (s.indexOf('{') < 0 && s.indexOf('\\') < 0) return s;
-  return s.replace(VAR_TOKEN, (m, name) => {
-    if (m === '\\{') return '{';
-    if (name && name.indexOf('.') > 0){
-      const i = name.indexOf('.');
-      const head = name.slice(0, i), tail = name.slice(i + 1);
-      /* ★ 先试「变量 + 下标 / 键」（{list.2} / {map.key}）。
-         变量名里不会有点（normalizeVarDef 会把点清掉），所以点一定是分隔符。
-         那个变量不存在、或者它不是列表 / 地图，才退回嵌入文档的跨层引用。 */
-      const def = findVarDefIn(ctx, head, fromId);
-      if (def){
-        const got = memberValueIn(ctx, def, tail, fromId);
-        if (got !== undefined) return valueToText(got);
-      }
-      return valueToText(resolveEmbedOutput(head, tail));
+  if (interpDepth >= INTERP_MAX) return '[循环]';
+  interpDepth++;
+  try {
+    let out = '', i = 0;
+    while (i < s.length){
+      const c = s[i];
+      if (c === '\\' && s[i + 1] === '{'){ out += '{'; i += 2; continue; }
+      if (c !== '{'){ out += c; i++; continue; }
+      const j = matchBrace(s, i);
+      if (j < 0){ out += c; i++; continue; }      // 没配对：当普通字符，别把整串吃掉
+      out += valueToText(resolveTokenIn(ctx, s.slice(i + 1, j), fromId));
+      i = j + 1;
     }
-    return valueToText(resolveVarIn(ctx, name, fromId));
-  });
+    return out;
+  } finally { interpDepth--; }
+}
+/* 解析一对花括号**里面**的东西。inner 自己还可能嵌着 {…}。
+   —— 这就是递归发生的地方。 */
+function resolveTokenIn(ctx, inner, fromId){
+  const d = splitDot(inner);
+  if (d < 0) return resolveVarIn(ctx, inner, fromId);
+  const headRaw = inner.slice(0, d), tailRaw = inner.slice(d + 1);
+  /* ★ 头和尾各自递归求值，得到**真正的**变量名和**真正的**键：
+       {{哪张表}.{第几个}}      → 名字来自变量，键也来自变量
+       {表.{序号}}              → 名字是字面量，键来自变量
+       {表.第{序号}项}          → 键是拼出来的字符串
+     注意点号是在**第 0 层**找的，所以 {a.b} 里的点不会被误当成外层的分隔符。 */
+  const name = interpolateIn(ctx, headRaw, fromId);
+  const key  = interpolateIn(ctx, tailRaw, fromId);
+  const def = findVarDefIn(ctx, name, fromId);
+  if (def){
+    const got = memberValueIn(ctx, def, key, fromId);
+    if (got !== undefined) return got;
+  }
+  return resolveEmbedOutput(name, key);
 }
 /* 给外部（和测试）用的薄封装，都走当前文档 */
 const interpolate   = (text, fromId) => interpolateIn(liveCtx(), text, fromId);
@@ -906,11 +958,14 @@ function sliderFrac(vd, fromId){
 /* 变量节点上那行小字：作用域 + （控件类型或值类型） */
 function varScopeText(vd){
   const v = normalizeVarDef(vd);
-  /* ⚠ 别在这里手写控件名 —— 之前「通路 → 条件」改名时就是漏了这行，
-     界面上一直显示「全局 · 通路」。一律查 VAR_CONTROL_LABEL。 */
-  const kind = v.control === 'plain' ? VAR_TYPE_LABEL[v.type]
-             : v.control === 'check' ? '列表'
+  /* ⚠ 别在这里手写控件名 —— 「通路 → 条件」改名时漏过一次，
+     这次「列表 → 勾选」又漏了一次：勾选节点的作用域行一直写着「全局 · 列表」。
+     而「列表」现在还是个**真的类型**，更说不清了。
+     一律查 VAR_CONTROL_LABEL；只有滑条要把上下限摊开显示。 */
+  const kind = v.control === 'plain'  ? VAR_TYPE_LABEL[v.type]
              : v.control === 'slider' ? (v.min + ' ~ ' + v.max + ' 步长 ' + v.step)
+             : v.control === 'list'   ? (VAR_CONTROL_LABEL.list + ' ' + v.items.length + ' 项')
+             : v.control === 'map'    ? (VAR_CONTROL_LABEL.map + ' ' + v.pairs.length + ' 对')
              : VAR_CONTROL_LABEL[v.control];
   return VAR_SCOPE_LABEL[v.scope] + ' · ' + kind;
 }

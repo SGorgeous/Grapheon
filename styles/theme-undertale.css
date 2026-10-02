@@ -221,6 +221,12 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 #nodebox .progsec{border-left:3px solid var(--y);padding-left:14px;margin-bottom:6px}
 #nodebox .hr2{height:3px;background:#333;margin:12px 0}
 #nodebox .nbnum{flex:none;width:96px;text-align:center}
+/* 勾选 / 列表 / 地图的「内容」多行输入框 */
+#nodebox .nbtext{
+  flex:1; min-width:0; min-height:56px; resize:vertical;
+  font-family:inherit; font-size:13px; line-height:1.5;
+  padding:6px 8px; white-space:pre; overflow:auto;
+}
 
 /* ---------------- 设置面板 / 顶栏分隔 / 星号 ---------------- */
 #set{

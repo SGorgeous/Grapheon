@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/menu.js
    通用弹出菜单，支持多级子菜单。右键菜单和顶栏「新建」菜单共用。
@@ -59,18 +59,22 @@ function showMenu(x, y, items, depth, anchorEl){
     if (subs) d.appendChild(el('span', 'k', '▶'));
 
     if (subs){
-      d.onmouseenter = () => {
+      /* ★ 子菜单**单击**才展开，不再用 hover ——
+         以前鼠标扫过一排带子菜单的项，子菜单会一层层弹开，
+         想点最下面那个还得到处绕。
+         再点同一项 = 收起。悬停**不再**关掉更深的那几级 ——
+         不然鼠标往子菜单挪的半路上它就没了。 */
+      d.onclick = (ev) => {
+        ev.stopPropagation();
+        const wasOpen = d.classList.contains('sel');
+        closeMenusBelow(depth + 1);
         for (const s of root.querySelectorAll('.item.sel')) s.classList.remove('sel');
+        if (wasOpen) return;
         d.classList.add('sel');
         showMenu(0, 0, subs, depth + 1, d);
       };
     } else {
-      // 移到没有子菜单的项上时，收起更深的那几级
-      d.onmouseenter = () => {
-        closeMenusBelow(depth + 1);
-        for (const s of root.querySelectorAll('.item.sel')) s.classList.remove('sel');
-      };
-      if (fn) d.onclick = () => { hideCtx(); fn(); };
+      if (fn) d.onclick = (ev) => { ev.stopPropagation(); hideCtx(); fn(); };
     }
     root.appendChild(d);
   }
@@ -227,7 +231,7 @@ function showCtx(x, y, n, e, info){
     data.push('hr');
     data.push([isProgram(n) ? '转回普通节点' : '转成程序节点', '程序节点才有作用域 / 输出',
       () => toggleProgramNode(n)]);
-    items.push(['数据', '作用域 / 控件 / 运算符', null, data]);
+    items.push(['数据', '类型 / 作用域 / 值类型 / 运算符', null, data]);
 
     /* ---------------- 连接 ▶（端点相关）---------------- */
     if (!isEmbed(n)){

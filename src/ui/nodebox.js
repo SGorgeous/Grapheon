@@ -32,6 +32,9 @@ const nbOprKindEl  = document.getElementById('nbOprKind');
 const nbOprTypeEl  = document.getElementById('nbOprType');
 const nbPrioEl     = document.getElementById('nbPrio');
 const nbVarCtrlEl  = document.getElementById('nbVarCtrl');
+const nbBodyRowEl  = document.getElementById('nbBodyRow');
+const nbBodyEl     = document.getElementById('nbBody');
+const nbBodyHintEl = document.getElementById('nbBodyHint');
 const nbSlideRowEl = document.getElementById('nbSlideRow');
 const nbSlideMinEl = document.getElementById('nbSlideMin');
 const nbSlideMaxEl = document.getElementById('nbSlideMax');
@@ -105,6 +108,42 @@ function renderNodeBox(){
       for (const [el, key] of [[nbSlideMinEl, 'min'], [nbSlideMaxEl, 'max'], [nbSlideStepEl, 'step']]){
         el.onchange = () => { setSliderRange(n, { [key]: el.value }); renderNodeBox(); };
       }
+    }
+    /* 内容编辑器放在 isVar 块**里面** —— v 是在这块里声明的 */
+    /* ---- 勾选 / 列表 / 地图的「内容」----
+       这三种以前只能在右键菜单里改，面板上没入口。
+       清单用逗号、列表一行一项、地图一行一对 key=value —— 和右键里那套完全一致。 */
+    if (isVar && (v.control === 'check' || v.control === 'list' || v.control === 'map')){
+      nbBodyRowEl.style.display = 'flex';
+      const fmt = (v.control === 'check') ? v.options.join(', ')
+                : (v.control === 'list')  ? v.items.join('\n')
+                : v.pairs.map(p => p.k + '=' + p.v).join('\n');
+      nbBodyEl.value = fmt;
+      nbBodyHintEl.textContent = (v.control === 'check') ? '用逗号分隔；勾中的拼成一串'
+        : (v.control === 'list') ? '一行一项；用 {' + v.name + '.序号} 取第几项（序号从 0 开始）'
+        : '一行一对 key=value；用 {' + v.name + '.键} 取值';
+      nbBodyEl.onchange = () => {
+        const raw = String(nbBodyEl.value);
+        if (v.control === 'check'){
+          const options = raw.split(',').map(x => x.trim()).filter(x => x !== '');
+          setVarDef(n, { options, picked: v.picked.filter(i => i < options.length) });
+        } else if (v.control === 'list'){
+          const items = raw.split('\n').map(x => x.replace(/\r$/, ''));
+          while (items.length && items[items.length - 1].trim() === '') items.pop();
+          setVarDef(n, { items: items.length ? items : ['0', '1', '2'] });
+        } else {
+          const pairs = raw.split('\n').map(line => {
+            const i = line.indexOf('=');
+            return (i < 0) ? { k:line.trim(), v:'' }
+                           : { k:line.slice(0, i).trim(), v:line.slice(i + 1).trim() };
+          }).filter(p => p.k !== '' || p.v !== '');
+          setVarDef(n, { pairs: pairs.length ? pairs : [{ k:'key', v:'value' }] });
+        }
+        afterNodeEdit();
+      };
+    } else {
+      nbBodyRowEl.style.display = 'none';
+      nbBodyEl.onchange = null;
     }
   }
   if (isOpr){

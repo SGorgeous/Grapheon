@@ -42,7 +42,8 @@
     const scopes = [menuStack[menuStack.length - 1], ctxEl].filter(Boolean);
     for (const sc of scopes){
       const d = [...sc.querySelectorAll('.item')].find(x => labelOf(x).indexOf(prefix) === 0);
-      if (d){ d.onmouseenter && d.onmouseenter(); return d; }
+      // ★ 子菜单现在是单击展开的（以前 hover 就弹）
+      if (d){ d.click(); return d; }
     }
     throw new Error('菜单里没有「' + prefix + '」（当前开了 ' + menuStack.length + ' 层）');
   };
@@ -1861,10 +1862,14 @@
     const subs = [...menuStack[2].querySelectorAll('.item')].map(labelOf);
     ok('M02d 四个形状都在子菜单里',
       ['矩形', '圆角矩形', '菱形（判断）', '椭圆'].every(s => subs.some(x => x === s)), subs.join(' | '));
-    // 移到一个没有子菜单的顶层项上 → 二级菜单应当收起来
+    /* ★ 子菜单现在是**单击**展开的，所以「移到普通项上」不该把它弄没 ——
+       以前 hover 就弹、鼠标一移开就收，想点子菜单里的东西得跟它赛跑。
+       这条断言的就是这个新契约。 */
     const plain = [...ctxEl.querySelectorAll('.item')].find(d => !d.classList.contains('sub'));
-    plain.onmouseenter && plain.onmouseenter();
-    ok('M02e 移到普通项上子菜单全收起', menuStack.length === 1, menuStack.length);
+    if (plain && plain.onmouseenter) plain.onmouseenter();
+    ok('M02e 移到普通项上子菜单**不**收起（要点了才收）', menuStack.length === 3, menuStack.length);
+    ok('M02e2 但展开的那一项还标着 sel',
+      !!ctxEl.querySelector('.item.sel'), ctxEl.querySelectorAll('.item.sel').length);
     hideCtx();
   });
   T('M03 子菜单里的当前值带 ●，点了就生效', () => {
@@ -5753,7 +5758,7 @@
       items.join(' / '));
     // 展开子菜单看看八项齐不齐
     const sub = [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('对齐与分布') === 0);
-    sub.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+    sub.click();   // ★ 子菜单改单击展开了
     const labels = [...document.querySelectorAll('.menu .item')].map(d => d.textContent);
     ok('AL09e 六种对齐 + 两种分布都在',
       ['左对齐','水平居中','右对齐','顶对齐','垂直居中','底对齐','横向等距分布','竖向等距分布']
@@ -6017,7 +6022,7 @@
     // 子菜单是 body 下的兄弟节点，不在 ctxEl 里，得全局找
     const it = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf(label) === 0);
     if (!it) return [];
-    it.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+    it.click();   // ★ 子菜单改单击展开了
     return [...document.querySelectorAll('.menu .item')].map(d => d.textContent);
   };
 
@@ -7849,10 +7854,10 @@
       const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
       ok('BG01e 右键菜单顶层就三项', labels.length === 3, labels.join(' / '));
       const it = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('新建') === 0);
-      it.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+      it.click();   // ★ 子菜单改单击展开了
       const it2 = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('节点') === 0);
       ok('BG01f 找得到「节点」子菜单', !!it2);
-      it2.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+      it2.click();   // ★ 子菜单改单击展开了
       const img = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('图片节点') === 0);
       ok('BG01g 找得到「图片节点…」', !!img, [...document.querySelectorAll('.menu .item')].map(d => d.textContent).join(' / '));
       if (img) img.dispatchEvent(new MouseEvent('click', { bubbles:true }));
@@ -8624,6 +8629,167 @@
         ['单一变量', '滑块', '列表', '地图', '勾选', '条件'].every(x => ts.some(t => t.indexOf(x) >= 0)),
         ts.join(' / '));
     }
+    hideCtx();
+  });
+
+  T('NX01 嵌套索引：{a.{b}} 甚至 {{a}.{b}}', () => {
+    fresh(); cancelEdit();
+    /* 造一套「名字也来自变量、键也来自变量」的结构 */
+    const idx = addVarNode('哪张', 0, 0, { name:'哪张', value:'表', type:'string' });
+    const which = addVarNode('第几个', 0, 300, { name:'第几个', value:'1', type:'number' });
+    const tbl = addVarNode('表', 0, 600, { name:'表', control:'list', items:['零', '一', '二'] });
+    const tbl2 = addVarNode('表二', 0, 900, { name:'表二', control:'list', items:['A', 'B', 'C'] });
+    const m = addVarNode('映射', 0, 1200,
+      /* 特意放一个键叫「壹」—— 这样「取到的值再去索引另一张表」那条三层链路才走得通 */
+      { name:'映射', control:'map',
+        pairs:[{ k:'一', v:'壹' }, { k:'二', v:'贰' }, { k:'壹', v:'深层命中' }] });
+    const m2 = addVarNode('映射二', 0, 1500,
+      { name:'映射二', control:'map', pairs:[{ k:'x', v:'X 值' }] });
+    reindex(); sizeAll();
+
+    const mk = (text, y) => { const n = addNodeAt(text, 900, y, 'round'); reindex(); sizeAll(); mark(); draw(); return displayTextOf(byId(n.id)); };
+    ok('NX01a 一层：{表.1} = 一', mk('{表.1}', 0) === '一', mk('{表.1}', 0));
+    ok('NX01b 头嵌一层：{{哪张}.1} = 一', mk('{{哪张}.1}', 200) === '一', mk('{{哪张}.1}', 200));
+    ok('NX01c 尾嵌一层：{表.{第几个}} = 一', mk('{表.{第几个}}', 400) === '一', mk('{表.{第几个}}', 400));
+    ok('NX01d 头尾都嵌：{{哪张}.{第几个}} = 一',
+      mk('{{哪张}.{第几个}}', 600) === '一', mk('{{哪张}.{第几个}}', 600));
+    ok('NX01e 地图键来自变量：{映射.{表.1}} = 壹',
+      mk('{映射.{表.1}}', 800) === '壹', mk('{映射.{表.1}}', 800));
+    /* ★ 用户举的那个三层例子 {{name1}.{name2.{name3}}} */
+    /* {{哪张}.{映射.{表.1}}} 展开是 表[映射[表[1]]] = 表['壹'] —— 壹 不是合法下标，
+       所以**应该**是 [未定义]。这条测的是「层层展开之后取不到也不炸」。 */
+    ok('NX01f 三层展开后取不到 → [未定义]，不炸',
+      mk('{{哪张}.{映射.{表.1}}}', 1000) === '[未定义]',
+      mk('{{哪张}.{映射.{表.1}}}', 1000));
+    /* 上面那条其实取不到：壹 不是合法下标。换一个真能取到的三层例子 */
+    ok('NX01g 三层（真能取到）：{{哪张}.{映射.二}} —— 映射.二 = 贰，表.贰 取不到',
+      mk('{{哪张}.{映射.二}}', 1200).indexOf('未定义') >= 0,
+      mk('{{哪张}.{映射.二}}', 1200));
+    ok('NX01h 三层（真能取到）：{{哪张}.{映射.一}} 也是 [未定义]（壹 不是数字下标）',
+      mk('{{哪张}.{映射.一}}', 1400).indexOf('未定义') >= 0,
+      mk('{{哪张}.{映射.一}}', 1400));
+    /* 真正常见的三层：变量 → 地图键 → 那个值又是另一个地图的键 */
+    const picker = addVarNode('选谁', 0, 1800, { name:'选谁', value:'一', type:'string' });
+    const keyOf = addVarNode('键表', 0, 2100,
+      { name:'键表', control:'map', pairs:[{ k:'一', v:'壹' }] });
+    reindex(); sizeAll();
+    /* 三层可用形态：
+         {选谁} = 一 → 键表['一'] = 壹 → 映射['壹'] = 深层命中
+       名字、中间的键、外层的键**全是算出来的**。 */
+    ok('NX01i 三层可用形态：{映射.{键表.{选谁}}} = 深层命中',
+      mk('{映射.{键表.{选谁}}}', 1600) === '深层命中', mk('{映射.{键表.{选谁}}}', 1600));
+    /* 拼出来的一整个键：{映射.第{第几个}项} 这种也得能算 —— 用地图键做整串匹配 */
+    const kk = addVarNode('串', 0, 2400, { name:'串', control:'map', pairs:[{ k:'第1项', v:'命中' }] });
+    reindex(); sizeAll();
+    ok('NX01j 键是拼出来的：{串.第{第几个}项} = 命中',
+      mk('{串.第{第几个}项}', 1800) === '命中', mk('{串.第{第几个}项}', 1800));
+  });
+  T('NX02 花括号的边界情况', () => {
+    fresh(); cancelEdit();
+    const L = addVarNode('表', 0, 0, { name:'表', control:'list', items:['甲'] });
+    reindex(); sizeAll();
+    const mk = (text) => { const n = addNodeAt(text, 800, 0, 'round'); reindex(); sizeAll(); mark(); draw(); return displayTextOf(byId(n.id)); };
+    ok('NX02 转义 \\{ 还是字面量', mk('\\{表.0}').indexOf('{表.0}') >= 0, mk('\\{表.0}'));
+    /* 没配对的括号不能把整串吃掉 */
+    const bad = mk('前 {表.0 后');
+    ok('NX02b 没配对的 { 当普通字符', bad.indexOf('前') === 0 && bad.indexOf('后') > 0, bad);
+    ok('NX02c 多余的 } 原样留着', mk('{表.0}}') === '甲}', mk('{表.0}}'));
+    /* 自我引用不能转不完 */
+    const self = addVarNode('自', 0, 400, { name:'自', value:'{自}' });
+    reindex(); sizeAll();
+    const r = mk('取 {自}');
+    ok('NX02d 自引用有护栏（不炸栈、给个标记）', r.length > 0 && r.length < 200, r);
+  });
+  T('NB01 勾选 / 列表 / 地图能在面板里编辑了', () => {
+    fresh(); cancelEdit();
+    const setPanel = (n) => { selectOnly(byId(n.id)); openNodeBox(byId(n.id)); renderNodeBox(); };
+    const row = () => document.getElementById('nbBodyRow');
+    const el2 = () => document.getElementById('nbBody');
+
+    const chk = addControlNode('check', 0, 0);
+    reindex(); sizeAll(); setPanel(chk);
+    ok('NB01 勾选节点：内容行显示出来了', row().style.display === 'flex', row().style.display);
+    ok('NB01b 框里是逗号分隔的选项', el2().value === '选项一, 选项二', JSON.stringify(el2().value));
+    ok('NB01c 提示语说明了格式', document.getElementById('nbBodyHint').textContent.indexOf('逗号') >= 0,
+      document.getElementById('nbBodyHint').textContent);
+    el2().value = '牛肉, 香菜, 辣椒'; el2().onchange();
+    ok('NB01d 改完真的存进去了',
+      normalizeVarDef(byId(chk.id).varDef).options.join('/') === '牛肉/香菜/辣椒',
+      normalizeVarDef(byId(chk.id).varDef).options.join('/'));
+
+    const lst = addVarNode('名单', 0, 500, { name:'名单', control:'list', items:['a', 'b'] });
+    reindex(); sizeAll(); setPanel(lst);
+    ok('NB01e 列表：一行一项', el2().value === 'a\nb', JSON.stringify(el2().value));
+    el2().value = '甲\n乙\n丙'; el2().onchange();
+    ok('NB01f 列表改完存进去',
+      normalizeVarDef(byId(lst.id).varDef).items.join('/') === '甲/乙/丙',
+      normalizeVarDef(byId(lst.id).varDef).items.join('/'));
+
+    const mp = addVarNode('配置', 0, 900,
+      { name:'配置', control:'map', pairs:[{ k:'a', v:'1' }] });
+    reindex(); sizeAll(); setPanel(mp);
+    ok('NB01g 地图：一行一对 key=value', el2().value === 'a=1', JSON.stringify(el2().value));
+    el2().value = 'host=localhost\nport=8080'; el2().onchange();
+    ok('NB01h 地图改完存进去',
+      JSON.stringify(normalizeVarDef(byId(mp.id).varDef).pairs)
+        === JSON.stringify([{ k:'host', v:'localhost' }, { k:'port', v:'8080' }]),
+      JSON.stringify(normalizeVarDef(byId(mp.id).varDef).pairs));
+
+    /* 别的类型要收起来 */
+    const plain = addVarNode('普通', 0, 1300, { name:'普通', value:'x' });
+    reindex(); sizeAll(); setPanel(plain);
+    ok('NB01i 单一变量：内容行收起来', row().style.display === 'none', row().style.display);
+    const sl = addVarNode('滑', 0, 1700, { name:'滑', control:'slider' });
+    reindex(); sizeAll(); setPanel(sl);
+    ok('NB01j 滑块：内容行也收起来', row().style.display === 'none', row().style.display);
+    closeNodeBox();
+  });
+  T('NB02 勾选的作用域行别再写成「列表」', () => {
+    fresh(); cancelEdit();
+    const chk = addControlNode('check', 0, 0);
+    reindex(); sizeAll();
+    const t = varScopeText(normalizeVarDef(byId(chk.id).varDef));
+    ok('NB02 勾选节点显示「勾选」不是「列表」', t.indexOf('勾选') >= 0 && t.indexOf('列表') < 0, t);
+    const lst = addVarNode('名单', 0, 400, { name:'名单', control:'list', items:['a'] });
+    reindex(); sizeAll();
+    ok('NB02b 列表节点显示项数',
+      varScopeText(normalizeVarDef(byId(lst.id).varDef)).indexOf('列表 1 项') >= 0,
+      varScopeText(normalizeVarDef(byId(lst.id).varDef)));
+    const mp = addVarNode('配置', 0, 800,
+      { name:'配置', control:'map', pairs:[{ k:'a', v:'1' }, { k:'b', v:'2' }] });
+    reindex(); sizeAll();
+    ok('NB02c 地图节点显示对数',
+      varScopeText(normalizeVarDef(byId(mp.id).varDef)).indexOf('地图 2 对') >= 0,
+      varScopeText(normalizeVarDef(byId(mp.id).varDef)));
+    /* 每种类型都不能出现别的类型的名字 */
+    ok('NB02d 六种类型两两不串名', VAR_CONTROLS.every(c => {
+      const n = addVarNode('t' + c, 0, 2000, { name:'t' + c, control:c });
+      reindex(); sizeAll();
+      const s = varScopeText(normalizeVarDef(byId(n.id).varDef));
+      return s.indexOf(VAR_CONTROL_LABEL[c]) >= 0
+          || c === 'slider' || c === 'plain';      // 这两个显示的是数值 / 类型名，不是控件名
+    }));
+  });
+  T('MN01 子菜单是单击展开的，不是悬停', () => {
+    fresh(); cancelEdit();
+    const n = addVarNode('x', 0, 0, { name:'x' });
+    reindex(); sizeAll(); selectOnly(byId(n.id));
+    showCtx(600, 400, byId(n.id), null, { p:{ x:0, y:0 } });
+    const top = [...ctxEl.querySelectorAll('.item')];
+    const sub = top.find(d => d.classList.contains('sub'));
+    ok('MN01 前置：顶层有带子菜单的项', !!sub, top.map(d => d.textContent).join(' / '));
+    const before = menuStack.length;
+    /* 悬停不该展开 */
+    if (sub.onmouseenter) sub.onmouseenter();
+    sub.dispatchEvent(new MouseEvent('mouseenter', { bubbles:true }));
+    ok('MN01b 悬停**不**展开', menuStack.length === before, before + ' → ' + menuStack.length);
+    /* 单击才展开 */
+    sub.click();
+    ok('MN01c 单击才展开', menuStack.length === before + 1, before + ' → ' + menuStack.length);
+    ok('MN01d 展开的那项标了 sel', sub.classList.contains('sel'));
+    /* 再点一下收起来 */
+    sub.click();
+    ok('MN01e 再点一下收起', menuStack.length === before, before + ' → ' + menuStack.length);
     hideCtx();
   });
   /* ==================== 收尾 ==================== */

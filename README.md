@@ -1,4 +1,4 @@
-# GRAPHEON
+﻿# GRAPHEON
 
 极简 · Undertale UI 风格的**节点与连线编辑器**。
 
@@ -717,7 +717,7 @@ src/
     demo.js                首次打开时的示例文档
     main.js                启动引导与主循环
 tests/
-  regression.js            1913 项断言
+  regression.js            1947 项断言
   run.mjs                  在真实 Edge 里跑断言：node tests/run.mjs
 ```
 
@@ -849,7 +849,7 @@ GP.keys.rows();                          // 列出所有绑定（带中文标签
 ## 测试
 
 ```bash
-node tests/run.mjs          # 在真实 Edge 里跑 1913 项断言；退出码 0 = 全过
+node tests/run.mjs          # 在真实 Edge 里跑 1947 项断言；退出码 0 = 全过
 node tests/run.mjs --keep   # 保留临时页面，方便手动打开看控制台
 ```
 
@@ -1024,6 +1024,10 @@ node tests/run.mjs --keep   # 保留临时页面，方便手动打开看控制�
 ## 变量节点的四种类型
 
 ![变量节点的四种类型](docs-var-types.png)
+
+样式面板里有一行**「内容」**可以直接改（勾选填逗号、列表一行一项、地图一行一对 key=value）：
+
+![样式面板的内容编辑](docs-var-panel.png)
 
 变量节点可以随时切换类型，**切换不丢数据**（每种的字段各存各的）：
 

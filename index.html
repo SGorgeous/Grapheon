@@ -190,6 +190,13 @@
       <span class="lab">值类型</span>
       <div id="nbVarType" class="opts"></div>
     </div>
+    <!-- 勾选 / 列表 / 地图的「内容」。以前只有右键菜单里能改，
+         面板上根本没入口，所以看起来像是「无法编辑」。 -->
+    <div class="row" id="nbBodyRow" style="display:none">
+      <span class="lab">内容</span>
+      <textarea id="nbBody" class="ud-input nbtext" rows="3" spellcheck="false"></textarea>
+      <div class="sub" id="nbBodyHint"></div>
+    </div>
     <div class="row" id="nbSlideRow" style="display:none">
       <span class="lab">下限</span>
       <input type="text" id="nbSlideMin" class="nbnum" placeholder="可写 {变量}">
