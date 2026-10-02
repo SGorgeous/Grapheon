@@ -239,7 +239,7 @@ function resetPorts(n){
   if (!n) return;
   n.ports = null;
   reindex(); sizeAll(); mark();
-  say('* 端点恢复默认。');
+  say('* ' + tagOf(n) + '的端点恢复默认。');
 }
 
 /* 落点压在某个端点上就返回它的 id，否则 null。

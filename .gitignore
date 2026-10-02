@@ -10,3 +10,7 @@ _*/
 .shot-profile/
 # 打包产物（用 node tools/package.mjs 随时重出）
 dist/
+
+tag.html
+tag.js
+tag.png

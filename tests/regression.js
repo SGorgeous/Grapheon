@@ -9045,6 +9045,104 @@
       JSON.stringify(logCounts()));
     clearLog();
   });
+
+  T('TG01 取名工具：改动类的提示语靠它们报出被改的是谁', () => {
+    fresh(); cancelEdit();
+    const a = addNodeAt('起点节点', 0, 0, 'rect');
+    reindex(); sizeAll();
+    ok('TG01 普通节点用正文', tagOf(byId(a.id)) === '「起点节点」', tagOf(byId(a.id)));
+    /* 空正文要退回类型词，不能变成「」 */
+    const v = addVarNode('', 400, 0, { name:'音量' });
+    reindex(); sizeAll();
+    ok('TG01b 空正文的变量节点用变量名', tagOf(byId(v.id)) === '「变量 音量」', tagOf(byId(v.id)));
+    const t = addNodeAt('', 800, 0, 'rect');
+    t.kind = 'table'; t.tableDef = normalizeTableDef({ rows:2, cols:2 });
+    reindex(); sizeAll();
+    ok('TG01c 空正文的表格退回「表格」', tagOf(byId(t.id)) === '「表格」', tagOf(byId(t.id)));
+    ok('TG01d 超长名字会截断', (() => {
+      const s = tagOf({ text:'这是一个特别特别长的节点名字用来测试截断' });
+      return s.length <= 16 && s.slice(-2) === '…」';
+    })(), tagOf({ text:'这是一个特别特别长的节点名字用来测试截断' }));
+    const g = newEmptyGroup(0, 600); renameGroup(g, '我的分组');
+    ok('TG01e 分组用标题', tagOf(g) === '「我的分组」', tagOf(g));
+    ok('TG01f 没标题的分组兜底', tagOf({ members:[] }) === '「分组」', tagOf({ members:[] }));
+    const e = linkNodes(a.id, v.id); reindex();
+    ok('TG01g 连线报两端', edgeTag(e) === '「起点节点 → 变量 音量」', edgeTag(e));
+    ok('TG01h 一批东西：三个以内全列，超过报总数', (() => {
+      const three = namesOf([a.id, v.id, t.id]);
+      /* namesOf 走的是 byId，只认节点 —— 四个**节点**才该报总数 */
+      const d = addNodeAt('第四', 1200, 0, 'rect');
+      reindex(); sizeAll();
+      const four = namesOf([a.id, v.id, t.id, d.id]);
+      return three.indexOf('等') < 0 && four.indexOf('等 4 个') >= 0;
+    })(), namesOf([a.id, v.id, t.id, g.id]));
+    ok('TG01i 空 / null 不炸', tagOf(null) === '' && namesOf([]) === '' && edgeTag(null) === '「连线」',
+      JSON.stringify([tagOf(null), namesOf([]), edgeTag(null)]));
+  });
+  T('TG02 改动类操作必须报出被改的节点 —— 抽查几条真跑的', () => {
+    fresh(); cancelEdit();
+    const r = doc.nodes.find(n => isRoot(n));
+    const rName = shortName(r);
+
+    /* 新建子节点 */
+    selectOnly(r.id); addChild(); skipDlg();
+    ok('TG02 新建子节点报出父节点', dlgText.textContent.indexOf(rName) >= 0,
+      dlgText.textContent);
+
+    /* 折叠 */
+    clearLog(); selectOnly(r.id); toggleCollapse(); skipDlg();
+    ok('TG02b 折叠报出节点名', dlgText.textContent.indexOf(rName) >= 0, dlgText.textContent);
+
+    /* 恢复自适应尺寸 */
+    const a = doc.nodes.find(n => n !== r && String(n.text || '').trim());
+    clearLog(); autoSizeNode(byId(a.id)); skipDlg();
+    ok('TG02c 恢复尺寸报出节点名', dlgText.textContent.indexOf(shortName(byId(a.id))) >= 0,
+      dlgText.textContent);
+
+    /* 变量节点的内容改动 */
+    const v = addVarNode('变量甲', 900, 0, { name:'甲', control:'list', items:['a'] });
+    reindex(); sizeAll();
+    clearLog(); addListItem(byId(v.id)); skipDlg();
+    ok('TG02d 列表加一项报出节点名', dlgText.textContent.indexOf(shortName(byId(v.id))) >= 0,
+      dlgText.textContent + ' ／ 期望含 ' + shortName(byId(v.id)));
+    clearLog(); setVarControl(byId(v.id), 'map'); skipDlg();
+    ok('TG02e 换类型报出节点名', dlgText.textContent.indexOf(shortName(byId(v.id))) >= 0,
+      dlgText.textContent + ' ／ 期望含 ' + shortName(byId(v.id)));
+
+    /* 表格行列 */
+    const tb = addTableNode(1400, 0, { rows:2, cols:2 });
+    reindex(); sizeAll();
+    clearLog(); tableAddRow(byId(tb.id)); skipDlg();
+    ok('TG02f 表格加行报出节点名', dlgText.textContent.indexOf(shortName(byId(tb.id))) >= 0,
+      dlgText.textContent);
+
+    /* 外观节点（程序节点）：它自己的参数也要报名字 */
+    const pg = createProgramNode(2000, 0);
+    reindex(); sizeAll();
+    clearLog();
+    selectOnly(byId(pg.id)); openNodeBox(byId(pg.id)); afterNodeEdit(); skipDlg();
+    ok('TG02g 外观节点报出自己的名字', dlgText.textContent.indexOf(shortName(byId(pg.id))) >= 0,
+      dlgText.textContent);
+    closeNodeBox();
+
+    /* 连线 */
+    clearLog();
+    const e = linkNodes(a.id, v.id); reindex(); pushHist();
+    say('* 连上了' + edgeTag(e) + '。'); skipDlg();
+    ok('TG02h 连线报出两端', dlgText.textContent.indexOf(shortName(byId(a.id))) >= 0
+      && dlgText.textContent.indexOf(shortName(byId(v.id))) >= 0, dlgText.textContent);
+  });
+  T('TG03 规范是靠工具盯着的，不是靠自觉', () => {
+    /* check-say.mjs 里那条规则：句子里出现「改了什么」的词却没报名字就报错。
+       这里验的是规则本身还在，以及 tagOf / edgeTag 的产物能被认出来。 */
+    ok('TG03 tagOf 的产物里有 「」', tagOf({ text:'x' }).indexOf('「') >= 0, tagOf({ text:'x' }));
+    ok('TG03b edgeTag 的产物里有 「」',
+      edgeTag({ s:'a', t:'b' }).indexOf('「') >= 0, edgeTag({ s:'a', t:'b' }));
+    ok('TG03c 名字为空时要兜底，不能是空字符串', (() => {
+      const bad = [null, {}, { text:'   ' }, { kind:'var' }].map(x => tagOf(x));
+      return bad.every(s => s === '' || (s.length > 2 && s[0] === '「' && s.slice(-1) === '」'));
+    })(), [null, {}, { text:'   ' }, { kind:'var' }].map(x => tagOf(x)).join(' | '));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

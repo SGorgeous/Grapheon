@@ -126,7 +126,7 @@ canvas.addEventListener('pointerdown', (ev) => {
       const a = lastClickNode, b = n.id;
       if (!doc.edges.some(e => e.s === a && e.t === b)){
         linkNodes(a, b, dragPortId, null); reindex(); pushHist();
-        say('* 已建立连线。');
+        say('* 连上了' + edgeTag(ne) + '。');
       }
       lastClickNode = n.id;
       return;
@@ -251,7 +251,7 @@ window.addEventListener('pointerup', (ev) => {
   if ((drag.mode === 'node' || drag.mode === 'group') && drag.moved){
     // 顺序要紧：先按中心位置同步成员关系（拖出去的就不算成员了），
     // 再让框长大到装得下剩下的成员。反过来的话，刚被移出的节点会把框撑大。
-    if (settleGroups(drag.snap.map(s => s.id))) say('* 分组成员 / 外框尺寸已按位置更新。');
+    if (settleGroups(drag.snap.map(s => s.id))) say('* ' + namesOf(drag.snap.map(s => s.id)) + '的位置改好了。');
     // 防重叠：被拖的那批不让路，把压到的别人弹开。弹完再同步一次成员关系。
     const pushed = resolveOverlaps(drag.snap.map(s => s.id));
     if (pushed.size){
@@ -278,7 +278,7 @@ window.addEventListener('pointerup', (ev) => {
       const p2 = portById(drag.node, drag.portId);
       pushHist();
       reindex(); sizeAll();
-      say('* 端点 #' + drag.portId + ' 挪到了'
+      say('* ' + tagOf(byId(drag.targetId)) + '的端点 #' + drag.portId + ' 挪到了'
         + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r'] + '。');
     }
     drag = null;
@@ -294,20 +294,20 @@ window.addEventListener('pointerup', (ev) => {
   } else if (drag.mode === 'resize' && drag.moved){
     if (drag.isGroup){
       const grp = byGroup(drag.targetId);
-      if (grp) say('* 分组框改成 ' + grp.w + ' × ' + grp.h + '。往框里拖节点就会自动收纳。');
+      if (grp) say('* ' + tagOf(grp) + '的框改成 ' + grp.w + ' × ' + grp.h + '。');
     } else {
       const n = byId(drag.targetId);
       resolveOverlaps([drag.targetId]);          // 变大之后可能压到别人
       settleGroups([drag.targetId]);             // 也可能顶出分组框
-      if (n) say('* 尺寸改为 ' + n.w + ' × ' + n.h + '。右键节点可以恢复自适应。');
+      if (n) say('* ' + tagOf(n) + '的尺寸改为 ' + n.w + ' × ' + n.h + '。');
     }
     pushHist();
   } else if (drag.mode === 'bend' && drag.moved){
     const e = doc.edges.find(x => x.id === drag.edgeId);
     if (e && drag.index >= 0 && pruneWaypoint(e, drag.index)){
-      say('* 拐点已拉直，自动收掉了。');
+      say('* ' + edgeTag(e) + '的拐点拉直后自动收掉了。');
     } else {
-      say('* 已调整拐点。把线拉直会自动收掉，右键可清除全部拐点。');
+      say('* ' + edgeTag(e) + '的拐点已调整。');
     }
     pushHist();
   } else if (drag.mode === 'marquee' && marquee){
@@ -382,7 +382,7 @@ canvas.addEventListener('dblclick', (ev) => {
   const wp = hitWaypoint(p);
   if (wp){
     const e = doc.edges.find(x => x.id === wp.edgeId);
-    if (e){ removeWaypoint(e, wp.index); pushHist(); say('* 拐点已删除。'); }
+    if (e){ removeWaypoint(e, wp.index); pushHist(); say('* ' + edgeTag(e) + '的拐点已删除。'); }
     return;
   }
   const n = hitNode(p);
