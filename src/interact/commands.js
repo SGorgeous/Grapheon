@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/commands.js
    结构操作：子/兄弟/父节点、删除、折叠、形状、方向生成、连线样式。
@@ -54,11 +54,11 @@ function addChild(){
   const n = soleSel();
   if (!n){ say('* 先选中一个节点，再按 Tab。'); return; }
   addChildOf(n);
-  say('* 新的子节点诞生了。Tab 继续深入，Enter 添加兄弟。');
+  say('* 新的子节点诞生了。');
 }
 function addSibling(){
   const n = soleSel();
-  if (!n){ say('* 先选中一个节点，再按 Enter。'); return; }
+  if (!n){ say('* 请先选中一个节点。'); return; }
   const p = idx.parent.get(n.id);
   if (!p){ addChildOf(n); say('* 根节点没有兄弟，改为新建子节点。'); return; }
   addSiblingOf(byId(p), n, 'after');
@@ -168,7 +168,7 @@ function applySpawnDir(e, from, to, dir){
 }
 function spawnInDirection(dir){
   const n = soleSel();
-  if (!n){ say('* 先选中一个节点，再按方向键（或 WASD）。'); return; }
+  if (!n){ say('* 请先选中一个节点。'); return; }
   const nn = addNodeAt('', n.x, n.y, 'rect');
   const ne = linkNodes(n.id, nn.id);
   reindex(); sizeAll();
@@ -247,7 +247,7 @@ function toggleCollapseOf(n){
     n.collapsed = true;
     n.collapseAt = { x:n.x, y:n.y };     // 记住折叠时父节点的位置
     reindex();
-    say('* 已折叠，隐藏 ' + descendants(n.id).length + ' 个子孙节点。点角标或按 Space 展开。');
+    say('* 已折叠，藏起 ' + descendants(n.id).length + ' 个子孙。');
   } else {
     const from = n.collapseAt;
     n.collapsed = false;
@@ -273,7 +273,7 @@ function toggleGroupCollapse(grp){
   grp.collapsed = !grp.collapsed;
   reindex(); pushHist(); mark();
   say(grp.collapsed
-    ? '* 已折叠分组「' + (grp.title || '分组') + '」，藏起 ' + ids.length + ' 个节点。点标题右边的角标展开。'
+    ? '* 已折叠分组「' + (grp.title || '分组') + '」，藏起 ' + ids.length + ' 个节点。'
     : '* 已展开分组「' + (grp.title || '分组') + '」。');
 }
 /* Space：选中分组就折叠分组，选中节点就折叠节点 */
@@ -281,7 +281,7 @@ function toggleCollapse(){
   const grp = soleGroup();
   if (grp){ toggleGroupCollapse(grp); return; }
   const n = soleSel();
-  if (!n){ say('* 先选中一个节点或分组，再按 Space。'); return; }
+  if (!n){ say('* 请先选中一个节点或分组。'); return; }
   toggleCollapseOf(n);
 }
 function setShape(shape){
@@ -465,7 +465,7 @@ function createGroup(){
   for (const grp of selectedGroups()) for (const id of groupAllNodes(grp.id)) inSel.add(id);
   const ids = [...sel].filter(id => byId(id) && !isHidden(id) && !inSel.has(id));
   for (const grp of selectedGroups()) ids.push(grp.id);
-  if (ids.length < 2){ say('* 至少选中两个东西（节点或分组）才能成组，Shift 点选或 Shift 拖拽框选。'); return null; }
+  if (ids.length < 2){ say('* 至少要选中两个东西才能成组。'); return null; }
   doc.groups = doc.groups || [];
   const grp = { id:uid('g'), title:'分组 ' + (doc.groups.length + 1), members:ids.slice(), color:null };
   doc.groups.push(grp);
@@ -584,7 +584,7 @@ function newEmptyGroup(cx, cy){
   reindex();
   selectGroup(grp.id);
   pushHist();
-  say('* 建了一个空分组框。把节点拖进去就会自动收纳，拖右下角可以改大小。');
+  say('* 建了一个空分组框。把节点拖进去就会收纳。');
   return grp;
 }
 
@@ -631,7 +631,7 @@ function toggleProgramNode(n){
     n.kind = 'program';
     n.program = normalizeProgram(n.program);
     if (!String(n.text).trim()) n.text = programLabel(n.program);
-    say('* 「' + (n.text || '节点') + '」已转成程序节点：把它连到目标节点上，算符就会叠加过去。');
+    say('* 「' + n.text + '」已转成外观节点。');
   }
   refreshEffects(); sizeAll(); pushHist(); mark();
 }
@@ -698,7 +698,7 @@ const viewCenter = () => s2w(VW / 2, VH / 2 - 60);
 function insertImageFile(file, at){
   if (!file){ return; }
   if (!/^image\//.test(file.type || '')){ say('* 「' + (file.name || '这个文件') + '」不是图片。'); return; }
-  say('* 正在处理图片……');
+  say('* 正在处理图片。');
   imageToDataURL(file, (url, natW, natH) => {
     if (!url){ say('* 这张图片读不出来。'); return; }
     const p = at || viewCenter();
@@ -706,8 +706,7 @@ function insertImageFile(file, at){
     reindex(); sizeAll();
     selectOnly(n.id);
     pushHist(); mark();
-    say('* 图片已加入（' + natW + '×' + natH + '，内嵌约 ' + Math.round(url.length / 1024) +
-        ' KB）。右上角双击命名，图片下面双击写描述。');
+    say('* 图片已加入（' + natW + '×' + natH + '，约 ' + Math.round(url.length / 1024) + ' KB）。');
   });
 }
 /* 给已有的图片节点换一张图 */
@@ -757,7 +756,7 @@ function insertEmbedFile(file, at){
     let d2 = null;
     try { d2 = JSON.parse(String(r.result)); } catch(e){ d2 = null; }
     if (!d2 || !Array.isArray(d2.nodes)){
-      say('* 这不是一个 Grapheon 文档（要 .json）。');
+      say('* 这不是 Grapheon 文档（要 .json）。');
       return;
     }
     const p = at || viewCenter();
@@ -765,8 +764,7 @@ function insertEmbedFile(file, at){
                            Math.round(p.x - EMBED_DEF_W / 2), Math.round(p.y - EMBED_DEF_H / 2));
     selectOnly(n.id);
     pushHist(); mark();
-    say('* 已把「' + n.text + '」整份嵌进来（' + d2.nodes.length + ' 个节点）。' +
-        '它是封闭的：连不了线；双击进去可以改，改的是副本，原文件不受影响。');
+    say('* 已嵌入「' + n.text + '」（' + d2.nodes.length + ' 个节点）。双击可以进去改。');
   };
   r.readAsText(file);
 }
@@ -785,7 +783,7 @@ function enterEmbed(n){
   });
   deserialize(JSON.parse(JSON.stringify(n.embed.doc)));   // 编辑的是副本
   fitView(); initHist(); mark();
-  say('* 进了「' + n.text + '」内部。这里改的是副本，原文件不会被动到；按 Esc 出来。');
+  say('* 进了「' + n.text + '」内部。改的是副本，原文件不受影响。');
   updateMeta();
 }
 /* 退出嵌入文档，把里面改的东西写回父文档里那个节点 */
@@ -855,7 +853,7 @@ function toggleFunctionGroup(grp){
   grp.isFunction = !grp.isFunction;
   reindex(); sizeAll(); pushHist(); mark();
   say(grp.isFunction
-    ? '* 「' + (grp.title || '分组') + '」现在是程序组：变量节点指向它，值就变成组内算出来的值。'
+    ? '* 「' + (grp.title || '分组') + '」已设为程序组。'
     : '* 「' + (grp.title || '分组') + '」不再是程序组。');
 }
 /* 手动设优先级 */
@@ -1111,8 +1109,9 @@ function selectGroupNodes(grp){
   }
   lastClickNode = null;
   mark();
-  say('* 选中了「' + (grp.title || '分组') + '」里的 ' + sel.size + ' 个节点'
-      + (skipped ? '（另有 ' + skipped + ' 个藏着，跳过了）' : '') + '。');
+  /* 「跳过 N 个藏着的」这句有用（也是断言在盯的）—— 但别写成一长串 */
+  say('* 选中了 ' + sel.size + ' 个节点'
+    + (skipped ? '，跳过 ' + skipped + ' 个藏着的' : '') + '。');
   return true;
 }
 

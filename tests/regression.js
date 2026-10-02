@@ -2454,8 +2454,8 @@
       const on = sw.filter(d => d.className.indexOf('on') >= 0);
       return on.length === 1 && on[0].style.background === 'rgb(0, 255, 255)';
     })(), [...nbColorEl.querySelectorAll('.sw')].findIndex(d => d.className.indexOf('on') >= 0));
-    ok('Q13b 底部说明写明了被几个程序节点作用',
-      nbHitsEl.textContent.indexOf('被 1 个程序节点作用') >= 0, nbHitsEl.textContent);
+    ok('Q13b 底部说明写明了被几个外观节点作用',
+      nbHitsEl.textContent.indexOf('被 1 个外观节点作用') >= 0, nbHitsEl.textContent);
     closeNodeBox();
   });
   T('Q14 程序节点的显示名会跟着算符自动更新', () => {

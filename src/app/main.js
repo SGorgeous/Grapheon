@@ -35,7 +35,7 @@ function boot(){
   if (typeof restoreUserFonts === 'function') restoreUserFonts().catch(() => {});
   fitView();
   document.body.classList.add('dsh-ready');
-  say('* 欢迎来到 GRAPHEON。选中节点后按方向键或 WASD 生成节点；点选连线后按 E 改连线样式。');
+  say('* 欢迎来到 GRAPHEON。选中一个节点就能开始。');
   updateMeta();
   setInterval(updateMeta, 500);
   requestAnimationFrame(loop);

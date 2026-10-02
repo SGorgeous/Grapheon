@@ -1,11 +1,11 @@
 'use strict';
 /* ==========================================================================
    GRAPHEON · ui/nodebox.js
-   节点面板：程序算符（程序节点才有）+ 外观（字号 / 字体 / 字色 / 外框色 / 尺寸）。
+   节点面板：程序算符（外观节点才有）+ 外观（字号 / 字体 / 字色 / 外框色 / 尺寸）。
 
    选中节点后右键 →「节点样式…」或直接按 E 打开。
    所有外观项都能选「默认」，意思是跟随主题（换主题时会一起变）；
-   显示出来的是**有效值** —— 被程序节点改过的话，这里显示的就是改过之后的。
+   显示出来的是**有效值** —— 被外观节点改过的话，这里显示的就是改过之后的。
    ========================================================================== */
 
 const nodeBoxEl = document.getElementById('nodebox');
@@ -76,9 +76,9 @@ function renderNodeBox(){
   const n = byId(nbNodeId);
   if (!n){ closeNodeBox(); return; }
   const prog = isProgram(n);
-  nbSubEl.textContent = (prog ? '程序节点「' : '节点「') + (n.text || '未命名') + '」 · ' +
+  nbSubEl.textContent = (prog ? '外观节点「' : '节点「') + (n.text || '未命名') + '」 · ' +
     n.w + ' × ' + n.h + (n.fixedW || n.fixedH ? '（手动尺寸）' : '（随文字自适应）');
-  nbProgBtn.textContent = prog ? '转回普通节点' : '转成程序节点';
+  nbProgBtn.textContent = prog ? '转回普通节点' : '转成外观节点';
 
   // ---- 变量定义 ----
   const isVar = (n.kind === 'var' || n.kind === 'broadcast'), isOpr = n.kind === 'op';
@@ -89,17 +89,13 @@ function renderNodeBox(){
     nbSubEl.textContent = '变量定义「' + v.name + '」 · 别的节点文本里用 {' + v.name + '} 引用';
     buildOpts(nbVarScopeEl, SCOPE_OPTS, v.scope, (x) => {
       setVarDef(n, { scope:x }); afterNodeEdit();
-      say('* 作用域：' + VAR_SCOPE_LABEL[x] + '（' + (x === 'global' ? '哪儿都能用'
-        : x === 'local' ? '只有它的下游能用' : '把它连到一个分组，组内才能用') + '）');
+      say('* 作用域改成「' + VAR_SCOPE_LABEL[x] + '」。');
     });
     buildOpts(nbVarTypeEl, VTYPE_OPTS, v.type, (x) => { setVarDef(n, { type:x }); afterNodeEdit(); });
     buildOpts(nbVarCtrlEl, CTRL_OPTS, v.control, (x) => {
       setVarControl(n, x);
       renderNodeBox();
-      say('* 控件改成「' + VAR_CONTROL_LABEL[x] + '」。' + (x === 'cond'
-        ? '它放在连接中间：关掉之后这条连接逻辑上就断了。'
-        : x === 'check' ? '点方框勾选，右键「编辑选项…」加减选项。'
-        : x === 'slider' ? '拖圆点实时改值。' : ''));
+      say('* 类型改成「' + VAR_CONTROL_LABEL[x] + '」。');
     });
     // 滑条才有上下限
     nbSlideRowEl.style.display = (v.control === 'slider') ? 'flex' : 'none';
@@ -171,7 +167,7 @@ function renderNodeBox(){
   nbProgEl.style.display = prog ? 'block' : 'none';
   if (prog) renderProgRows(n);
 
-  // ---- 外观（读有效值：被程序节点改过就显示改过之后的） ----
+  // ---- 外观（读有效值：被外观节点改过就显示改过之后的） ----
   buildOpts(nbFsEl, FS_OPTS, effFsPx(n) || 0, (v) => { setNodeStyle(n, { fsPx: v || null }); afterNodeEdit(); });
   buildOpts(nbFontEl, Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]), effFont(n) || 'auto', (v) => { setNodeStyle(n, { font: v }); afterNodeEdit(); });
   buildSwatches(nbColorEl, effColor(n), (v) => { setNodeStyle(n, { color: v }); afterNodeEdit(); });
@@ -189,11 +185,11 @@ function renderNodeBox(){
   const hits = programHits(n.id);
   if (prog){
     nbHitsEl.textContent = doc.edges.some(e => e.s === n.id)
-      ? '算符会沿着从它出发的连线叠加到目标上；多个程序节点按连线先后依次累加。'
+      ? '算符会沿着从它出发的连线叠加到目标上；多个外观节点按连线先后依次累加。'
       : '还没连到任何节点：从它拉一条线到目标节点，算符才会生效。';
   } else if (hits.length){
     const ev = effOf(n);
-    nbHitsEl.textContent = '被 ' + hits.length + ' 个程序节点作用：' +
+    nbHitsEl.textContent = '被 ' + hits.length + ' 个外观节点作用：' +
       hits.map(h => '「' + (h.text || '程序') + '」').join('、') +
       (ev && ev.value != null ? '　当前数值 = ' + ev.value : '');
   } else {
@@ -296,12 +292,12 @@ function afterNodeEdit(){
   renderNodeBox();
   const n = byId(nbNodeId);
   if (n){
-    if (isProgram(n)) say('* 程序节点：' + programLabel(n.program));
+    if (isProgram(n)) say('* 外观节点：' + programLabel(n.program));
     else {
       const hits = programHits(n.id);
       const ev = effOf(n);
       const extra = (ev && ev.value != null) ? '（数值 = ' + ev.value + '）' : '';
-      say('* 节点外观：' + nodeStyleText(n) + (hits.length ? '　被 ' + hits.length + ' 个程序节点作用' + extra : ''));
+      say('* 节点外观：' + nodeStyleText(n) + (hits.length ? '　被 ' + hits.length + ' 个外观节点作用' + extra : ''));
     }
   }
   pushHist();

@@ -375,7 +375,7 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addTableNode(Math.round(p.x - 160), Math.round(p.y - 70));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个表格节点。双击格子改内容，右键可以加行 / 加列。');
+          say('* 建了一个表格节点。双击格子改内容。');
         }]
       ]],
       ['空组', '一个空的分组框，往里拖东西就自动收纳', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
@@ -384,31 +384,31 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个变量节点。双击左边的框改名，右边的框改值；别处写 {名字} 就能引用。');
+          say('* 建了一个变量节点。别处写 {名字} 就能引用。');
         }],
         ['勾选节点', '选项随便加，输出选中的那一串', () => {
           const p = s2w(x, y);
           const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 勾选节点：点方框就能勾 / 取消，输出是选中的那一串。右键「编辑选项…」加减选项。');
+          say('* 建了一个勾选节点。点方框勾选，输出是选中那串。');
         }],
         ['条件节点', '输入为 1 时才把所填的值放出去', () => {
           const p = s2w(x, y);
           const nn = addControlNode('cond', Math.round(p.x - 140), Math.round(p.y - 60));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 条件节点：一个输入一个输出。流进来的值是 1 就把「所填的值」放出去；不是 1 就不通。');
+          say('* 建了一个条件节点。输入为 1 才放行。');
         }],
         ['广播节点', '把输入值变成全局变量，只能设名字', () => {
           const p = s2w(x, y);
           const nn = addBroadcastNode(Math.round(p.x - 137), Math.round(p.y - 50));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个广播节点。把值连进来，它的名字就是全局变量名。');
+          say('* 建了一个广播节点。它的名字就是全局变量。');
         }],
         ['输出节点', '声明本作用域的输出值', () => {
           const p = s2w(x, y);
           const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个输出节点。把值连进来，或者双击名字框填一个同作用域的变量名。');
+          say('* 建了一个输出节点。把值连进来就行。');
         }],
         'hr',
         // 这两个也是程序节点，只是不是「变量」那一类。
@@ -417,14 +417,14 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个运算符节点。左边两个输入端点各对一个操作数：接上了就用接进来的值，没接就用格子里的。');
+          say('* 建了一个运算符节点。两个输入端点各对一个操作数。');
         }],
         ['外观节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
           const p = s2w(x, y);
           const nn = createProgramNode(p.x - 70, p.y - 24);
           reindex(); relayout();
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个外观节点。从它拉一条线到目标节点，算符就会叠加过去。');
+          say('* 建了一个外观节点。拉线到目标就生效。');
         }]
       ]],
       ['程序组', '组内变量 + 运算 + 输出，外面接它的输出（原函数分组）', () => {
@@ -434,7 +434,7 @@ function showCtx(x, y, n, e, info){
         renameGroup(g, '程序组');
         reindex(); sizeAll();
         selectGroup(g.id); pushHist(); mark();
-        say('* 建了一个程序组。往里放变量 / 运算 / 输出节点，外面用一个变量节点指向它就能取到结果。');
+        say('* 建了一个程序组。外面用变量节点指向它取结果。');
       }],
       ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile(s2w(x, y))]
     ]]);
@@ -486,7 +486,7 @@ function showInsertMenu(anchor){
       const c = viewCenter();
       const n = addNodeAt('新节点', Math.round(c.x - 60), Math.round(c.y - 24), 'rect');
       selectOnly(n.id); pushHist(); mark();
-      say('* 加了一个节点。选中它按方向键 / WASD 可以往那个方向接着生成。');
+      say('* 加了一个节点。');
     }],
     ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],

@@ -192,7 +192,7 @@ function doExport(){
       say('* 导出失败了：' + err.message);
     }
   };
-  say('* 正在导出……');
+  say('* 正在导出。');
   const pending = ensureImagesLoaded();
   if (pending && pending.then) pending.then(go, go); else go();
 }

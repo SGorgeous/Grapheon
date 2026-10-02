@@ -12,7 +12,9 @@ const dlgArrow = document.getElementById('dlgArrow');
 const dlgMeta  = document.getElementById('dlgMeta');
 const dlgHint  = document.getElementById('dlgHint');
 let dlg = { full:'', shown:0, timer:null };
-const HINT = '方向键/WASD 生成节点 · Tab 子节点 · Enter 兄弟 · E 样式面板 · Ctrl+G 分组 · Del 删除 · H 帮助';
+/* ★ 这里以前挂着一整行快捷键（方向键 / Tab / Enter / E / Ctrl+G / Del / H）。
+   现在底栏只显示「当前这一下发生了什么」，快捷键和教程都归帮助面板（按 H）。
+   dlgHint 只剩一个用途：进到嵌入副本里时提醒你正在改副本。 */
 /* 主题不要星号的话，就把开头那个 '* ' 摘掉（文字里原本都带着它） */
 function stripStar(s){ return themeStar() ? s : String(s).replace(/^\*\s?/, ''); }
 function say(msg){
@@ -60,7 +62,10 @@ function updateMeta(){
   dlgMeta.textContent = crumb + doc.nodes.length + ' 节点' + hid +
     ' / ' + doc.edges.length + ' 连线' + (gN ? ' / ' + gN + ' 分组' : '') + selTxt +
     ' · ' + Math.round(view.z * 100) + '%';
-  dlgHint.textContent = insideEmbed() ? '正在编辑嵌入副本 · Esc 或顶栏「返回」回到外层 · 原文件不受影响' : HINT;
+  const emb = insideEmbed() ? '正在编辑嵌入副本 · 原文件不受影响' : '';
+  dlgHint.textContent = emb;
+  /* 没话可说就把这行收掉，别留一条空行把面板撑高 */
+  dlgHint.style.display = emb ? '' : 'none';
   const back = document.getElementById('b-back');
   if (back) back.style.display = insideEmbed() ? '' : 'none';
 }

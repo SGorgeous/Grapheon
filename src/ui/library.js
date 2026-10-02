@@ -174,9 +174,9 @@ async function insertAsset(it){
     try { obj = JSON.parse(await blob.text()); } catch(e){ obj = null; }
     if (obj && obj.theme) obj = Object.assign({ id:obj.id }, obj.theme);
     const id = registerUserTheme(obj);
-    if (!id){ say('* 这个文件读不出主题（至少要有一个 canvas 调色板）。'); return; }
+    if (!id){ say('* 这个文件里没有能用的主题。'); return; }
     applyTheme(id);
-    say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。不想要了可以在设置里「删除当前主题」。');
+    say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。');
   }
 }
 
@@ -197,7 +197,7 @@ document.getElementById('libConnect').onclick = async () => {
   try {
     const b = await Store.connectFolder();
     await refreshLib();
-    say('* 接上了磁盘文件夹（' + Store.dirName + '/）。素材是真实的文件，资源管理器里也能看到。');
+    say('* 已接上磁盘文件夹「' + Store.dirName + '」。素材是真实文件。');
   } catch(e){
     say('* ' + (e && e.name === 'AbortError' ? '取消了。' : '连不上：' + e.message));
   }

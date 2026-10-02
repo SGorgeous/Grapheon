@@ -279,8 +279,7 @@ window.addEventListener('pointerup', (ev) => {
       pushHist();
       reindex(); sizeAll();
       say('* 端点 #' + drag.portId + ' 挪到了'
-        + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r']
-        + '。双击它可以改 ID 和标签；把它拖到别的节点上就是连线。');
+        + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r'] + '。');
     }
     drag = null;
     mark();
