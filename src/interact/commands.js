@@ -54,15 +54,15 @@ function addChild(){
   const n = soleSel();
   if (!n){ say('* 先选中一个节点，再按 Tab。'); return; }
   addChildOf(n);
-  say('* 新的子节点诞生了。');
+  say('* 在' + tagOf(n) + '下新建了子节点。');
 }
 function addSibling(){
   const n = soleSel();
   if (!n){ say('* 请先选中一个节点。'); return; }
   const p = idx.parent.get(n.id);
-  if (!p){ addChildOf(n); say('* 根节点没有兄弟，改为新建子节点。'); return; }
+  if (!p){ addChildOf(n); say('* ' + tagOf(n) + '是根节点，改为新建子节点。'); return; }
   addSiblingOf(byId(p), n, 'after');
-  say('* 新的兄弟节点。');
+  say('* 在' + tagOf(n) + '旁新建了兄弟节点。');
 }
 /* --- 结构原语：子 / 兄弟（可指定前后）/ 父 --- */
 function afterSpawn(nn){
@@ -179,7 +179,7 @@ function spawnInDirection(dir){
      于是往下生成却从右边连出来。 */
   applySpawnDir(ne, n, nn, dir);
   afterSpawn(nn);
-  say('* 已在' + ({ up:'上', down:'下', left:'左', right:'右' })[dir] + '方生成新节点。');
+  say('* 在' + tagOf(n) + '的' + ({ up:'上', down:'下', left:'左', right:'右' })[dir] + '方新建了节点。');
 }
 function spawnPos(n, dir, w, h, skip){
   const GAP = 64;
@@ -232,22 +232,25 @@ function deleteSelection(){
   sel.clear();
   reindex(); relayout();
   pushHist();
-  say('* ' + kill.size + ' 个节点被抹除了' + (grps.length ? '，另有 ' + grps.length + ' 个分组被解散。' : '。'));
+  /* 规范：改动类要报名字。删一批的话最多列三个，多了就报总数 */
+    const names = [...kill].slice(0, 3).map(id => tagOf(byId(id))).join('');
+    say('* 删掉了' + (kill.size <= 3 ? names : ('「等 ' + kill.size + ' 个东西')) 
+      + (grps.length ? '，另有 ' + grps.length + ' 个分组被解散。' : '。'));
 }
 function deleteEdgeOnly(e){
   doc.edges = doc.edges.filter(x => x !== e);
   if (selEdgeId === e.id) selEdgeId = null;
-  reindex(); relayout(); pushHist(); say('* 连线已断开。');
+  reindex(); relayout(); pushHist(); say('* 断开了' + edgeTag(e) + '。');
 }
 function toggleCollapseOf(n){
   if (!n) return;
   const kids = idx.children.get(n.id) || [];
-  if (!kids.length){ say('* 这个节点没有子节点。'); return; }
+  if (!kids.length){ say('* ' + tagOf(n) + '没有子节点。'); return; }
   if (!n.collapsed){
     n.collapsed = true;
     n.collapseAt = { x:n.x, y:n.y };     // 记住折叠时父节点的位置
     reindex();
-    say('* 已折叠，藏起 ' + descendants(n.id).length + ' 个子孙。');
+    say('* 折叠了' + tagOf(n) + '，藏起 ' + descendants(n.id).length + ' 个子孙。');
   } else {
     const from = n.collapseAt;
     n.collapsed = false;
@@ -258,7 +261,7 @@ function toggleCollapseOf(n){
     }
     n.collapseAt = null;
     reindex();
-    say('* 已展开。');
+    say('* 展开了' + tagOf(n) + '。');
   }
   pushHist(); mark();
 }
@@ -295,7 +298,7 @@ function autoSizeNode(n){
   if (!n) return;
   n.fixedW = null; n.fixedH = null;
   sizeNode(n); pushHist(); mark();
-  say('* 尺寸已恢复自适应。');
+  say('* ' + tagOf(n) + '的尺寸恢复自适应。');
 }
 function setNodeSize(n, w, h){
   if (!n) return;
@@ -445,7 +448,7 @@ function resetNodeStyle(n){
   if (!n) return;
   n.font = null; n.fsPx = null; n.color = null; n.border = null;
   sizeNode(n); mark();
-  say('* 外观已恢复成跟随主题。');
+  say('* ' + tagOf(n) + '的外观恢复成跟随主题。');
 }
 const nodeStyleText = (n) => [
   NODE_FONT_LABEL[n.font] || NODE_FONT_LABEL.auto,
@@ -518,7 +521,7 @@ function removeSelectionFromGroup(grp){
     if (i >= 0) grp.members.splice(i, 1);
   }
   reindex(); pushHist(); mark();
-  say('* 已移出分组。');
+  say('* 把' + namesOf(out) + '移出了' + tagOf(grp) + '。');
 }
 
 /* 分组自由框：手动改尺寸。成员的外接框是硬下限 —— 拉不到比成员还小。 */
@@ -706,7 +709,7 @@ function insertImageFile(file, at){
     reindex(); sizeAll();
     selectOnly(n.id);
     pushHist(); mark();
-    say('* 图片已加入（' + natW + '×' + natH + '，约 ' + Math.round(url.length / 1024) + ' KB）。');
+    say('* 图片' + tagOf(n) + '已加入（' + natW + '×' + natH + '，约 ' + Math.round(url.length / 1024) + ' KB）。');
   });
 }
 /* 给已有的图片节点换一张图 */
@@ -885,7 +888,7 @@ function setOpOperator(n, id){
   if (!isOpNode(n) || !OP_BY_ID.has(id)) return;
   setOpDef(n, { op:id });          // normalizeOpDef 会把 operands 补齐到新算符的 arity
   pushHist();
-  say('* 算符改成 ' + opDefOf(id).label + '（' + opDefOf(id).hint + '）。');
+  say('* ' + tagOf(n) + '的算符改成' + opDefOf(id).label + '。');
 }
 
 /* =========================================================================
@@ -942,14 +945,14 @@ function setSliderRange(n, patch){
   if (!isVarNode(n)) return;
   n.varDef = normalizeVarDef(Object.assign({}, n.varDef, patch));
   reindex(); sizeAll(); pushHist(); mark();
-  say('* 滑条范围：' + varScopeText(n.varDef) + '。');
+  say('* ' + tagOf(n) + '的滑条范围：' + varScopeText(n.varDef) + '。');
 }
 function setVarControl(n, control){
   if (!isVarNode(n)) return;
   n.varDef = normalizeVarDef(Object.assign({}, n.varDef, { control }));
   sizeNode(n);
   reindex(); sizeAll(); pushHist(); mark();
-  say('* 「' + normalizeVarDef(n.varDef).name + '」现在是' + VAR_CONTROL_LABEL[control] + '节点。');
+  say('* ' + tagOf(n) + '现在是' + VAR_CONTROL_LABEL[control] + '节点。');
 }
 /* 列表 / 地图的增删。
    ⚠ 列表空了会被 normalizeVarDef 重置回默认的 0 1 2 —— 所以「删到空」等于重置，
@@ -961,8 +964,7 @@ function addListItem(n){
   items.push(String(items.length));            // 新项先填个序号，方便改
   setVarDef(n, { items });
   sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 列表加了一项：第 ' + (items.length - 1) + ' 项。引用写法 {' + v.name + '.'
-      + (items.length - 1) + '}。');
+  say('* ' + tagOf(n) + '的列表加了一项。');
 }
 function removeListItem(n){
   if (!isVarNode(n)) return;
@@ -971,7 +973,7 @@ function removeListItem(n){
   const items = v.items.slice(0, v.items.length - 1);
   setVarDef(n, { items });
   sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 列表删掉了最后一项，现在 ' + items.length + ' 项。');
+  say('* ' + tagOf(n) + '的列表删掉了最后一项，现在 ' + items.length + ' 项。');
 }
 function addMapPair(n){
   if (!isVarNode(n)) return;
@@ -980,7 +982,7 @@ function addMapPair(n){
   pairs.push({ k:'key' + pairs.length, v:'' });
   setVarDef(n, { pairs });
   sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 地图加了一对，引用写法 {' + v.name + '.key' + (pairs.length - 1) + '}。');
+  say('* ' + tagOf(n) + '的地图加了一对。');
 }
 function removeMapPair(n){
   if (!isVarNode(n)) return;
@@ -989,7 +991,7 @@ function removeMapPair(n){
   const pairs = v.pairs.slice(0, v.pairs.length - 1).map(p => ({ k:p.k, v:p.v }));
   setVarDef(n, { pairs });
   sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 地图删掉了最后一对，现在 ' + pairs.length + ' 对。');
+  say('* ' + tagOf(n) + '的地图删掉了最后一对，现在 ' + pairs.length + ' 对。');
 }
 /* 勾选节点的选项列表：用一串逗号分隔的文本来编辑 */
 function setCheckOptions(n, text){
@@ -1154,7 +1156,7 @@ function tableAddRow(n, after){
   t.cells.splice(after == null ? t.rows : after + 1, 0, new Array(t.cols).fill(''));
   t.rows = t.cells.length;
   n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 加了一行，现在 ' + t.rows + ' 行。');
+  say('* ' + tagOf(n) + '加了一行，现在 ' + t.rows + ' 行。');
 }
 function tableAddCol(n, after){
   if (!isTableNode(n)) return;
@@ -1163,7 +1165,7 @@ function tableAddCol(n, after){
   for (const row of t.cells) row.splice(at, 0, '');
   t.cols = t.cells[0].length;
   n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 加了一列，现在 ' + t.cols + ' 列。');
+  say('* ' + tagOf(n) + '加了一列，现在 ' + t.cols + ' 列。');
 }
 function tableDelRow(n, r){
   if (!isTableNode(n)) return;
@@ -1172,7 +1174,7 @@ function tableDelRow(n, r){
   t.cells.splice(r == null ? t.rows - 1 : r, 1);
   t.rows = t.cells.length;
   n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 删了一行，现在 ' + t.rows + ' 行。');
+  say('* ' + tagOf(n) + '删了一行，现在 ' + t.rows + ' 行。');
 }
 function tableDelCol(n, c){
   if (!isTableNode(n)) return;
@@ -1182,7 +1184,7 @@ function tableDelCol(n, c){
   for (const row of t.cells) row.splice(at, 1);
   t.cols = t.cells[0].length;
   n.tableDef = t; sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
-  say('* 删了一列，现在 ' + t.cols + ' 列。');
+  say('* ' + tagOf(n) + '删了一列，现在 ' + t.cols + ' 列。');
 }
 function toggleTableHeader(n){
   if (!isTableNode(n)) return;

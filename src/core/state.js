@@ -65,6 +65,49 @@ let lastClickNode = null;      // Shift 连线的第一个节点
 let dirty = true;
 const isRoot = (n) => !idx.parent.has(n.id);
 const byId   = (id) => idx.byId.get(id);
+
+/* =========================================================================
+   提示语里怎么称呼一个东西
+   -------------------------------------------------------------------------
+   规范：**改动类的提示语一律报出被改的东西的名字**。
+   没名字的节点（变量 / 表格 / 图片）退回它的类型词 ——
+   别让提示语变成「尺寸已改」这种看完还不知道改的是谁的话。
+   ========================================================================= */
+const NAME_MAX = 12;
+function shortName(x){
+  if (!x) return '?';
+  const t = String(x.text || '').trim().split('\n')[0];
+  if (t) return t.length > NAME_MAX ? (t.slice(0, NAME_MAX) + '…') : t;
+  /* 变量节点正文常常是空的，那就用变量名 */
+  if (x.kind === 'var' || x.kind === 'broadcast'){
+    const nm = normalizeVarDef(x.varDef).name;
+    return nm ? ('变量 ' + nm) : '变量';
+  }
+  if (x.kind === 'table') return '表格';
+  if (x.kind === 'embed') return '嵌入';
+  if (x.kind === 'op')    return '运算符';
+  if (x.kind === 'out')   return '输出';
+  return '节点';
+}
+/* 节点 / 分组 → 「名字」 */
+function tagOf(x){
+  if (!x) return '';
+  if (x.members) return '「' + (String(x.title || '').trim() || '分组') + '」';
+  return '「' + shortName(x) + '」';
+}
+/* 一批东西 → 「甲」「乙」「丙」（超过三个就报总数）。
+   删 / 移出这种一次动好几个的操作，名字全列出来会很长。 */
+function namesOf(ids){
+  const arr = [...(ids || [])].map(id => (typeof id === 'string' ? byId(id) : id)).filter(Boolean);
+  if (!arr.length) return '';
+  if (arr.length <= 3) return arr.map(tagOf).join('');
+  return '「等 ' + arr.length + ' 个」';
+}
+/* 连线 → 「起点 → 终点」 */
+function edgeTag(e){
+  if (!e) return '「连线」';
+  return '「' + shortName(byId(e.s)) + ' → ' + shortName(byId(e.t)) + '」';
+}
 const mark   = () => { dirty = true; };
 
 /* =========================================================================

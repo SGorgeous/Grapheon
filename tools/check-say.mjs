@@ -14,7 +14,18 @@ import { join } from 'node:path';
 
 const MAXLEN = 28;
 const DYNLEN = 40;   // 带拼接的放宽一点（动态内容长短不一）
+/* 这些是全局操作，本来就没有「被改的某个东西」 */
+const GLOBALOK = ['撤销', '重做', '全选', '居中', '排版', '弹开', '重叠', '导出', '复制',
+  '清空', '导入', '字体', '主题', '文件夹', '最少', '至少', '先选中', '请先选中',
+  '界面',            // 隐藏 / 恢复界面，没有具体节点
+  '快捷键',          // 恢复默认快捷键，全局设置
+  '没有节点', '没有选中', '没有可以'];   // 这些是「什么都没做」的提示
 const OLDNAMES = ['程序节点', '运算节点', '通路节点', '滑条节点', '程序化节点'];
+/* 规范：改动类的提示语必须报出被改的东西的名字。
+   判据：句子里出现了这些「改了什么」的词，却没出现 「」（tagOf / edgeTag 的产物）。 */
+const MUTVERBS = ['改了', '已改', '改成', '改为', '恢复', '加了一', '删了一', '删掉了',
+  '折叠了', '展开了', '断开了', '挪到了', '算符', '范围', '已清除', '已删除', '已调整',
+  '尺寸', '连上了', '新建了', '转成', '设为', '已移出', '已加'];
 const KEYWORDS = ['方向键', 'WASD', 'Tab ', 'Enter ', 'Esc', 'Space', 'Ctrl', 'Shift', '按 E', '按 H'];
 
 function walk(d, out = []){
@@ -51,7 +62,7 @@ function sayTexts(file){
     /* say(a ? '* 甲' : '* 乙') 会把两个分支拼在一起 —— 拆开分别检查 */
     const parts = txt.split(/(?=\* )/).filter(x => x.trim());
     for (const one of parts){
-      out.push({ line, txt: one.trim(), dynamic: /['"]\s*\+/.test(body) });
+      out.push({ line, txt: one.trim(), src: body, dynamic: /['"]\s*\+/.test(body) });
     }
   }
   return out;
@@ -72,6 +83,15 @@ for (const f of walk('src')){
     if (!m.dynamic && !/[。！？」]$/.test(m.txt)) problems.push('结尾不是句号');
     for (const k of KEYWORDS) if (m.txt.indexOf(k) >= 0) problems.push('写了快捷键「' + k.trim() + '」');
     for (const k of OLDNAMES) if (m.txt.indexOf(k) >= 0) problems.push('用了旧名字「' + k + '」');
+    /* 改动类要报名字 —— 除非它本来就是全局操作（撤销 / 全选 / 居中 这种） */
+    /* 名字是运行时由 tagOf() / edgeTag() 拼出来的，字面量里看不到「」——
+       所以还得看源码里有没有调这两个函数 */
+    const hasName = m.txt.indexOf('「') >= 0 || m.src.indexOf('tagOf(') >= 0
+                 || m.src.indexOf('edgeTag(') >= 0 || m.src.indexOf('shortName(') >= 0;
+    if (!hasName && !GLOBALOK.some(w => m.txt.indexOf(w) >= 0)
+        && MUTVERBS.some(w => m.txt.indexOf(w) >= 0)){
+      problems.push('改了东西却没报名字（用 tagOf() / edgeTag()）');
+    }
     if (problems.length){
       console.log('  ✗ ' + rel + ':' + m.line);
       console.log('      ' + m.txt);

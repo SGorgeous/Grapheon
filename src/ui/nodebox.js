@@ -292,12 +292,12 @@ function afterNodeEdit(){
   renderNodeBox();
   const n = byId(nbNodeId);
   if (n){
-    if (isProgram(n)) say('* 外观节点：' + programLabel(n.program));
+    if (isProgram(n)) say('* ' + tagOf(n) + '：' + programLabel(n.program));
     else {
       const hits = programHits(n.id);
       const ev = effOf(n);
       const extra = (ev && ev.value != null) ? '（数值 = ' + ev.value + '）' : '';
-      say('* 节点外观：' + nodeStyleText(n) + (hits.length ? '　被 ' + hits.length + ' 个外观节点作用' + extra : ''));
+      say('* ' + tagOf(n) + '：' + nodeStyleText(n) + (hits.length ? '（被 ' + hits.length + ' 个外观节点作用）' : ''));
     }
   }
   pushHist();

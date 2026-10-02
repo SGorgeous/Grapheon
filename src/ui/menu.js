@@ -329,7 +329,7 @@ function showCtx(x, y, n, e, info){
     items.push(['把选中的（节点 / 分组）加入', '', () => addSelectionToGroup(grp)]);
     items.push('hr');
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
-      grp.color = v; mark(); pushHist(); say('* 分组颜色已改为 ' + (v || '默认') + '。');
+      grp.color = v; mark(); pushHist(); say('* ' + tagOf(grp) + '的颜色改为' + (v || '默认') + '。');
     })]);
     items.push(['组件…', 'C', () => openComps()]);
     items.push([grp.isFunction ? '取消程序组' : '设为程序组', '', () => toggleFunctionGroup(grp)]);
@@ -354,10 +354,10 @@ function showCtx(x, y, n, e, info){
     const hasWp = !!(e.waypoints && e.waypoints.length);
     items.push(['拐点', '', null, [
       info.waypoint
-        ? ['删除这个拐点', '双击', () => { removeWaypoint(e, info.waypoint.index); pushHist(); say('* 拐点已删除。'); }]
-        : ['在此添加拐点', '', info.p ? () => { addWaypoint(e, info.p.x, info.p.y); pushHist(); say('* 已添加拐点，拖动它调整走向。'); } : null],
+        ? ['删除这个拐点', '双击', () => { removeWaypoint(e, info.waypoint.index); pushHist(); say('* ' + edgeTag(e) + '的拐点已删除。'); }]
+        : ['在此添加拐点', '', info.p ? () => { addWaypoint(e, info.p.x, info.p.y); pushHist(); say('* ' + edgeTag(e) + '加了拐点，拖动它调整走向。'); } : null],
       ['清除全部拐点', hasWp ? String(e.waypoints.length) + ' 个' : '当前没有拐点',
-        hasWp ? () => { clearWaypoints(e); pushHist(); say('* 拐点已清除。'); } : null]
+        hasWp ? () => { clearWaypoints(e); pushHist(); say('* ' + edgeTag(e) + '的拐点已清除。'); } : null]
     ]]);
     items.push('hr');
     items.push(['删除连线', 'Del', () => deleteEdgeOnly(e)]);
@@ -375,7 +375,7 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addTableNode(Math.round(p.x - 160), Math.round(p.y - 70));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个表格节点。双击格子改内容。');
+          say('* 建了表格节点' + tagOf(nn) + '。双击格子改内容。');
         }]
       ]],
       ['空组', '一个空的分组框，往里拖东西就自动收纳', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
@@ -384,31 +384,31 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个变量节点。别处写 {名字} 就能引用。');
+          say('* 建了变量节点' + tagOf(nn) + '。别处写 {名字} 就能引用。');
         }],
         ['勾选节点', '选项随便加，输出选中的那一串', () => {
           const p = s2w(x, y);
           const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个勾选节点。点方框勾选，输出是选中那串。');
+          say('* 建了勾选节点' + tagOf(nn) + '。点方框勾选，输出是选中那串。');
         }],
         ['条件节点', '输入为 1 时才把所填的值放出去', () => {
           const p = s2w(x, y);
           const nn = addControlNode('cond', Math.round(p.x - 140), Math.round(p.y - 60));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个条件节点。输入为 1 才放行。');
+          say('* 建了条件节点' + tagOf(nn) + '。输入为 1 才放行。');
         }],
         ['广播节点', '把输入值变成全局变量，只能设名字', () => {
           const p = s2w(x, y);
           const nn = addBroadcastNode(Math.round(p.x - 137), Math.round(p.y - 50));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个广播节点。它的名字就是全局变量。');
+          say('* 建了广播节点' + tagOf(nn) + '。它的名字就是全局变量。');
         }],
         ['输出节点', '声明本作用域的输出值', () => {
           const p = s2w(x, y);
           const nn = addOutNode('output', Math.round(p.x - 110), Math.round(p.y - 40));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个输出节点。把值连进来就行。');
+          say('* 建了输出节点' + tagOf(nn) + '。把值连进来就行。');
         }],
         'hr',
         // 这两个也是程序节点，只是不是「变量」那一类。
@@ -417,14 +417,14 @@ function showCtx(x, y, n, e, info){
           const p = s2w(x, y);
           const nn = addOpNode('运算', Math.round(p.x - 110), Math.round(p.y - 40));
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个运算符节点。两个输入端点各对一个操作数。');
+          say('* 建了运算符节点' + tagOf(nn) + '。两个输入端点各对一个操作数。');
         }],
         ['外观节点', '改变目标的 外观 / 形状 / 位置 / 数值', () => {
           const p = s2w(x, y);
           const nn = createProgramNode(p.x - 70, p.y - 24);
           reindex(); relayout();
           selectOnly(nn.id); pushHist(); mark();
-          say('* 建了一个外观节点。拉线到目标就生效。');
+          say('* 建了外观节点' + tagOf(nn) + '。拉线到目标就生效。');
         }]
       ]],
       ['程序组', '组内变量 + 运算 + 输出，外面接它的输出（原函数分组）', () => {
@@ -434,7 +434,7 @@ function showCtx(x, y, n, e, info){
         renameGroup(g, '程序组');
         reindex(); sizeAll();
         selectGroup(g.id); pushHist(); mark();
-        say('* 建了一个程序组。外面用变量节点指向它取结果。');
+        say('* 建了程序组' + tagOf(g) + '。外面用变量节点指向它取结果。');
       }],
       ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile(s2w(x, y))]
     ]]);
@@ -486,7 +486,7 @@ function showInsertMenu(anchor){
       const c = viewCenter();
       const n = addNodeAt('新节点', Math.round(c.x - 60), Math.round(c.y - 24), 'rect');
       selectOnly(n.id); pushHist(); mark();
-      say('* 加了一个节点。');
+      say('* 加了节点' + tagOf(n) + '。');
     }],
     ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
