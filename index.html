@@ -32,6 +32,7 @@
     <button class="ud-btn" id="b-insert">插入</button>
     <button class="ud-btn" id="b-view">视图</button>
     <span class="tbsep"></span>
+    <button class="ud-btn" id="b-log">记录</button>
     <button class="ud-btn" id="b-set">设置</button>
     <button class="ud-btn" id="b-help">?</button>
     <button class="ud-btn" id="b-reload">刷新</button>
@@ -289,6 +290,7 @@
     <tr><td>拖空白 / 滚轮</td><td>平移 / 以光标为中心缩放</td></tr>
     <tr><td>Delete</td><td>删掉选中的节点、连线或分组</td></tr>
     <tr><td>Ctrl + Z</td><td>撤销（Ctrl + Shift + Z 重做）</td></tr>
+    <tr><td>顶栏「记录」</td><td>看这次会话里做过的每一件事，可以按分类筛、复制、导出 txt</td></tr>
     <tr><td>H 或 ?</td><td>开关本帮助</td></tr>
 
     <tr><td class="sec" colspan="2">— 生成节点 —</td></tr>
@@ -377,6 +379,18 @@
 </div>
 </div>
 
+<div id="logbox" class="ud">
+  <h2>* 操作记录</h2>
+  <div id="logBar" class="logbar"></div>
+  <div id="logList" class="loglist"></div>
+  <div id="logFoot" class="foot"></div>
+  <div class="logbar logacts">
+    <button class="ud-btn" id="logCopy">复制</button>
+    <button class="ud-btn" id="logSave">导出 txt</button>
+    <button class="ud-btn" id="logClear">清空</button>
+  </div>
+</div>
+
 <input type="file" id="file" accept=".json,application/json" hidden style="display:none">
 <input type="file" id="imgfile" accept="image/*" hidden style="display:none">
 <input type="file" id="gpkfile" accept=".json,application/json" hidden style="display:none">
@@ -407,6 +421,7 @@
      （换成 ES module 会被 file:// 的 CORS 拦掉）。 -->
 <script src="src/core/util.js"></script>
 <script src="src/core/theme.js"></script>
+<script src="src/core/log.js"></script>
 <script src="src/view/stage.js"></script>
 <script src="src/core/text.js"></script>
 <script src="src/core/store.js"></script>
@@ -431,6 +446,7 @@
 <script src="src/ui/dialogue.js"></script>
 <script src="src/ui/menu.js"></script>
 <script src="src/ui/help.js"></script>
+<script src="src/ui/logbox.js"></script>
 <script src="src/ui/exporter.js"></script>
 <script src="src/ui/edgebox.js"></script>
 <script src="src/ui/endbox.js"></script>

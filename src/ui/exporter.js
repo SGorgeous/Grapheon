@@ -184,12 +184,12 @@ function doExport(){
       const c = buildExportCanvas(nodes, title);
       const finish = () => {
         closeExport();
-        say('* 已把 ' + nodes.length + ' 个节点导出为 ' + name + '.png' + (title ? '（标题：' + title + '）' : ''));
+        say('* 已把 ' + nodes.length + ' 个节点导出为 ' + name + '.png' + (title ? '（标题：' + title + '）' : ''), '文件');
       };
       if (c.toBlob) c.toBlob((blob) => { downloadBlob(blob, name + '.png'); finish(); }, 'image/png');
       else { downloadBlob(dataURLtoBlob(c.toDataURL('image/png')), name + '.png'); finish(); }
     } catch (err){
-      say('* 导出失败了：' + err.message);
+      say('* 导出失败了：' + err.message, '文件');
     }
   };
   say('* 正在导出。');

@@ -8949,6 +8949,102 @@
     ok('SL04e 拖到中点 ≈ 15 且不是 NaN', isFinite(got) && Math.abs(got - 15) <= 1,
       JSON.stringify(V().value));
   });
+
+  T('LG01 操作记录：每次操作都记下来', () => {
+    fresh(); cancelEdit();
+    clearLog();
+    ok('LG01 清空之后是空的', logSize() === 0, String(logSize()));
+    ok('LG01b 空的时候导出来是空串', logAsText() === '', JSON.stringify(logAsText()));
+
+    say('* 第一件事。');
+    say('* 第二件事。', '文件');
+    say('* 第三件事。', '视图');
+    ok('LG01c 三条都进去了', logSize() === 3, String(logSize()));
+    const c = logCounts();
+    ok('LG01d 分类计数对', c['全部'] === 3 && c['操作'] === 1 && c['文件'] === 1 && c['视图'] === 1,
+      JSON.stringify(c));
+    ok('LG01e 按分类筛', logEntries('文件').length === 1, String(logEntries('文件').length));
+    ok('LG01f 认不出的分类归到「操作」', (() => {
+      say('* 怪事。', '这不是分类');
+      return logEntries('操作').length === 2;
+    })(), String(logEntries('操作').length));
+    /* 日志里的文字不该带 '* ' 前缀（那是给底栏的） */
+    ok('LG01g 记录里不带 "* " 前缀',
+      logEntries() .every(e => e.text.indexOf('*') !== 0),
+      JSON.stringify(logEntries().map(e => e.text)));
+    ok('LG01h 导出的文本一行一条、带时间和分类', (() => {
+      const t = logAsText().split('\n');
+      return t.length === logEntries().length && /^\d\d:\d\d:\d\d {2}\[/.test(t[0]);
+    })(), JSON.stringify(logAsText().split('\n')[0]));
+    clearLog();
+    ok('LG01i 清空有效', logSize() === 0);
+  });
+  T('LG02 记录是环形的，不会无限涨', () => {
+    fresh(); cancelEdit(); clearLog();
+    for (let i = 0; i < 900; i++) say('* 第 ' + i + ' 条。');
+    ok('LG02 上限就是 800 条', logSize() === 800, String(logSize()));
+    const first = logEntries()[0].text;
+    ok('LG02b 丢的是最旧的（第 0 条没了）', first !== '第 0 条。', first);
+    ok('LG02c 最新的还在', logEntries()[799].text === '第 899 条。', logEntries()[799].text);
+    clearLog();
+  });
+  T('LG03 面板：开关 / 筛选 / 复制 / 清空', () => {
+    fresh(); cancelEdit(); clearLog();
+    say('* 甲。');
+    say('* 乙。', '文件');
+    openLogbox();
+    ok('LG03 打开了', logboxEl.style.display === 'block', logboxEl.style.display);
+    ok('LG03b 列出来了两条', logListEl.querySelectorAll('.logrow').length === 2,
+      String(logListEl.querySelectorAll('.logrow').length));
+    ok('LG03c 新的在上面', logListEl.querySelector('.logrow .lx').textContent === '乙。',
+      logListEl.querySelector('.logrow .lx').textContent);
+    /* 分类按钮 */
+    const btns = [...document.getElementById('logBar').querySelectorAll('.ud-btn')];
+    ok('LG03d 有「全部」和分类按钮', btns.length >= 3, btns.map(b => b.textContent).join(' / '));
+    const fileBtn = btns.find(b => b.textContent.indexOf('文件') === 0);
+    ok('LG03e 分类按钮上带数量', !!fileBtn && /文件 1/.test(fileBtn.textContent),
+      fileBtn ? fileBtn.textContent : '(没有)');
+    if (fileBtn){
+      fileBtn.click();
+      ok('LG03f 点一下只剩这一类', logListEl.querySelectorAll('.logrow').length === 1,
+        String(logListEl.querySelectorAll('.logrow').length));
+    }
+    /* 回全部 */
+    [...document.getElementById('logBar').querySelectorAll('.ud-btn')]
+      .find(b => b.textContent.indexOf('全部') === 0).click();
+    ok('LG03g 切回全部又两条了', logListEl.querySelectorAll('.logrow').length === 2);
+    /* 面板开着时新记录要实时进来 */
+    say('* 丙。');
+    ok('LG03h 面板开着时实时补上', logListEl.querySelectorAll('.logrow').length === 3,
+      String(logListEl.querySelectorAll('.logrow').length));
+    /* 清空 */
+    document.getElementById('logClear').click();
+    ok('LG03i 清空按钮有效', logSize() === 0 && logListEl.querySelectorAll('.logrow').length === 0);
+    ok('LG03j 空的时候给一句说明', !!logListEl.querySelector('.empty'),
+      logListEl.textContent.slice(0, 30));
+    closeLogbox();
+    ok('LG03k 关掉了', logboxEl.style.display === 'none', logboxEl.style.display);
+  });
+  T('LG04 所有操作都会自动进记录（say 是总闸）', () => {
+    fresh(); cancelEdit(); clearLog();
+    const r = doc.nodes.find(n => isRoot(n));
+    selectOnly(r.id);
+    spawnInDirection('right'); skipDlg();
+    ok('LG04 生成节点被记下来了', logSize() > 0, String(logSize()));
+    ok('LG04b 记的和底栏说的是同一句', (() => {
+      skipDlg();
+      return logEntries().some(e => e.text === dlgText.textContent);
+    })(), JSON.stringify(logEntries().map(e => e.text)));
+    const before = logSize();
+    addChild(); skipDlg();
+    ok('LG04c 加子节点也记了', logSize() > before, before + ' → ' + logSize());
+    /* 文件类的要落到「文件」分类里 */
+    clearLog();
+    say('* 已保存为 x.json', '文件');
+    ok('LG04d 文件类进「文件」分类', logEntries('文件').length === 1,
+      JSON.stringify(logCounts()));
+    clearLog();
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

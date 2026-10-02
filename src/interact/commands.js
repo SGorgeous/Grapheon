@@ -764,7 +764,7 @@ function insertEmbedFile(file, at){
                            Math.round(p.x - EMBED_DEF_W / 2), Math.round(p.y - EMBED_DEF_H / 2));
     selectOnly(n.id);
     pushHist(); mark();
-    say('* 已嵌入「' + n.text + '」（' + d2.nodes.length + ' 个节点）。双击可以进去改。');
+    say('* 已嵌入「' + n.text + '」（' + d2.nodes.length + ' 个节点）。双击可以进去改。', '文件');
   };
   r.readAsText(file);
 }
@@ -783,7 +783,7 @@ function enterEmbed(n){
   });
   deserialize(JSON.parse(JSON.stringify(n.embed.doc)));   // 编辑的是副本
   fitView(); initHist(); mark();
-  say('* 进了「' + n.text + '」内部。改的是副本，原文件不受影响。');
+  say('* 进了「' + n.text + '」内部。改的是副本，原文件不受影响。', '文件');
   updateMeta();
 }
 /* 退出嵌入文档，把里面改的东西写回父文档里那个节点 */

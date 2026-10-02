@@ -18,6 +18,7 @@ const TOPBAR = [
   ['b-png',   () => openExport()],
   ['b-insert',(ev) => { hideCtx(); showInsertMenu(ev.currentTarget); }],
   ['b-view',  (ev) => { hideCtx(); showViewMenu(ev.currentTarget); }],
+  ['b-log',   () => openLogbox()],
   ['b-set',   () => toggleSettings()],
   ['b-back',  () => exitEmbed()],
   ['b-help',  () => openHelp()],

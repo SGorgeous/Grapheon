@@ -412,3 +412,31 @@ body.no-heart .ud-btn::before{ content:none; }
 /* 值是 {变量} 时那条数值滑条会停用 —— 得看得出来它不工作 */
 .nbval-range:disabled{ opacity:.35; cursor:not-allowed; }
 #nodebox .nbexprnote{ flex:1 0 100%; color:var(--d); font-size:12px; margin-top:-2px; }
+
+/* ---------- 操作记录 ---------- */
+#logbox{
+  position:fixed;display:none;z-index:80;left:50%;top:47%;transform:translate(-50%,-50%);
+  width:min(880px,calc(100vw - 80px));max-height:calc(100vh - 250px);
+  pointer-events:auto;padding:18px 22px;
+  display:none;flex-direction:column;
+}
+#logbox h2{margin:0 0 12px;font-size:32px;letter-spacing:2px}
+.logbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.logbar .ud-btn.on{border-color:var(--y);color:var(--y)}
+.logacts{margin-top:12px;margin-bottom:0}
+.loglist{
+  flex:1;min-height:120px;max-height:calc(100vh - 430px);overflow:auto;
+  border-top:1px solid var(--d);border-bottom:1px solid var(--d);padding:6px 0;
+}
+.logrow{display:flex;gap:12px;align-items:baseline;padding:3px 4px;font-size:16px;line-height:1.45}
+.logrow:nth-child(even){background:rgba(255,255,255,.03)}
+.logrow .lt{color:var(--g);white-space:nowrap;font-variant-numeric:tabular-nums}
+.logrow .lk{white-space:nowrap;width:48px;color:var(--g)}
+.logrow .lx{flex:1;word-break:break-word}
+.logrow.k-操作 .lk{color:var(--w)}
+.logrow.k-文件 .lk{color:var(--y)}
+.logrow.k-视图 .lk{color:var(--c,var(--y))}
+.logrow.k-设置 .lk{color:var(--g)}
+.logrow.k-面板 .lk{color:var(--dim,var(--g))}
+.loglist .empty{color:var(--g);padding:24px 4px;text-align:center}
+#logFoot{margin-top:10px;color:var(--g);font-size:16px}

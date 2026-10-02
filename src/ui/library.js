@@ -176,7 +176,7 @@ async function insertAsset(it){
     const id = registerUserTheme(obj);
     if (!id){ say('* 这个文件里没有能用的主题。'); return; }
     applyTheme(id);
-    say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。');
+    say('* 主题「' + ((THEMES[id] || {}).label || '') + '」已套用。', '视图');
   }
 }
 
@@ -197,7 +197,7 @@ document.getElementById('libConnect').onclick = async () => {
   try {
     const b = await Store.connectFolder();
     await refreshLib();
-    say('* 已接上磁盘文件夹「' + Store.dirName + '」。素材是真实文件。');
+    say('* 已接上磁盘文件夹「' + Store.dirName + '」。素材是真实文件。', '设置');
   } catch(e){
     say('* ' + (e && e.name === 'AbortError' ? '取消了。' : '连不上：' + e.message));
   }

@@ -17,8 +17,13 @@ let dlg = { full:'', shown:0, timer:null };
    dlgHint 只剩一个用途：进到嵌入副本里时提醒你正在改副本。 */
 /* 主题不要星号的话，就把开头那个 '* ' 摘掉（文字里原本都带着它） */
 function stripStar(s){ return themeStar() ? s : String(s).replace(/^\*\s?/, ''); }
-function say(msg){
+function say(msg, kind, opts){
   dlg.full = stripStar(msg); dlg.shown = 0;
+  /* ★ 每次操作都会经这里说一句「刚发生了什么」—— 顺手记进操作记录。
+     kind 默认「操作」，文件 / 视图 / 设置那几类在调用处显式传。
+     opts.noLog —— 给「操作记录」面板自己的动作留的：清空 / 复制 / 导出
+     不该把自己也记进去（不然清空之后立刻又冒出一条「记录已清空」）。 */
+  if (!(opts && opts.noLog) && typeof pushLog === 'function') pushLog(kind || '操作', dlg.full);
   clearInterval(dlg.timer);
   dlgText.textContent = '';
   dlgArrow.style.visibility = 'hidden';

@@ -25,7 +25,7 @@ function newDocument(kind){
   relayout(); fitView(); initHist(); updateMeta(); mark();
   say(kind === 'demo'
     ? '* 已载入示例文档。'
-    : '* 新文件。按 Tab 或方向键，从中心开始生长。');
+    : '* 新文件。');
 }
 function saveFile(){
   const name = 'grapheon-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -33,9 +33,9 @@ function saveFile(){
     const data = JSON.stringify(serialize(), null, 2);
     downloadBlob(new Blob([data], { type:'application/json' }), name);
     try { localStorage.setItem(LS_KEY, data); } catch (e) {}
-    say('* 已保存为 ' + name);
+    say('* 已保存为 ' + name, '文件');
   } catch (err){
-    say('* 保存失败了：' + err.message);
+    say('* 保存失败了：' + err.message, '文件');
   }
 }
 const fileEl = document.getElementById('file');
@@ -50,7 +50,7 @@ function readFile(f){
     try {
       clearDocStack();     // 从外面打开文件也回到最外层
       deserialize(JSON.parse(String(r.result)));
-      relayout(); fitView(); initHist(); updateMeta(); say('* 读取成功，共 ' + doc.nodes.length + ' 个节点。');
+      relayout(); fitView(); initHist(); updateMeta(); say('* 读取成功，共 ' + doc.nodes.length + ' 个节点。', '文件');
     } catch(err){ say('* 这个文件无法读取……也许它并不属于这里。'); }
   };
   r.readAsText(f);

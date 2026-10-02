@@ -40,7 +40,11 @@ function sayTexts(file){
     }
     const body = s.slice(start, i - 1);
     if (body.indexOf("'* ") < 0) continue;         // 不是提示语（比如拼出来的别的函数调用）
-    const lits = [...body.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(x => x[1]);
+    let lits = [...body.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(x => x[1]);
+    /* say(消息, '分类') 的第二个参数是分类名，不是消息的一部分 —— 别拼进去 */
+    if (lits.length > 1 && ['操作', '文件', '视图', '设置', '面板'].indexOf(lits[lits.length - 1]) >= 0){
+      lits = lits.slice(0, -1);
+    }
     const txt = lits.join('');
     if (!txt.startsWith('* ')) continue;
     const line = s.slice(0, m.index).split('\n').length;
