@@ -77,8 +77,19 @@ const opArity = (id) => opDefOf(id).arity;
 /* ---------------- 数据规范化 ---------------- */
 /* 特殊控件。原「通路节点」已换成「条件节点」—— 它不再是个手动开关，
    而是「输入为 1 才把所填的值放出去」。老存档的 switch 在 normalizeVarDef 里就地转过来。 */
-const VAR_CONTROLS = ['plain', 'check', 'slider', 'cond'];
-const VAR_CONTROL_LABEL = { plain:'普通', check:'勾选', slider:'滑条', cond:'条件' };
+/* 变量节点的「类型」。切换类型不丢数据 —— 每种的字段各存各的，
+   切回来还在（normalizeVarDef 只规范化、不删字段）。 */
+const VAR_CONTROLS = ['plain', 'slider', 'list', 'map', 'check', 'cond'];
+const VAR_CONTROL_LABEL = { plain:'单一变量', slider:'滑块', list:'列表', map:'地图',
+                            check:'勾选', cond:'条件' };
+const VAR_CONTROL_HINT = {
+  plain:'填什么就是什么，数字和字符串都行',
+  slider:'起点 / 终点 / 步长都是浮点数，都能写 {变量}',
+  list:'任意长度，用 {名字.序号} 取第几项 —— 序号从 0 开始',
+  map:'key 索引 value，用 {名字.key} 取值',
+  check:'勾中的拼成一串',
+  cond:'输入为 1 才把所填的值放出去'
+};
 function normalizeVarDef(v){
   const out = Object.assign({ name:'x', value:'0', type:'number', scope:'global',
     control:'plain', options:[], picked:[], min:0, max:100, step:1, on:false }, v || {});
@@ -96,6 +107,16 @@ function normalizeVarDef(v){
   out.picked = (Array.isArray(out.picked) ? out.picked : [])
     .map(x => Math.round(+x)).filter(i => i >= 0 && i < out.options.length);
   out.picked = [...new Set(out.picked)].sort((a, b) => a - b);
+  /* 列表：任意长度的字符串数组。每一项都可以写 {变量}。
+     默认是 0 / 1 / 2 —— 空列表会被重置回默认，所以列表永远至少有一项。 */
+  out.items = (Array.isArray(out.items) ? out.items : [])
+    .map(x => String(x == null ? '' : x));
+  if (out.control === 'list' && !out.items.length) out.items = ['0', '1', '2'];
+  /* 地图：有序的 key → value。key 和 value 都能写 {变量}。 */
+  out.pairs = (Array.isArray(out.pairs) ? out.pairs : [])
+    .map(p => ({ k:String((p && p.k) == null ? '' : p.k),
+                 v:String((p && p.v) == null ? '' : p.v) }));
+  if (out.control === 'map' && !out.pairs.length) out.pairs = [{ k:'key', v:'value' }];
   // 滑条：上下限和步长
   /* ★ 允许写 {变量} —— 含花括号的一律**原样留着字符串**，求值时再解析。
      以前这里无条件 +x 强转，{宽} 会变成 NaN→0，参数化就无从谈起。 */
@@ -174,6 +195,16 @@ const checkValue = (vd) => normalizeVarDef(vd).picked
 function controlValue(vd, fromId){
   const v = normalizeVarDef(vd);
   if (v.control === 'check')  return checkValue(v);
+  /* 列表 / 地图：不写下标时整条拼成一串（和勾选节点一个道理）。
+     每一项都要插值 —— 「所有的空都能写 {变量}」。 */
+  if (v.control === 'list' || v.control === 'map'){
+    const ctx = liveCtx();
+    const at = (x) => (fromId == null) ? String(x == null ? '' : x)
+                                       : interpolateIn(ctx, String(x == null ? '' : x), fromId);
+    return (v.control === 'list')
+      ? v.items.map(at).join(', ')
+      : v.pairs.map(p => at(p.k) + '=' + at(p.v)).join(', ');
+  }
   if (v.control === 'switch') return v.on ? (v.type === 'number' ? '1' : '开')
                                           : (v.type === 'number' ? '0' : '关');
   // 没给 fromId 就不插值（有些调用点手里只有 varDef，没有所属节点）
@@ -653,6 +684,27 @@ function embeddedCtxOf(embedNode){
   embedCtxCache.set(embedNode.id, c);
   return c;
 }
+/* 列表 / 地图的成员取值。
+   返回 **undefined** 表示「这个变量没有下标这一说」——
+   调用方据此退回「嵌入文档的跨层引用」那条路。
+   返回 **null** 表示「确实是列表 / 地图，但没有这一项」→ 显示 [未定义]。 */
+function memberValueIn(ctx, def, key, fromId){
+  const v = normalizeVarDef(def.varDef);
+  const k = String(key == null ? '' : key).trim();
+  const at = (x) => interpolateIn(ctx, String(x == null ? '' : x), fromId);
+  if (v.control === 'list'){
+    if (k === '' || !isFinite(+k)) return null;
+    const i = Math.round(+k);
+    return (i >= 0 && i < v.items.length) ? at(v.items[i]) : null;
+  }
+  if (v.control === 'map'){
+    /* ★ key 本身也可能写了 {变量}（{图.k{甲}} 这种），
+       所以要拿**插值之后**的 key 去比 —— 不然永远匹配不上。 */
+    const hit = v.pairs.filter(p => at(p.k) === k)[0];
+    return hit ? at(hit.v) : null;
+  }
+  return undefined;
+}
 function resolveEmbedOutput(embedName, outName){
   for (const n of doc.nodes){
     if (n.kind !== 'embed') continue;
@@ -676,7 +728,16 @@ function interpolateIn(ctx, text, fromId){
     if (m === '\\{') return '{';
     if (name && name.indexOf('.') > 0){
       const i = name.indexOf('.');
-      return valueToText(resolveEmbedOutput(name.slice(0, i), name.slice(i + 1)));
+      const head = name.slice(0, i), tail = name.slice(i + 1);
+      /* ★ 先试「变量 + 下标 / 键」（{list.2} / {map.key}）。
+         变量名里不会有点（normalizeVarDef 会把点清掉），所以点一定是分隔符。
+         那个变量不存在、或者它不是列表 / 地图，才退回嵌入文档的跨层引用。 */
+      const def = findVarDefIn(ctx, head, fromId);
+      if (def){
+        const got = memberValueIn(ctx, def, tail, fromId);
+        if (got !== undefined) return valueToText(got);
+      }
+      return valueToText(resolveEmbedOutput(head, tail));
     }
     return valueToText(resolveVarIn(ctx, name, fromId));
   });
@@ -787,8 +848,13 @@ function varLayout(box, varDef, lineH){
   R.nameBox = { x:box.x + VAR_PAD, y:top, w:VAR_NAME_W, h:VAR_BOX_H };
   const bodyX = R.nameBox.x + VAR_NAME_W + 10;
   const bodyW = Math.max(80, box.x + box.w - VAR_PAD - bodyX);
-  if (v.control === 'check'){
-    const rows = Math.max(1, v.options.length);
+  if (v.control === 'check' || v.control === 'list' || v.control === 'map'){
+    /* 勾选 / 列表 / 地图：都是「一行一项」，共用同一块列表区。
+       高度跟着项数长 —— 所以节点会自己变高。 */
+    const cnt = (v.control === 'check') ? v.options.length
+              : (v.control === 'list')  ? v.items.length
+              : v.pairs.length;
+    const rows = Math.max(1, cnt);
     R.listBox = { x:bodyX, y:top, w:bodyW, h:rows * CHECK_ROW_H };
     R.bodyH = Math.max(VAR_BOX_H, R.listBox.h);
   } else if (v.control === 'slider'){

@@ -166,13 +166,30 @@ function showCtx(x, y, n, e, info){
     }
     if (isVarNode(n)){
       const v = normalizeVarDef(n.varDef);
-      data.push(['控件：' + VAR_CONTROL_LABEL[v.control], '▶', null,
-        VAR_CONTROLS.map(c => [(v.control === c ? '● ' : '   ') + VAR_CONTROL_LABEL[c], '', () => {
-          setVarControl(n, c);
-        }])]);
+      /* 「类型」而不是「控件」—— 单一变量 / 滑块 / 列表 / 地图 / 勾选 / 条件
+         都是同一个变量节点的不同形态，切换不丢数据。 */
+      data.push(['类型：' + VAR_CONTROL_LABEL[v.control], '', null,
+        VAR_CONTROLS.map(c => [(v.control === c ? '● ' : '   ') + VAR_CONTROL_LABEL[c],
+          (typeof VAR_CONTROL_HINT === 'object' && VAR_CONTROL_HINT[c]) || '',
+          () => { setVarControl(n, c); }])]);
       if (v.control === 'check'){
         data.push(['编辑选项…', '逗号分隔', () => startEdit('checkOpts', n.id)]);
         data.push(['清空勾选', '', () => { setVarDef(n, { picked:[] }); pushHist(); }]);
+      }
+      if (v.control === 'list'){
+        data.push(['编辑项目…', '一行一项，可以写 {变量}', () => startEdit('listItems', n.id)]);
+        data.push(['加一项', '引用写法 {' + v.name + '.' + v.items.length + '}', () => addListItem(n)]);
+        data.push(['删掉最后一项', v.items.length > 1 ? ('现在 ' + v.items.length + ' 项')
+                                                      : '至少留一项',
+          v.items.length > 1 ? () => removeListItem(n) : null]);
+      }
+      if (v.control === 'map'){
+        data.push(['编辑键值…', '一行一对 key=value，都能写 {变量}',
+          () => startEdit('mapPairs', n.id)]);
+        data.push(['加一对', '引用写法 {' + v.name + '.键名}', () => addMapPair(n)]);
+        data.push(['删掉最后一对', v.pairs.length > 1 ? ('现在 ' + v.pairs.length + ' 对')
+                                                      : '至少留一对',
+          v.pairs.length > 1 ? () => removeMapPair(n) : null]);
       }
       if (v.control === 'slider'){
         data.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
@@ -192,17 +209,17 @@ function showCtx(x, y, n, e, info){
         data.push(['条件：输入 ' + (inc == null ? '（没接）' : String(inc))
           + ' → ' + (gateOpenIn(ctx0, n) ? '通' : '不通'), '输入为 1 才通', null]);
       }
-      data.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '▶', null,
+      data.push(['作用域：' + VAR_SCOPE_LABEL[v.scope], '', null,
         VAR_SCOPES.map(s => [(v.scope === s ? '● ' : '   ') + VAR_SCOPE_LABEL[s], VAR_SCOPE_HINT[s],
           () => { setVarDef(n, { scope:s }); pushHist();
                   say('* 作用域改成「' + VAR_SCOPE_LABEL[s] + '」：' + VAR_SCOPE_HINT[s] + '。'); }])]);
-      data.push(['值类型：' + VAR_TYPE_LABEL[v.type], '▶', null,
+      data.push(['值类型：' + VAR_TYPE_LABEL[v.type], '', null,
         VAR_TYPES.map(x => [(v.type === x ? '● ' : '   ') + VAR_TYPE_LABEL[x], '',
           () => { setVarDef(n, { type:x }); pushHist(); }])]);
     }
     if (isOpNode(n)){
       const od = normalizeOpDef(n.opDef);
-      data.push(['运算符：' + opDefOf(od.op).label, '▶', null,
+      data.push(['运算符：' + opDefOf(od.op).label, '', null,
         OPERATORS.map(o => [(od.op === o.id ? '● ' : '   ') + o.label, o.hint,
           () => { setOpOperator(n, o.id); }])]);
       data.push(['操作数…', '可以写 {变量}', () => startEdit('opVal0', n.id)]);
@@ -283,7 +300,7 @@ function showCtx(x, y, n, e, info){
 
     /* ---------------- 对齐与分布 ▶（选了多个才有意义）---------------- */
     if (sel.size + selGroups.size >= 2){
-      items.push(['对齐与分布', '▶', null, [
+      items.push(['对齐与分布', '', null, [
         ['左对齐',      '', () => alignSelection('h-left')],
         ['水平居中',    '', () => alignSelection('h-center')],
         ['右对齐',      '', () => alignSelection('h-right')],
@@ -355,8 +372,8 @@ function showCtx(x, y, n, e, info){
         }]
       ]],
       ['空组', '一个空的分组框，往里拖东西就自动收纳', () => newEmptyGroup(s2w(x, y).x, s2w(x, y).y)],
-      ['程序节点', '变量 / 勾选 / 滑条 / 条件 / 输出', null, [
-        ['变量节点', '{name} 可引用，全局零连线可用', () => {
+      ['程序节点', '变量（可切类型）/ 勾选 / 条件 / 输出', null, [
+        ['变量节点', '单一变量 / 滑块 / 列表 / 地图，建好再切类型', () => {
           const p = s2w(x, y);
           const nn = addVarNode('x', Math.round(p.x - 137), Math.round(p.y - 50));
           selectOnly(nn.id); pushHist(); mark();
@@ -367,12 +384,6 @@ function showCtx(x, y, n, e, info){
           const nn = addControlNode('check', Math.round(p.x - 140), Math.round(p.y - 70));
           selectOnly(nn.id); pushHist(); mark();
           say('* 勾选节点：点方框就能勾 / 取消，输出是选中的那一串。右键「编辑选项…」加减选项。');
-        }],
-        ['滑条节点', '上下限 + 步长，拖一下实时生效', () => {
-          const p = s2w(x, y);
-          const nn = addControlNode('slider', Math.round(p.x - 140), Math.round(p.y - 60));
-          selectOnly(nn.id); pushHist(); mark();
-          say('* 滑条节点：拖圆点实时改值，引用它的地方跟着变。上下限 / 步长在面板或右键里设。');
         }],
         ['条件节点', '输入为 1 时才把所填的值放出去', () => {
           const p = s2w(x, y);
@@ -473,7 +484,7 @@ function showInsertMenu(anchor){
     ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
     'hr',
-    ['变量定义节点', '别的文字里写 {名字} 引用', () => {
+    ['变量定义节点', '单一变量 / 滑块 / 列表 / 地图，右键可切', () => {
       const c = viewCenter();
       const n = addVarNode('x', Math.round(c.x - 137), Math.round(c.y - 50));
       selectOnly(n.id); pushHist(); mark();
@@ -492,11 +503,6 @@ function showInsertMenu(anchor){
     ['勾选节点', '选项随便加，输出一串列表', () => {
       const c = viewCenter();
       const n = addControlNode('check', Math.round(c.x - 140), Math.round(c.y - 70));
-      selectOnly(n.id); pushHist(); mark();
-    }],
-    ['滑条节点', '上下限 + 步长，实时生效', () => {
-      const c = viewCenter();
-      const n = addControlNode('slider', Math.round(c.x - 140), Math.round(c.y - 60));
       selectOnly(n.id); pushHist(); mark();
     }],
     ['条件节点', '输入为 1 时把所填的值放出去', () => {

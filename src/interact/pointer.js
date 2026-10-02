@@ -407,6 +407,9 @@ canvas.addEventListener('dblclick', (ev) => {
     // 变量 / 运算符节点：双击哪个小框就编辑哪个字段
     const vp = hitVarPart(n, p);
     if (vp === 'varName' || vp === 'varValue'){ startEdit(vp, n.id); return; }
+    // 列表 / 地图：双击本体编辑整块（和勾选节点的「编辑选项…」一个口子）
+    if (vp === 'listBody'){ startEdit('listItems', n.id); return; }
+    if (vp === 'mapBody'){  startEdit('mapPairs', n.id); return; }
     const op = hitOpPart(n, p);
     if (op === 'opOp'){ cycleOpOperator(n); return; }
     if (op && /^opVal[0-9]*$/.test(op)){ startEdit(op, n.id); return; }

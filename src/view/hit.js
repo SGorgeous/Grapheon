@@ -40,6 +40,12 @@ function hitVarPart(n, p){
   if (L.nameBox  && inRect(L.nameBox,  p)) return 'varName';
   // 广播节点的值来自输入，不能手填 —— 所以它的值框不给 varValue
   if (L.valBox   && inRect(L.valBox,   p)) return isBroadcast(n) ? 'text' : 'varValue';
+  // 列表 / 地图：双击本体就编辑整块（和勾选节点的「编辑选项…」一个口子）
+  if (L.listBox  && inRect(L.listBox,  p)){
+    if (v.control === 'list') return 'listBody';
+    if (v.control === 'map')  return 'mapBody';
+    return 'text';
+  }
   if (L.scopeBox && inRect(L.scopeBox, p)) return 'varScope';
   return 'text';
 }

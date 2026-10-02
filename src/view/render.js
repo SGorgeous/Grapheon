@@ -470,6 +470,52 @@ function drawOutNode(g, n, b, selected, hov){
   g.restore();
 }
 /* ---------------- 三种特殊变量控件的绘制 ---------------- */
+/* 列表：一行一项，前面是序号（{名字.序号} 里的那个序号） */
+function drawListControl(g, L, v, fromId){
+  const b = L.listBox;
+  const ctx = liveCtx();
+  const at = (x) => (fromId == null) ? String(x == null ? '' : x)
+                                     : interpolateIn(ctx, String(x == null ? '' : x), fromId);
+  g.save();
+  g.strokeStyle = C.gray; g.lineWidth = 2;
+  g.strokeRect(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+  setFont(g, FS, 'normal', FONT);
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  const rows = Math.max(1, v.items.length);
+  for (let i = 0; i < rows; i++){
+    const y = b.y + i * CHECK_ROW_H + CHECK_ROW_H / 2;
+    g.fillStyle = C.dim;
+    g.fillText(String(i), b.x + 10, y + 1);
+    g.fillStyle = C.white;
+    g.fillText(fitText(g, at(v.items[i]), b.w - 44), b.x + 34, y + 1);
+  }
+  g.restore();
+}
+/* 地图：一行一对 key = value */
+function drawMapControl(g, L, v, fromId){
+  const b = L.listBox;
+  const ctx = liveCtx();
+  const at = (x) => (fromId == null) ? String(x == null ? '' : x)
+                                     : interpolateIn(ctx, String(x == null ? '' : x), fromId);
+  g.save();
+  g.strokeStyle = C.gray; g.lineWidth = 2;
+  g.strokeRect(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+  setFont(g, FS, 'normal', FONT);
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  const rows = Math.max(1, v.pairs.length);
+  for (let i = 0; i < rows; i++){
+    const p = v.pairs[i] || { k:'', v:'' };
+    const y = b.y + i * CHECK_ROW_H + CHECK_ROW_H / 2;
+    const keyW = Math.min(150, Math.max(60, b.w * 0.38));
+    g.fillStyle = C.yellow;
+    g.fillText(fitText(g, at(p.k), keyW - 8), b.x + 10, y + 1);
+    g.fillStyle = C.dim;
+    g.fillText('=', b.x + 10 + keyW, y + 1);
+    g.fillStyle = C.white;
+    g.fillText(fitText(g, at(p.v), b.w - keyW - 34), b.x + 10 + keyW + 20, y + 1);
+  }
+  g.restore();
+}
 function drawCheckControl(g, L, v){
   const b = L.listBox;
   g.save();
@@ -585,6 +631,8 @@ function drawVarNode(g, n, b, selected, hov){
     return;
   }
   if (v.control === 'check')       drawCheckControl(g, L, v);
+  else if (v.control === 'list')   drawListControl(g, L, v, n.id);
+  else if (v.control === 'map')    drawMapControl(g, L, v, n.id);
   else if (v.control === 'slider') drawSliderControl(g, L, v, n);
   else if (v.control === 'switch') drawSwitchControl(g, L, v);
   else drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);

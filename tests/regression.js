@@ -6050,7 +6050,7 @@
     emptyMenu();
     subMenu('新建');
     const sub = subMenu('程序节点');
-    ok('RB04 五种都在', ['变量节点', '勾选节点', '滑条节点', '条件节点', '输出节点']
+    ok('RB04 五种都在（滑条已经不是独立节点了，它是变量节点的类型）', ['变量节点', '勾选节点', '条件节点', '输出节点']
       .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
     ok('RB04b 叫「条件节点」（原通路节点），不叫「开关节点」',
       sub.some(t => t.indexOf('条件节点') === 0)
@@ -8170,8 +8170,8 @@
     selectOnly(v.id);
     showCtx(500, 400, byId(v.id), null, { p:{} });
     const data = subMenu('数据');
-    ok('PM02 数据组里有控件 / 作用域 / 值类型',
-      ['控件：', '作用域：', '值类型：'].every(x => data.some(t => t.indexOf(x) >= 0)),
+    ok('PM02 数据组里有类型 / 作用域 / 值类型',
+      ['类型：', '作用域：', '值类型：'].every(x => data.some(t => t.indexOf(x) >= 0)),
       data.join(' / '));
     ok('PM02b 数据组里有「转为 / 转回」',
       data.some(t => t.indexOf('转成程序节点') >= 0 || t.indexOf('转回普通节点') >= 0),
@@ -8435,6 +8435,196 @@
     deserialize(JSON.parse(JSON.stringify(serialize())));
     const c4 = count(() => draw());
     ok('BAL01e 存读往返之后还配平', c4.s === c4.r, c4.s + ' / ' + c4.r);
+  });
+
+  T('VL01 变量节点的六种类型', () => {
+    fresh();
+    ok('VL01 类型表里有单一变量 / 滑块 / 列表 / 地图',
+      ['plain', 'slider', 'list', 'map'].every(c => VAR_CONTROLS.indexOf(c) >= 0),
+      VAR_CONTROLS.join('/'));
+    ok('VL01b 单一变量不再叫「普通」', VAR_CONTROL_LABEL.plain === '单一变量', VAR_CONTROL_LABEL.plain);
+    ok('VL01c 每种都有说明文字', VAR_CONTROLS.every(c => !!VAR_CONTROL_HINT[c]),
+      VAR_CONTROLS.map(c => c + ':' + !!VAR_CONTROL_HINT[c]).join(' '));
+  });
+  T('VL02 列表：默认 0 1 2，{名单.序号} 取值', () => {
+    fresh(); cancelEdit();
+    const L = addVarNode('名单', 0, 0, { name:'名单', control:'list' });
+    reindex(); sizeAll();
+    const v = normalizeVarDef(byId(L.id).varDef);
+    ok('VL02 默认是 0 / 1 / 2', v.items.join(',') === '0,1,2', JSON.stringify(v.items));
+    // 换成正儿八经的内容
+    setVarDef(byId(L.id), { items:['张三', '李四', '王五'] });
+    const use = addNodeAt('第二个人是 {名单.1}', 600, 0, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL02b {名单.1} = 李四', displayTextOf(byId(use.id)) === '第二个人是 李四',
+      displayTextOf(byId(use.id)));
+    const u0 = addNodeAt('第一个 {名单.0}', 600, 120, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL02c {名单.0} = 张三（序号从 0 开始）', displayTextOf(byId(u0.id)) === '第一个 张三',
+      displayTextOf(byId(u0.id)));
+    // 越界 / 非数字 → [未定义]
+    const bad = addNodeAt('越界 {名单.9}', 600, 240, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL02d 序号越界显示 [未定义]', displayTextOf(byId(bad.id)) === '越界 [未定义]',
+      displayTextOf(byId(bad.id)));
+    // 不写下标 → 整条拼起来
+    const all = addNodeAt('全部 {名单}', 600, 360, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL02e 不写下标就整条拼成一串', displayTextOf(byId(all.id)) === '全部 张三, 李四, 王五',
+      displayTextOf(byId(all.id)));
+  });
+  T('VL03 地图：key 索引 value，{配置.键} 取值', () => {
+    fresh(); cancelEdit();
+    const M = addVarNode('配置', 0, 0,
+      { name:'配置', control:'map', pairs:[{ k:'host', v:'localhost' }, { k:'port', v:'8080' }] });
+    reindex(); sizeAll();
+    const use = addNodeAt('连 {配置.host}:{配置.port}', 600, 0, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL03 两个键都取到了', displayTextOf(byId(use.id)) === '连 localhost:8080',
+      displayTextOf(byId(use.id)));
+    const no = addNodeAt('没有这个键 {配置.nope}', 600, 120, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL03b 键不存在显示 [未定义]', displayTextOf(byId(no.id)) === '没有这个键 [未定义]',
+      displayTextOf(byId(no.id)));
+    ok('VL03c 默认一对 key=value', (() => {
+      const m2 = normalizeVarDef({ control:'map' });
+      return m2.pairs.length === 1 && m2.pairs[0].k === 'key';
+    })(), JSON.stringify(normalizeVarDef({ control:'map' }).pairs));
+  });
+  T('VL04 列表 / 地图里的每一格都能引用变量', () => {
+    fresh(); cancelEdit();
+    const a = addVarNode('甲', 0, 0, { name:'甲', value:'7' });
+    const L = addVarNode('表', 0, 400, { name:'表', control:'list', items:['{甲}', 'x', '{甲}0'] });
+    const M = addVarNode('图', 0, 800,
+      { name:'图', control:'map', pairs:[{ k:'k{甲}', v:'v{甲}' }] });
+    reindex(); sizeAll();
+    const u1 = addNodeAt('{表.0} {表.2} {图.k7}', 700, 0, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL04 项 / 键 / 值里的 {变量} 都解析了',
+      displayTextOf(byId(u1.id)) === '7 70 v7', displayTextOf(byId(u1.id)));
+  });
+  T('VL05 切换类型不丢数据，切回来还在', () => {
+    fresh(); cancelEdit();
+    const n = addVarNode('万金油', 0, 0,
+      { name:'万金油', value:'文字值', control:'plain' });
+    reindex(); sizeAll();
+    setVarDef(byId(n.id), { items:['a', 'b'], pairs:[{ k:'k', v:'v' }], min:'1.5', max:'9.25' });
+    // 挨个切换一圈
+    for (const c of ['slider', 'list', 'map', 'check', 'cond', 'plain']){
+      setVarControl(byId(n.id), c);
+      reindex(); sizeAll();
+    }
+    const v = normalizeVarDef(byId(n.id).varDef);
+    ok('VL05 值还在', v.value === '文字值', JSON.stringify(v.value));
+    ok('VL05b 列表项还在', v.items.join(',') === 'a,b', JSON.stringify(v.items));
+    ok('VL05c 键值对还在', v.pairs.length === 1 && v.pairs[0].k === 'k', JSON.stringify(v.pairs));
+    // min / max / step 存的是**数字**（只有含花括号的才留成字符串），所以按数字比
+    ok('VL05d 滑条上下限还在', Number(v.min) === 1.5 && Number(v.max) === 9.25,
+      v.min + '~' + v.max);
+  });
+  T('VL06 滑块的起点 / 终点 / 步长是浮点数', () => {
+    fresh(); cancelEdit();
+    const s = addVarNode('滑', 0, 0, { name:'滑', control:'slider', type:'number',
+      value:'0.5', min:'0.25', max:'2.75', step:'0.25' });
+    reindex(); sizeAll();
+    const v = normalizeVarDef(byId(s.id).varDef);
+    ok('VL06 三个都是浮点',
+      Number(v.min) === 0.25 && Number(v.max) === 2.75 && Number(v.step) === 0.25,
+      [v.min, v.max, v.step].join(' / '));
+    ok('VL06b 拖动时按浮点步长走', sliderValue(Object.assign({}, v, { value:'1.1' })) === 1.0,
+      String(sliderValue(Object.assign({}, v, { value:'1.1' }))));
+    // 上下限也能写 {变量}
+    const lo = addVarNode('下限', 0, 400, { name:'下限', value:'3' });
+    setVarDef(byId(s.id), { min:'{下限}' });
+    const u = addNodeAt('取 {滑}', 700, 0, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL06c 上下限引用变量后照样能算', displayTextOf(byId(u.id)).indexOf('取 ') === 0,
+      displayTextOf(byId(u.id)));
+  });
+  T('VL07 列表 / 地图的增删', () => {
+    fresh(); cancelEdit();
+    const L = addVarNode('清单', 0, 0, { name:'清单', control:'list', items:['a'] });
+    reindex(); sizeAll();
+    addListItem(byId(L.id));
+    ok('VL07 加一项', normalizeVarDef(byId(L.id).varDef).items.length === 2,
+      normalizeVarDef(byId(L.id).varDef).items.join(','));
+    removeListItem(byId(L.id));
+    ok('VL07b 删一项', normalizeVarDef(byId(L.id).varDef).items.length === 1,
+      normalizeVarDef(byId(L.id).varDef).items.join(','));
+    // 只剩一项时再删：不动它（列表永远至少一项）
+    removeListItem(byId(L.id));
+    ok('VL07c 只剩一项时删不动', normalizeVarDef(byId(L.id).varDef).items.length === 1,
+      normalizeVarDef(byId(L.id).varDef).items.join(','));
+    const M = addVarNode('表', 0, 600, { name:'表', control:'map', pairs:[{ k:'a', v:'1' }] });
+    reindex(); sizeAll();
+    addMapPair(byId(M.id));
+    ok('VL07d 加一对', normalizeVarDef(byId(M.id).varDef).pairs.length === 2,
+      JSON.stringify(normalizeVarDef(byId(M.id).varDef).pairs));
+    removeMapPair(byId(M.id));
+    removeMapPair(byId(M.id));
+    ok('VL07e 只剩一对时删不动', normalizeVarDef(byId(M.id).varDef).pairs.length === 1,
+      JSON.stringify(normalizeVarDef(byId(M.id).varDef).pairs));
+  });
+  T('VL08 变量优先，但嵌入文档的 {嵌入名.输出名} 没被弄坏', () => {
+    fresh(); cancelEdit();
+    /* 同名冲突时变量优先 —— 但**没有**同名变量时，{a.b} 必须还是嵌入引用。
+       这条是防回归：改动把 {a.b} 一律当成了列表下标。 */
+    const L = addVarNode('表', 0, 0, { name:'表', control:'list', items:['第一'] });
+    reindex(); sizeAll();
+    const u = addNodeAt('{表.0}', 600, 0, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL08 有同名变量时按列表下标走', displayTextOf(byId(u.id)) === '第一',
+      displayTextOf(byId(u.id)));
+    // 一个不存在的名字 + 点 → 走嵌入那条路（找不到就是 [未定义]，不该抛异常）
+    const u2 = addNodeAt('{没这个东西.输出}', 600, 120, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL08b 没有同名变量时退回嵌入引用，不抛异常',
+      displayTextOf(byId(u2.id)) === '[未定义]', displayTextOf(byId(u2.id)));
+    // 普通变量（不是列表）后面跟点 → 也退回嵌入那条路
+    const P = addVarNode('普', 0, 400, { name:'普', value:'x' });
+    reindex(); sizeAll();
+    const u3 = addNodeAt('{普.啥}', 600, 240, 'round');
+    reindex(); sizeAll(); mark(); draw();
+    ok('VL08c 非列表类型后面跟点也退回嵌入引用',
+      displayTextOf(byId(u3.id)) === '[未定义]', displayTextOf(byId(u3.id)));
+  });
+  T('VL09 菜单里没有独立的「滑条节点」了', () => {
+    fresh(); cancelEdit();
+    const n = doc.nodes[0];
+    selectOnly(n.id);
+    showCtx(600, 400, byId(n.id), null, { p:{ x:0, y:0 } });
+    const all = [...ctxEl.querySelectorAll('.item')].map(d => d.textContent);
+    ok('VL09 右键菜单里没有「滑条节点」',
+      !all.some(t => t.indexOf('滑条节点') === 0), all.slice(0, 6).join(' / '));
+    if (all.some(t => t.indexOf('新建') === 0)){
+      const nw = openSub('新建');
+      const sub = menuStack[menuStack.length - 1];
+      const subAll = [...sub.querySelectorAll('.item')].map(d => d.textContent);
+      openSub('程序节点');
+      const sub2 = menuStack[menuStack.length - 1];
+      const sub2All = [...sub2.querySelectorAll('.item')].map(d => d.textContent);
+      ok('VL09b 新建 → 程序节点里也没有滑条节点',
+        !sub2All.some(t => t.indexOf('滑条节点') === 0), sub2All.join(' / '));
+      ok('VL09c 但变量节点还在', sub2All.some(t => t.indexOf('变量节点') === 0), sub2All.join(' / '));
+    }
+    hideCtx();
+    // 右键变量节点 → 类型 里六种都在
+    const vn = addVarNode('x', 0, 900, { name:'x' });
+    reindex(); sizeAll(); selectOnly(byId(vn.id));
+    showCtx(600, 400, byId(vn.id), null, { p:{ x:0, y:0 } });
+    // 「类型：」在**数据**子菜单里，得先展开
+    openSub('数据');
+    const dataEl = menuStack[menuStack.length - 1];
+    const typeItem = [...dataEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('类型：') === 0);
+    ok('VL09d 变量节点的菜单里有「类型：」', !!typeItem, typeItem ? typeItem.textContent : '(没有)');
+    if (typeItem){
+      openSub('类型：');
+      const ts = [...menuStack[menuStack.length - 1].querySelectorAll('.item')].map(d => d.textContent);
+      ok('VL09e 六种类型都在下拉里',
+        ['单一变量', '滑块', '列表', '地图', '勾选', '条件'].every(x => ts.some(t => t.indexOf(x) >= 0)),
+        ts.join(' / '));
+    }
+    hideCtx();
   });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {

@@ -953,6 +953,46 @@ function setVarControl(n, control){
   reindex(); sizeAll(); pushHist(); mark();
   say('* 「' + normalizeVarDef(n.varDef).name + '」现在是' + VAR_CONTROL_LABEL[control] + '节点。');
 }
+/* 列表 / 地图的增删。
+   ⚠ 列表空了会被 normalizeVarDef 重置回默认的 0 1 2 —— 所以「删到空」等于重置，
+     和勾选节点「至少留一个」是一个道理，菜单里也会把最后一项的删除项灰掉。 */
+function addListItem(n){
+  if (!isVarNode(n)) return;
+  const v = normalizeVarDef(n.varDef);
+  const items = v.items.slice();
+  items.push(String(items.length));            // 新项先填个序号，方便改
+  setVarDef(n, { items });
+  sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 列表加了一项：第 ' + (items.length - 1) + ' 项。引用写法 {' + v.name + '.'
+      + (items.length - 1) + '}。');
+}
+function removeListItem(n){
+  if (!isVarNode(n)) return;
+  const v = normalizeVarDef(n.varDef);
+  if (v.items.length <= 1){ say('* 列表至少留一项。'); return; }
+  const items = v.items.slice(0, v.items.length - 1);
+  setVarDef(n, { items });
+  sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 列表删掉了最后一项，现在 ' + items.length + ' 项。');
+}
+function addMapPair(n){
+  if (!isVarNode(n)) return;
+  const v = normalizeVarDef(n.varDef);
+  const pairs = v.pairs.map(p => ({ k:p.k, v:p.v }));
+  pairs.push({ k:'key' + pairs.length, v:'' });
+  setVarDef(n, { pairs });
+  sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 地图加了一对，引用写法 {' + v.name + '.key' + (pairs.length - 1) + '}。');
+}
+function removeMapPair(n){
+  if (!isVarNode(n)) return;
+  const v = normalizeVarDef(n.varDef);
+  if (v.pairs.length <= 1){ say('* 地图至少留一对。'); return; }
+  const pairs = v.pairs.slice(0, v.pairs.length - 1).map(p => ({ k:p.k, v:p.v }));
+  setVarDef(n, { pairs });
+  sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+  say('* 地图删掉了最后一对，现在 ' + pairs.length + ' 对。');
+}
 /* 勾选节点的选项列表：用一串逗号分隔的文本来编辑 */
 function setCheckOptions(n, text){
   if (!isVarNode(n)) return;

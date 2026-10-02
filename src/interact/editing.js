@@ -28,6 +28,11 @@ const editValue = (kind, t) => {
   if (kind === 'portLabel') return (portById(t, editing.portId) || {}).label || '';
   if (kind === 'portId') return String(editing.portId);
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
+  /* 列表：**一行一项**（换行分隔，所以项里可以有逗号）。
+     地图：一行一对「key=value」。 */
+  if (kind === 'listItems') return normalizeVarDef(t.varDef).items.join('\n');
+  if (kind === 'mapPairs')  return normalizeVarDef(t.varDef).pairs
+    .map(p => p.k + '=' + p.v).join('\n');
   /* 滑条范围：一行填「下限 上限 [步长]」。**每一项都能写 {变量}**。 */
   if (kind === 'sliderRange'){
     const v = normalizeVarDef(t.varDef);
@@ -56,6 +61,21 @@ function editSetValue(kind, t, v){
   else if (kind === 'portLabel') setPortLabel(t, editing.dir, editing.portId, v.trim());
   else if (kind === 'portId'){
     if (setPortId(t, editing.dir, editing.portId, v.trim())) editing.portId = Math.round(+v.trim());
+  }
+  else if (kind === 'listItems'){
+    const items = String(v).split('\n').map(x => x.replace(/\r$/, ''));
+    while (items.length && items[items.length - 1].trim() === '') items.pop();
+    setVarDef(t, { items: items.length ? items : ['0', '1', '2'] });
+    sizeNode(t);
+  }
+  else if (kind === 'mapPairs'){
+    const pairs = String(v).split('\n').map(line => {
+      const i = line.indexOf('=');
+      return (i < 0) ? { k:line.trim(), v:'' }
+                     : { k:line.slice(0, i).trim(), v:line.slice(i + 1).trim() };
+    }).filter(p => p.k !== '' || p.v !== '');
+    setVarDef(t, { pairs: pairs.length ? pairs : [{ k:'key', v:'value' }] });
+    sizeNode(t);
   }
   else if (kind === 'sliderRange'){
     const parts = String(v).trim().split(/[\s,，]+/).filter(x => x !== '');
