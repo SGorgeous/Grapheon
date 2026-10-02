@@ -196,13 +196,16 @@ function showCtx(x, y, n, e, info){
           v.pairs.length > 1 ? () => removeMapPair(n) : null]);
       }
       if (v.control === 'slider'){
-        data.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
-          ['精确填…（可写 {变量}）', '上下限 / 步长', () => startEdit('sliderRange', n.id)],
-          'hr',
-          ['下限 -10', '', () => setSliderRange(n, { min:v.min - 10 })],
-          ['下限 +10', '', () => setSliderRange(n, { min:v.min + 10 })],
-          ['上限 -10', '', () => setSliderRange(n, { max:v.max - 10 })],
-          ['上限 +10', '', () => setSliderRange(n, { max:v.max + 10 })],
+        /* ★ 上下限可能写的是 {变量} —— 加减之前必须先解析成数。
+       以前直接 v.min - 10，上下限写 {下界} 的时候算出来是 NaN，
+       点一下「下限 -10」，范围就变成 NaN 了。 */
+    const curMin = () => paramNum(liveCtx(), v.min, n.id, 0);
+    const curMax = () => paramNum(liveCtx(), v.max, n.id, curMin() + 100);
+    data.push(['滑条范围…', v.min + ' ~ ' + v.max + ' 步长 ' + v.step, null, [
+      ['下限 -10', '', () => setSliderRange(n, { min:curMin() - 10 })],
+      ['下限 +10', '', () => setSliderRange(n, { min:curMin() + 10 })],
+      ['上限 -10', '', () => setSliderRange(n, { max:curMax() - 10 })],
+      ['上限 +10', '', () => setSliderRange(n, { max:curMax() + 10 })],
           ['步长归 1', '', () => setSliderRange(n, { step:1 })],
           ['步长归 5', '', () => setSliderRange(n, { step:5 })]
         ]]);

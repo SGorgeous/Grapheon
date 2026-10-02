@@ -8792,6 +8792,163 @@
     ok('MN01e 再点一下收起', menuStack.length === before, before + ' → ' + menuStack.length);
     hideCtx();
   });
+
+  T('SL01 面板的行不串：换节点类型要跟着收掉', () => {
+    fresh(); cancelEdit();
+    const vis = (id) => document.getElementById(id).style.display || '(默认)';
+    const setPanel = (n) => { selectOnly(byId(n.id)); openNodeBox(byId(n.id)); renderNodeBox(); };
+    const sl = addVarNode('音量', 0, 0,
+      { name:'音量', value:'50', type:'number', control:'slider' });
+    const chk = addControlNode('check', 0, 600);
+    const lst = addVarNode('名单', 0, 1200, { name:'名单', control:'list', items:['a'] });
+    const txt = addNodeAt('普通文本', 0, 1800, 'rect');
+    reindex(); sizeAll();
+
+    setPanel(sl);
+    ok('SL01 滑块：滑条行开、内容行关',
+      vis('nbSlideRow') === 'flex' && vis('nbBodyRow') === 'none',
+      vis('nbSlideRow') + ' / ' + vis('nbBodyRow'));
+    setPanel(chk);
+    ok('SL01b 勾选：内容行开、滑条行关',
+      vis('nbBodyRow') === 'flex' && vis('nbSlideRow') === 'none',
+      vis('nbSlideRow') + ' / ' + vis('nbBodyRow'));
+    setPanel(lst);
+    ok('SL01c 列表：内容行开、滑条行关',
+      vis('nbBodyRow') === 'flex' && vis('nbSlideRow') === 'none',
+      vis('nbSlideRow') + ' / ' + vis('nbBodyRow'));
+    /* ★ 这一条是回归：以前非变量节点不进任何分支，
+       那两行会留着上一个变量的状态 —— 面板看起来就是「串了」。 */
+    setPanel(txt);
+    ok('SL01d 普通文本节点：两行都要收掉（以前会留着上一个的）',
+      vis('nbSlideRow') === 'none' && vis('nbBodyRow') === 'none',
+      vis('nbSlideRow') + ' / ' + vis('nbBodyRow'));
+    setPanel(sl);
+    ok('SL01e 再切回滑块：又正常了',
+      vis('nbSlideRow') === 'flex' && vis('nbBodyRow') === 'none',
+      vis('nbSlideRow') + ' / ' + vis('nbBodyRow'));
+    closeNodeBox();
+  });
+  T('SL02 值是 {变量} 时，那条数值滑条要停用（不能偷偷把引用冲掉）', () => {
+    fresh(); cancelEdit();
+    const pg = createProgramNode(0, 0);
+    reindex(); sizeAll(); selectOnly(byId(pg.id));
+    openNodeBox(byId(pg.id)); renderNodeBox();
+    const box = () => document.getElementById('nbVal');
+    const rg = () => box().querySelector('input[type=range]');
+    const tx = () => box().querySelector('input[type=text]');
+
+    ok('SL02 前置：数字值时滑条可用', rg() && !rg().disabled);
+    const before = [+rg().min, +rg().max];
+    /* 拖一下：数字值正常生效 */
+    rg().value = '20'; rg().oninput();
+    ok('SL02b 数字值能拖', byId(pg.id).program.value === 20, JSON.stringify(byId(pg.id).program.value));
+    /* 改成变量引用 */
+    tx().value = '{倍数}'; tx().onchange();
+    ok('SL02c 框里写 {变量} 原样存住', byId(pg.id).program.value === '{倍数}',
+      JSON.stringify(byId(pg.id).program.value));
+    renderNodeBox();
+    /* ★ 回归点：以前滑条照样可用、值算成 0，用户一碰就把 {倍数} 冲掉了 */
+    ok('SL02d 重新渲染后滑条**停用**了', rg().disabled === true, String(rg().disabled));
+    ok('SL02e 停用的滑条不再挂 oninput', !rg().oninput,
+      String(rg().oninput));
+    ok('SL02f 界面上有一句说明', !!box().querySelector('.nbexprnote'));
+    /* 就算有人硬派发事件，也不该把值改掉 */
+    const kept = byId(pg.id).program.value;
+    rg().dispatchEvent(new Event('input'));
+    rg().dispatchEvent(new Event('change'));
+    ok('SL02g 硬派发事件也改不掉它', byId(pg.id).program.value === kept,
+      JSON.stringify(byId(pg.id).program.value));
+    /* 改回数字 → 滑条复活 */
+    tx().value = '24'; tx().onchange();
+    renderNodeBox();
+    ok('SL02h 改回数字之后滑条复活', rg().disabled === false, String(rg().disabled));
+    rg().value = '30'; rg().oninput();
+    ok('SL02i 复活后能正常拖', byId(pg.id).program.value === 30,
+      JSON.stringify(byId(pg.id).program.value));
+    closeNodeBox();
+  });
+  T('SL03 变量滑条本身没问题（拖动 / 引用 / 上下限算得对）', () => {
+    fresh(); cancelEdit();
+    const lo = addVarNode('下界', 0, 0, { name:'下界', value:'10' });
+    const hi = addVarNode('上界', 0, 400, { name:'上界', value:'20' });
+    const s = addVarNode('滑', 0, 800,
+      { name:'滑', control:'slider', type:'number', value:'15', min:'{下界}', max:'{上界}', step:'1' });
+    reindex(); sizeAll();
+    const v = normalizeVarDef(byId(s.id).varDef);
+    ok('SL03 sliderValue 解析了上下限', sliderValue(v, byId(s.id).id) === 15,
+      String(sliderValue(v, byId(s.id).id)));
+    const f = sliderFrac(v, byId(s.id).id);
+    ok('SL03b 分数在 0..1 之间（10~20 里的 15 = 0.5）', Math.abs(f - 0.5) < 1e-9, String(f));
+    selectOnly(byId(s.id)); mark(); draw();
+    const L = varBoxes(byId(s.id));
+    ok('SL03c 有轨道', !!L.trackBox);
+    /* 拖到轨道四分之三处（10 + 0.75*10 = 17.5 → 步长 1 取 18） */
+    const px = { x: L.trackBox.x + 12 + (L.trackBox.w - 24) * 0.75,
+                 y: L.trackBox.y + L.trackBox.h / 2 };
+    ok('SL03d 命中轨道', JSON.stringify(hitVarControl(byId(s.id), px)) === '{"kind":"slider"}',
+      JSON.stringify(hitVarControl(byId(s.id), px)));
+    setSliderFromPointer(byId(s.id), px);
+    ok('SL03e 拖到 75% → 18', normalizeVarDef(byId(s.id).varDef).value === '18'
+      || +normalizeVarDef(byId(s.id).varDef).value === 18,
+      JSON.stringify(normalizeVarDef(byId(s.id).varDef).value));
+    /* 值超出范围要被夹住，不能出现 NaN */
+    setVarDef(byId(s.id), { value:'999' });
+    ok('SL03f 超范围被夹到上限', sliderValue(normalizeVarDef(byId(s.id).varDef), byId(s.id).id) === 20,
+      String(sliderValue(normalizeVarDef(byId(s.id).varDef), byId(s.id).id)));
+    setVarDef(byId(s.id), { value:'一段文字' });
+    const sv = sliderValue(normalizeVarDef(byId(s.id).varDef), byId(s.id).id);
+    ok('SL03g 非数字落到下限，不是 NaN', sv === 10 && isFinite(sv), String(sv));
+  });
+
+  T('SL04 上下限写 {变量} 时，加减范围也不能算出 NaN', () => {
+    fresh(); cancelEdit();
+    const lo = addVarNode('下界', 0, 0, { name:'下界', value:'10' });
+    const hi = addVarNode('上界', 0, 400, { name:'上界', value:'20' });
+    const s = addVarNode('滑', 0, 800,
+      { name:'滑', control:'slider', type:'number', value:'15',
+        min:'{下界}', max:'{上界}', step:'1' });
+    reindex(); sizeAll(); selectOnly(byId(s.id));
+    const V = () => normalizeVarDef(byId(s.id).varDef);
+    ok('SL04 前置：上下限是变量引用', V().min === '{下界}' && V().max === '{上界}',
+      V().min + ' / ' + V().max);
+
+    /* ★ 回归点：以前菜单里直接 v.min - 10，'{下界}' - 10 = NaN */
+    showCtx(600, 400, byId(s.id), null, { p:{ x:0, y:0 } });
+    openSub('数据');
+    const it = openSub('滑条范围…');
+    /* 子菜单里找「下限 -10」 */
+    const mi = [...menuStack[menuStack.length - 1].querySelectorAll('.item')]
+      .find(d => d.textContent.indexOf('下限 -10') === 0);
+    ok('SL04b 菜单里有「下限 -10」', !!mi);
+    if (mi) mi.click();
+    const after = V();
+    ok('SL04c 点完下限不是 NaN（10 - 10 = 0）',
+      Number(after.min) === 0 && !isNaN(Number(after.min)),
+      JSON.stringify(after.min));
+    hideCtx();
+
+    /* 上限也来一下 */
+    showCtx(600, 400, byId(s.id), null, { p:{ x:0, y:0 } });
+    openSub('数据');
+    openSub('滑条范围…');
+    const ma = [...menuStack[menuStack.length - 1].querySelectorAll('.item')]
+      .find(d => d.textContent.indexOf('上限 +10') === 0);
+    if (ma) ma.click();
+    ok('SL04d 上限 +10 也不是 NaN（20 + 10 = 30）', Number(V().max) === 30,
+      JSON.stringify(V().max));
+    hideCtx();
+
+    /* 拖动也得跟着对：上下限变数字之后，拖到中点该是 15（0~30 的中点） */
+    setVarDef(byId(s.id), { min:'0', max:'30', step:'1' });
+    reindex(); sizeAll(); mark(); draw();
+    const L = varBoxes(byId(s.id));
+    const px = { x: L.trackBox.x + 12 + (L.trackBox.w - 24) * 0.5,
+                 y: L.trackBox.y + L.trackBox.h / 2 };
+    setSliderFromPointer(byId(s.id), px);
+    const got = Number(V().value);
+    ok('SL04e 拖到中点 ≈ 15 且不是 NaN', isFinite(got) && Math.abs(got - 15) <= 1,
+      JSON.stringify(V().value));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

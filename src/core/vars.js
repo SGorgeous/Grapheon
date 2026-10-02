@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/vars.js
    变量系统：变量定义节点、文本里的 {name} 引用、运算符节点、函数分组、输出节点、优先级。
@@ -940,11 +940,21 @@ function sliderValueAt(n, worldX){
   const b = L.trackBox;
   if (!b) return sliderValue(n.varDef, n.id);
   const v = normalizeVarDef(n.varDef);
+  const ctx = liveCtx();
+  /* ★ 上下限 / 步长**可能写的是 {变量}**，必须走 paramNum 解析。
+     以前这里直接拿 v.min / v.max / v.step 做算术 ——
+     只要上下限写成 {下界} 这种字符串，v.min + t * (v.max - v.min) 就是 NaN，
+     拖一下值变成 "NaN" 而且**直接存进 varDef**。
+     旁边的 sliderValue / sliderFrac 都老老实实走了 paramNum，只有这里漏了，
+     所以症状是「画出来的位置是对的、一拖就坏」。 */
+  const lo = paramNum(ctx, v.min, n.id, 0);
+  const hi = paramNum(ctx, v.max, n.id, lo + 100);
+  const st = Math.max(1e-9, paramNum(ctx, v.step, n.id, 1));
   const pad = 12;
   const t = Math.max(0, Math.min(1, (worldX - (b.x + pad)) / Math.max(1, b.w - pad * 2)));
-  const raw = v.min + t * (v.max - v.min);
-  const steps = Math.round((raw - v.min) / v.step);
-  return Math.round((v.min + steps * v.step) * 1e6) / 1e6;
+  const raw = lo + t * (hi - lo);
+  const steps = Math.round((raw - lo) / st);
+  return Math.round((lo + steps * st) * 1e6) / 1e6;
 }
 /* 滑条：值 → 轨道上的比例 */
 function sliderFrac(vd, fromId){

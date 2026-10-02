@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/nodebox.js
    节点面板：程序算符（程序节点才有）+ 外观（字号 / 字体 / 字色 / 外框色 / 尺寸）。
@@ -145,6 +145,14 @@ function renderNodeBox(){
       nbBodyRowEl.style.display = 'none';
       nbBodyEl.onchange = null;
     }
+  } else {
+    /* ★ 不是变量节点：**主动把这两行收掉**。
+       以前这里什么都不做，于是「滑条 / 勾选」那两行会留着上一次的状态 ——
+       选中一个普通文本节点，面板上还挂着上个变量的上下限输入框。 */
+    nbSlideRowEl.style.display = 'none';
+    nbBodyRowEl.style.display = 'none';
+    nbBodyEl.onchange = null;
+    nbSlideMinEl.onchange = null; nbSlideMaxEl.onchange = null; nbSlideStepEl.onchange = null;
   }
   if (isOpr){
     const od = normalizeOpDef(n.opDef);
@@ -244,27 +252,44 @@ function renderProgRows(n){
   nbValEl.appendChild(inp);
 
   /* ★ 数值类再来一条**滑条**（字号 / 偏移量）。滑条只出数字，
-     想引用变量就填它左边那个框 —— 两条路并存。 */
+     想引用变量就填它上面那个框 —— 两条路并存。
+
+     ⚠ 但**值本身是 {变量} 的时候，滑条必须停用**：
+       以前照样渲染，Number('{倍数}') → 0，滑条就停在 0；
+       更糟的是它还给 oninput 挂着，用户随手碰一下滑条，
+       刚写好的 {变量} 就被一个数字冲掉了 —— 而且看不出是怎么没的。 */
   const isDelta = (p.mode === 'add');
-  const numNow = (typeof p.value === 'number')
-    ? p.value : (Number(String(p.value).trim()) || 0);
+  const isExpr = (typeof p.value === 'string' && p.value.indexOf('{') >= 0);
   const lo = isDelta ? -32 : 8, hi = isDelta ? 32 : 72;
+  const numNow = isExpr ? (isDelta ? 0 : 16)
+    : (typeof p.value === 'number') ? p.value : (Number(String(p.value).trim()) || 0);
   const rg = el('input', 'nbval-range');
   rg.type = 'range';
   rg.min = String(Math.min(lo, numNow));
   rg.max = String(Math.max(hi, numNow));
   rg.step = '1';
   rg.value = String(numNow);
-  rg.title = isDelta ? '拖动改增量（-32 ~ +32）' : '拖动改字号（8 ~ 72）';
-  /* 拖动时**只重画不进历史** —— 一次拖动会触发几百下，进历史就没法撤销了。
-     松手（change）才算一次编辑。 */
-  rg.oninput = () => {
-    inp.value = rg.value;
-    setProgram(n, { value:+rg.value });
-    reindex(); mark();
-  };
-  rg.onchange = () => afterNodeEdit();
+  if (isExpr){
+    rg.disabled = true;
+    rg.title = '当前值写的是变量引用（' + p.value + '），滑条用不了 —— 把上面框里改回数字就恢复';
+    rg.oninput = null; rg.onchange = null;
+  } else {
+    rg.disabled = false;
+    rg.title = isDelta ? '拖动改增量（-32 ~ +32）' : '拖动改字号（8 ~ 72）';
+    /* 拖动时**只重画不进历史** —— 一次拖动会触发几百下，进历史就没法撤销了。
+       松手（change）才算一次编辑。 */
+    rg.oninput = () => {
+      inp.value = rg.value;
+      setProgram(n, { value:+rg.value });
+      reindex(); mark();
+    };
+    rg.onchange = () => afterNodeEdit();
+  }
   nbValEl.appendChild(rg);
+  if (isExpr){
+    const note = el('div', 'sub nbexprnote', '↑ 值写的是变量引用，滑条已停用（改回数字就恢复）');
+    nbValEl.appendChild(note);
+  }
 }
 
 function afterNodeEdit(){

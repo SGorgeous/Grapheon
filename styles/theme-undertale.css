@@ -406,3 +406,7 @@ body.no-heart .ud-btn::before{ content:none; }
   accent-color:var(--y);
   background:transparent;
 }
+
+/* 值是 {变量} 时那条数值滑条会停用 —— 得看得出来它不工作 */
+.nbval-range:disabled{ opacity:.35; cursor:not-allowed; }
+#nodebox .nbexprnote{ flex:1 0 100%; color:var(--d); font-size:12px; margin-top:-2px; }
