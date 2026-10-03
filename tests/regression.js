@@ -6069,22 +6069,31 @@
       sub.some(t => t.indexOf('外观节点') === 0), sub.join(' / '));
     hideCtx();
   });
-  T('RB05 每一项都带灰字说明', () => {
+  T('RB05 右边只留快捷键，说明收进 title / data-tip', () => {
     emptyMenu();
+    const shown = (d) => { const h = d.querySelector('.k'); return h ? h.textContent.trim() : ''; };
+    const tipOf = (d) => d.dataset.tip || d.title || '';
     const top = [...ctxEl.querySelectorAll('.item')];
-    const allHaveHint = top.every(d => {
-      const h = d.querySelector('.k');
-      return !!h && !!h.textContent.trim();
-    });
-    ok('RB05 新建 / 全选 / 居中都有灰字', allHaveHint,
-      top.map(d => d.textContent).join(' / '));
-    const sub = subMenu('新建');
+    /* 快捷键照旧显示 */
+    ok('RB05 有快捷键的项右边照旧显示（全选 = Ctrl+A）',
+      top.some(d => shown(d) === 'Ctrl+A'), top.map(d => d.textContent).join(' / '));
+    /* ★ 只有说明的项：右边**不再**显示，但挂到了 title / dataset.tip 上 */
+    const descOnly = top.filter(d => shown(d) !== 'Ctrl+A');
+    ok('RB05b ★ 只有说明的项右边不显示了',
+      descOnly.every(d => shown(d) === '' || shown(d) === '▶'),
+      descOnly.map(d => JSON.stringify([d.textContent, shown(d)])).join(' / '));
+    ok('RB05c ★ 但说明都挂到 title / data-tip 上了（右键 / 悬停能看到）',
+      descOnly.filter(d => shown(d) !== '▶').every(d => !!tipOf(d)),
+      descOnly.map(d => JSON.stringify([d.textContent, tipOf(d)])).join(' / '));
+    /* 子菜单里也一样 */
+    subMenu('新建');
     const flat = [...document.querySelectorAll('.menu .item')];
-    const noHint = flat.filter(d => {
-      const h = d.querySelector('.k');
-      return !h || !h.textContent.trim();
-    }).map(d => d.textContent);
-    ok('RB05b 子菜单里的每一项也有灰字', noHint.length === 0, noHint.join(' / '));
+    const bad = flat.filter(d => shown(d) !== '' && shown(d) !== '▶' && !/^(Ctrl|Shift|Alt)/.test(shown(d)));
+    ok('RB05d ★ 子菜单里也只有快捷键露在外面', bad.length === 0,
+      bad.map(d => JSON.stringify([d.textContent, shown(d)])).join(' / '));
+    const noTip = flat.filter(d => shown(d) === '' && !tipOf(d));
+    ok('RB05e ★ 子菜单里被收起来的说明都有 title', noTip.length === 0,
+      noTip.map(d => d.textContent).join(' / '));
     hideCtx();
   });
   T('RB06 程序组：建出来就是函数分组', () => {
@@ -6252,10 +6261,10 @@
         .every(L => sub.some(x => x.indexOf(L) >= 0)), sub.join(' / '));
     const tblItems = [...document.querySelectorAll('.menu .item')]
       .filter(d => /加一行|加一列|删掉最后|表头/.test(d.textContent));
-    ok('TB07c 表格那几项都有灰字', tblItems.length >= 5 && tblItems.every(d => {
-      const h = d.querySelector('.k');
-      return !!h && !!h.textContent.trim();
-    }), tblItems.map(d => d.textContent).join(' / '));
+    /* ★ 改过了：右边只留快捷键，说明收进 title / data-tip */
+    ok('TB07c 表格那几项都把说明挂在 title 上（右边不再显示）',
+      tblItems.length >= 5 && tblItems.every(d => !!(d.dataset.tip || d.title)),
+      tblItems.map(d => JSON.stringify([d.textContent, d.dataset.tip || d.title || ''])).join(' / '));
     hideCtx();
   });
 

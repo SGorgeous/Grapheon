@@ -53,9 +53,22 @@ function showMenu(x, y, items, depth, anchorEl){
     const [label, hint, fn, subs] = it;
     const d = el('div', 'item' + (subs ? ' sub' : '') + (!fn && !subs ? ' off' : ''));
     d.appendChild(el('span', 'lb', label));
-    // 有子菜单的也要显示灰字说明 —— 以前直接跳过 hint 只给个 ▶，
-    // 结果「节点」「程序节点」这两项光秃秃的。
-    if (hint) d.appendChild(el('span', 'k', hint));
+    /* ★ 右边只留**快捷键**；说明文字收起来，右键点这一项时在鼠标处浮出来
+       （同时挂 title，悬停也能看到）。 */
+    if (hint){
+      if (isMenuShortcut(hint)){
+        d.appendChild(el('span', 'k', hint));
+      } else {
+        d.title = hint;
+        d.dataset.tip = hint;
+        d.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          showMenuTip(hint, ev);
+        });
+        d.addEventListener('mouseleave', hideMenuTip);
+      }
+    }
     if (subs) d.appendChild(el('span', 'k', '▶'));
 
     if (subs){
@@ -95,6 +108,52 @@ function showMenu(x, y, items, depth, anchorEl){
   }
   return root;
 }
+
+/* =========================================================================
+   菜单项右边的 hint 是「快捷键」还是「说明」？
+   快捷键：纯 ASCII 且短（Esc / Enter / Ctrl+X / Del），或者白名单里的中文按键名。
+   说明  ：带中文的整句话（一个中心节点 / 拖过去的会把别人弹开）。
+   ========================================================================= */
+const MENU_KEY_NAMES = ['方向键','空格','双击','右键','单击','拖拽','滚动','回车','退格'];
+function isMenuShortcut(s){
+  const t = String(s == null ? '' : s).trim();
+  if (!t) return false;
+  if (/^(Ctrl|Shift|Alt|Cmd|⌘)\s*\+/i.test(t)) return true;   // Ctrl + X
+  if (/^[A-Za-z0-9+\-\/ ]{1,12}$/.test(t)) return true;        // 纯 ASCII 且短
+  return MENU_KEY_NAMES.indexOf(t) >= 0;                        // 白名单里的中文按键名
+}
+
+/* 「用法」浮层：右键点菜单项时，在鼠标处浮出来 */
+function menuTipEl(){
+  let t = document.getElementById('menuTip');
+  if (!t){
+    t = el('div', 'ud menu-tip');
+    t.id = 'menuTip';
+    t.style.display = 'none';
+    document.body.appendChild(t);
+  }
+  return t;
+}
+function showMenuTip(text, ev){
+  const t = menuTipEl();
+  t.textContent = String(text || '');
+  t.style.display = 'block';
+  /* 先摆上去量一下，别超出右 / 下边 */
+  const w = t.offsetWidth, h = t.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 16;
+  if (x + w > window.innerWidth - 8)  x = Math.max(8, ev.clientX - w - 10);
+  if (y + h > window.innerHeight - 8) y = Math.max(8, ev.clientY - h - 10);
+  t.style.left = Math.round(x) + 'px';
+  t.style.top  = Math.round(y) + 'px';
+}
+function hideMenuTip(){
+  const t = document.getElementById('menuTip');
+  if (t) t.style.display = 'none';
+}
+/* 关菜单的时候顺手把它收掉 */
+document.addEventListener('pointerdown', hideMenuTip, true);
+window.addEventListener('blur', hideMenuTip);
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hideMenuTip(); }, true);
 
 /* ---------------- 子菜单小工具 ---------------- */
 /* 单选型子菜单：当前值前面画 ●，点一下直接切过去（比「点一次循环一个」好找得多） */

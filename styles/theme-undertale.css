@@ -144,6 +144,15 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 /* 行距也收一点：14px × 十行就是 140px 的空 */
 #exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
 /* 标签列收窄：110px 十行下来，左边空出一大片，右边内容反被挤 */
+/* 菜单项的「用法」浮层：右键点那一项时在鼠标处出现 */
+.menu-tip{
+  position:fixed;z-index:300;pointer-events:none;
+  max-width:260px;padding:5px 9px;
+  background:var(--bg);color:var(--g);
+  border:2px solid var(--d);font-size:13px;line-height:1.5;
+  letter-spacing:.5px;
+}
+
 /* 变量标签条：一个节点挂多个变量时选编辑哪个 */
 #nodebox .vtabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 #nodebox .vtab{
