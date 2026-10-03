@@ -519,10 +519,14 @@ function downstreamOfIn(ctx, startId, inside){
   }
   return seen;
 }
-function varVisibleIn(ctx, def, fromId){
+function varVisibleIn(ctx, def, fromId, oneDef){
   // 函数分组内外完全隔离：作用域不同就互相看不见
   if (scopeKeyOfIn(ctx, def.id) !== scopeKeyOfIn(ctx, fromId)) return false;
-  const v = varDefOf(def);
+  /* ★ 作用域要按**被问到的那个变量**取，不能一律用节点的第一个 ——
+     一个节点挂了两个变量时（比如第 1 个「局内」、第 2 个「全局」），
+     用第一个去判会让那个**全局**变量在组外也看不见。
+     不传 oneDef 时退回原来那一条，单变量行为不变。 */
+  const v = oneDef || varDefOf(def);
   if (def.id === fromId) return true;
   const scopeId = scopeKeyOfIn(ctx, def.id);
   // 广播节点 = 全局变量，本作用域内到处可用，不用连线
@@ -550,7 +554,8 @@ function findVarRefIn(ctx, name, fromId){
     if (!isVarNode(n)) continue;
     const ref = varRefInNode(n, name);
     if (!ref) continue;
-    if (!varVisibleIn(ctx, n, fromId)) continue;
+    /* ★ 把**匹配到的那个变量**传进去 —— 作用域按它取 */
+    if (!varVisibleIn(ctx, n, fromId, ref.def)) continue;
     const p = priorityOf(n);
     if (p > bestP){ bestP = p; best = ref; }
   }
@@ -568,9 +573,10 @@ function findVarRefByTitle(ctx, nodeName, varName, fromId){
   for (const n of ctx.nodes){
     if (!isVarNode(n)) continue;
     if (String(n.text == null ? '' : n.text) !== nodeName) continue;
-    if (!varVisibleIn(ctx, n, fromId)) continue;
     const ref = varRefInNode(n, varName);
     if (!ref) continue;
+    /* ★ 同样按匹配到的那个变量判作用域 */
+    if (!varVisibleIn(ctx, n, fromId, ref.def)) continue;
     const p = priorityOf(n);
     if (p > bestP){ bestP = p; best = ref; }
   }

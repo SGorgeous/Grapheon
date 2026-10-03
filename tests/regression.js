@@ -10003,6 +10003,77 @@
     closeNodeBox();
     fresh();   /* 收尾清干净 */
   });
+
+  T('MV09 作用域按**变量**取，不按节点的第一个', () => {
+    fresh();
+    /* 用户报的：一个有两个变量的变量节点在分组里，
+       其中一个「全局」变量，组外的节点却引用不到。 */
+    const vn = addNodeAt('设置', 0, 0, 'round');
+    vn.kind = 'var';
+    vn.varDefs = [
+      { name:'局内量', control:'plain', type:'number', value:'11', scope:'local'  },
+      { name:'全局量', control:'plain', type:'number', value:'22', scope:'global' }
+    ];
+    const inside = addNodeAt('组内', 300, 0, 'round');
+    reindex(); sizeAll();
+    doc.groups = [ { id:'mg1', title:'一组', color:'', members:[vn.id, inside.id] } ];
+    const outside = addNodeAt('组外', 700, 0, 'round');
+    reindex(); sizeAll();
+    const ctx = () => buildCtx(doc.nodes, doc.edges, doc.groups);
+
+    /* ★ 核心：第二个变量是「全局」，组外也该读得到
+       （以前 varVisibleIn 一律拿**第一个**变量的作用域去判，所以读不到） */
+    ok('MV09 ★ 组外节点能读到那个「全局」变量',
+      String(interpolateIn(ctx(), '{全局量}', outside.id)) === '22',
+      String(interpolateIn(ctx(), '{全局量}', outside.id)));
+    ok('MV09b 组内节点也能读到它',
+      String(interpolateIn(ctx(), '{全局量}', inside.id)) === '22',
+      String(interpolateIn(ctx(), '{全局量}', inside.id)));
+    /* 点名语法走的是另一条路，也要通 */
+    ok('MV09c ★ 组外点名 {设置.全局量}',
+      String(interpolateIn(ctx(), '{设置.全局量}', outside.id)) === '22',
+      String(interpolateIn(ctx(), '{设置.全局量}', outside.id)));
+    /* 「局内」那个不该被组外看到 —— 这条一直是对的，别改坏 */
+    ok('MV09d 组外读不到那个「局内」变量',
+      String(interpolateIn(ctx(), '{局内量}', outside.id)) === '[未定义]',
+      String(interpolateIn(ctx(), '{局内量}', outside.id)));
+    ok('MV09e 组外点名也读不到「局内」',
+      String(interpolateIn(ctx(), '{设置.局内量}', outside.id)) === '[未定义]',
+      String(interpolateIn(ctx(), '{设置.局内量}', outside.id)));
+    /* 顺序反过来也要对：第一个全局、第二个局内 */
+    vn.varDefs = [
+      { name:'甲全局', control:'plain', value:'1', scope:'global' },
+      { name:'乙局内', control:'plain', value:'2', scope:'local'  }
+    ];
+    reindex(); sizeAll();
+    ok('MV09f ★ 第一个是全局 → 组外读得到',
+      String(interpolateIn(ctx(), '{甲全局}', outside.id)) === '1',
+      String(interpolateIn(ctx(), '{甲全局}', outside.id)));
+    ok('MV09g ★ 第二个是局内 → 组外读不到',
+      String(interpolateIn(ctx(), '{乙局内}', outside.id)) === '[未定义]',
+      String(interpolateIn(ctx(), '{乙局内}', outside.id)));
+    /* 两个都全局：都该通 */
+    vn.varDefs[1].scope = 'global';
+    reindex(); sizeAll();
+    ok('MV09h 两个都全局 → 组外都读得到',
+      String(interpolateIn(ctx(), '{甲全局}', outside.id)) === '1'
+      && String(interpolateIn(ctx(), '{乙局内}', outside.id)) === '2',
+      String(interpolateIn(ctx(), '{甲全局}', outside.id)) + ' / ' + String(interpolateIn(ctx(), '{乙局内}', outside.id)));
+    /* 单变量节点：行为不能变（varVisibleIn 不传 oneDef 时走原来那条） */
+    const solo = addVarNode('单独', 1000, 0, { name:'单独', control:'plain', value:'9', scope:'global' });
+    reindex(); sizeAll();
+    ok('MV09i 单变量全局照旧读得到',
+      String(interpolateIn(ctx(), '{单独}', outside.id)) === '9',
+      String(interpolateIn(ctx(), '{单独}', outside.id)));
+    const solo2 = addVarNode('独局内', 1300, 0, { name:'独局内', control:'plain', value:'8', scope:'local' });
+    reindex(); sizeAll();
+    ok('MV09j 单变量局内，组外照旧读不到',
+      String(interpolateIn(ctx(), '{独局内}', outside.id)) === '[未定义]',
+      String(interpolateIn(ctx(), '{独局内}', outside.id)));
+    void solo2;
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
