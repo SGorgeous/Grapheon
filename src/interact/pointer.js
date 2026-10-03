@@ -389,10 +389,14 @@ window.addEventListener('pointerup', (ev) => {
 canvas.addEventListener('dblclick', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
   // ⚠ 分组上的双击必须在这里**让开**：下面 click 那条线（detail === 2）
-  //   已经把组内节点选好了，这里再往下走就会**顺手新建一个节点** ——
-  //   那正是「双击分组之后冒出一个新节点」的原因。
+  //   已经把组内节点选好了，这里再往下走就会**顺手新建一个节点**。
   // 给分组改名挪到右键菜单和 F2 了。
-  if (groupGestureTarget(p, true)) return;
+  //
+  // ★ 但**只让开标题栏和外框边** —— 框**内部**的空白处双击要照常新建节点，
+  //   下面那段会 settleGroups 把新节点收进这个组。
+  //   以前这里用的是 groupGestureTarget(p, true)，它把「有成员的组」的
+  //   **整块内部**都算成「点在分组上」，于是组内永远建不了节点。
+  if (hitGroupTitle(p) || hitGroupBorder(p)) return;
   // 双击拐点 = 删掉它
   const wp = hitWaypoint(p);
   if (wp){

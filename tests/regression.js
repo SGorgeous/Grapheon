@@ -5905,10 +5905,28 @@
     cv.dispatchEvent(new MouseEvent('click', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
     cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:cx, clientY:cy }));
     skipDlg();
-    ok('DC04b 没有新建节点（dblclick 在分组上要让开）',
-      doc.nodes.length === before, before + ' -> ' + doc.nodes.length);
-    ok('DC04c 组内节点被选中了', sel.has(a.id) && sel.has(b.id), [...sel].join(','));
+    /* ★ 行为改过了：框**内部**的空白处双击现在**会新建节点**，
+       并且新节点被这个组收纳。
+       以前 dblclick 用的是 groupGestureTarget(p, true)，
+       它把「有成员的组」的整块内部都算成「点在分组上」，组内就永远建不了节点。
+       现在只让开标题栏和外框边 —— 那两处的「不新建」由 DC04f/g 盯着。 */
+    ok('DC04b ★ 框内空白双击会新建节点（这条以前是反的）',
+      doc.nodes.length === before + 1, before + ' -> ' + doc.nodes.length);
+    const nn = doc.nodes[doc.nodes.length - 1];
+    ok('DC04c ★ 新节点被收进了这个组',
+      (doc.groups[0].members || []).indexOf(nn.id) >= 0,
+      JSON.stringify(doc.groups[0].members));
+    ok('DC04c2 ★ 新节点成为选中项', sel.has(nn.id), [...sel].join(','));
     ok('DC04d 外框没被选中', selGroups.size === 0);
+    /* 标题栏 / 外框边的双击仍然要让开（那是分组本身） */
+    {
+      const tb = groupTitleBox(doc.groups[0]);
+      const n0 = doc.nodes.length;
+      const sx = Math.round(tb.x + tb.w / 2 + view.x), sy = Math.round(tb.y + tb.h / 2 + view.y);
+      cv.dispatchEvent(new MouseEvent('dblclick', { detail:2, bubbles:true, cancelable:true, clientX:sx, clientY:sy }));
+      skipDlg();
+      ok('DC04f ★ 标题栏双击不新建节点', doc.nodes.length === n0, n0 + ' -> ' + doc.nodes.length);
+    }
   });
   T('DC04e 空框例外：里面没节点时，双击仍然是新建节点', () => {
     fresh(); layoutMind();
