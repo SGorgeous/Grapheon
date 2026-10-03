@@ -31,7 +31,7 @@ const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= 
 function hitVarPart(n, p){
   if (!n || !isVarNode(n)) return null;      // 含广播节点
   const L = varBoxes(n);
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   // 变量名格子（普通变量和三种控件都有）。
   //   控件节点的 nameBox 在左边，控件本体在它右边。
   //   ⚠ inRect 一定要先判空：老逻辑直接 inRect(L.nameBox) 在控件节点上会抛异常，
@@ -53,7 +53,7 @@ function hitVarPart(n, p){
    和 hitVarPart 分开：那一套返回字符串，已经被断言钉住了，不动它。 */
 function hitVarControl(n, p){
   if (!n || n.kind !== 'var') return null;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.control === 'plain') return null;
   const L = varBoxes(n);
   if (v.control === 'check'){

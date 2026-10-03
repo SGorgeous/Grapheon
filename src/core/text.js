@@ -74,7 +74,7 @@ function sizeEmbedNode(n){
 function sizeVarNode(n){
   setFont(mctx, FS, 'normal', FONT);
   const desc = displayTextOf(n);
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   // 控件节点也是「名字格 + 本体」两段，宽度按同一套算
   let inner = (v.control === 'plain')
     ? VAR_PAD * 2 + VAR_NAME_W + 10 + VAR_VAL_W

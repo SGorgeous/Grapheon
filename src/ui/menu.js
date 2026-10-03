@@ -169,7 +169,7 @@ function showCtx(x, y, n, e, info){
       data.push('hr');
     }
     if (isVarNode(n)){
-      const v = normalizeVarDef(n.varDef);
+      const v = varDefOf(n);
       /* 「类型」而不是「控件」—— 单一变量 / 滑块 / 列表 / 地图 / 勾选 / 条件
          都是同一个变量节点的不同形态，切换不丢数据。 */
       data.push(['类型：' + VAR_CONTROL_LABEL[v.control], '', null,

@@ -85,7 +85,7 @@ function renderNodeBox(){
   nbVarSecEl.style.display = isVar ? 'block' : 'none';
   nbOprSecEl.style.display = isOpr ? 'block' : 'none';
   if (isVar){
-    const v = normalizeVarDef(n.varDef);
+    const v = varDefOf(n);
     /* 面板上只留一小行身份说明；「怎么引用」这种教学挪进悬停提示 */
     nbSubEl.textContent = '变量 ' + v.name;
     nbSubEl.title = '别的节点文本里写 {' + v.name + '} 就能引用它';

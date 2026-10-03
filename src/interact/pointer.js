@@ -294,7 +294,7 @@ window.addEventListener('pointerup', (ev) => {
     return;
   } else if (drag.mode === 'slider'){
     const sn = byId(drag.targetId);
-    if (sn) say('* 「' + normalizeVarDef(sn.varDef).name + '」= ' + controlValue(sn.varDef) + '。');
+    if (sn) say('* 「' + varDefOf(sn).name + '」= ' + controlValue(sn.varDef) + '。');
     if (drag.moved) pushHist();
     drag = null; if (typeof resetDragRipple === 'function') resetDragRipple();
     mark();

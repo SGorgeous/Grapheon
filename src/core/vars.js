@@ -155,6 +155,19 @@ function nodeVarDef(n){
   const l = nodeVarDefs(n);
   return l.length ? l[0] : normalizeVarDef(null);
 }
+/* ★ 统一的「拿一份变量定义」读取器。
+   传节点 → 这个节点上第一个变量（单变量时就是老行为）
+   传 def  → 直接规范化
+   第 2 步的机械迁移全靠它：原来满篇的 varDefOf(X)
+   在多变量节点上会拿到 undefined（节点没有 varDef 字段），
+   换成 varDefOf(X) 就对了，且单变量时结果分毫不差。 */
+function varDefOf(x){
+  if (!x) return normalizeVarDef(null);
+  if (x.kind === 'var' || x.kind === 'broadcast') return nodeVarDef(x);
+  if (x.varDef !== undefined && x.id) return nodeVarDef(x);   // 看着像节点
+  return normalizeVarDef(x);
+}
+
 /* 这个节点上有没有叫这个名字的变量；有就返回 { node, index, def } */
 function varRefInNode(n, name){
   const defs = nodeVarDefs(n);
@@ -258,7 +271,7 @@ function controlValue(vd, fromId){
    （老的 switch 已经不会出现，留着只是保险。） */
 function gateOpenIn(ctx, n){
   if (!isVarNode(n)) return true;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.control === 'switch') return v.on;
   // 条件节点自己就是个「值来源」：它总归输出点东西（所填的值 或「无」），
   // 所以这里一律放行 —— 通不通由 applyNodeOut / condOutputIn 决定。
@@ -303,7 +316,7 @@ function toNum(v){
      （以前 applyNodeOut 对变量节点是恒等，于是通的时候把上游的值漏了出去。） */
 const COND_NONE = '无';
 function condOutputIn(ctx, node){
-  const v = normalizeVarDef(node.varDef);
+  const v = varDefOf(node);
   const inc = valueFromUpstream(ctx, node.id);
   if (inc == null || inc === VAR_BLOCKED) return COND_NONE;   // 没接 / 上游不通
   return Number(String(inc).trim()) === 1 ? v.value : COND_NONE;
@@ -339,7 +352,7 @@ function applyNodeOut(ctx, node, incoming){
   if (!node) return incoming;
   if (isOpNode(node)) return opOutputIn(ctx, node, incoming, node.id);
   // 条件节点：输出自己的值（或「无」），不把上游的值放过去
-  if (isVarNode(node) && normalizeVarDef(node.varDef).control === 'cond'){
+  if (isVarNode(node) && varDefOf(node).control === 'cond'){
     return condOutputIn(ctx, node);
   }
   return incoming;                       // 其余节点原样透传
@@ -445,7 +458,7 @@ function downstreamOfIn(ctx, startId, inside){
 function varVisibleIn(ctx, def, fromId){
   // 函数分组内外完全隔离：作用域不同就互相看不见
   if (scopeKeyOfIn(ctx, def.id) !== scopeKeyOfIn(ctx, fromId)) return false;
-  const v = normalizeVarDef(def.varDef);
+  const v = varDefOf(def);
   if (def.id === fromId) return true;
   const scopeId = scopeKeyOfIn(ctx, def.id);
   // 广播节点 = 全局变量，本作用域内到处可用，不用连线
@@ -463,16 +476,26 @@ function varVisibleIn(ctx, def, fromId){
   return false;
 }
 /* 找一个名字对 fromId 可见的变量定义。同名时优先级高的赢，再同就取靠前的。 */
-function findVarDefIn(ctx, name, fromId){
+/* ★ 按名字找变量，返回 { node, index, def } ——
+   一个节点挂多个变量时，index 指明是哪一个。
+   节点上有**任何一个**变量叫这个名字就算命中。
+   和以前一样：按优先级挑，同级取文档里靠前的。 */
+function findVarRefIn(ctx, name, fromId){
   let best = null, bestP = -Infinity;
   for (const n of ctx.nodes){
     if (!isVarNode(n)) continue;
-    if (nodeVarDef(n).name !== name) continue;
+    const ref = varRefInNode(n, name);
+    if (!ref) continue;
     if (!varVisibleIn(ctx, n, fromId)) continue;
     const p = priorityOf(n);
-    if (p > bestP){ bestP = p; best = n; }
+    if (p > bestP){ bestP = p; best = ref; }
   }
   return best;
+}
+/* 老名字保留：只要节点的调用点（多数场景就是一个变量）*/
+function findVarDefIn(ctx, name, fromId){
+  const ref = findVarRefIn(ctx, name, fromId);
+  return ref ? ref.node : null;
 }
 /* {变量节点名.变量名} —— 一个节点挂多个变量时，用它指名道姓。
    和 findVarDefIn 一样按优先级挑，同级取文档里靠前的。 */
@@ -684,7 +707,7 @@ function defValueIn(ctx, def){
   }
   /* ★ 条件节点：按名字引用它，拿到的就是 condOutputIn（所填的值，或「无」）。
      它不是「不通就没值」—— 不通的时候输出的是「无」这个值。 */
-  if (isVarNode(def) && normalizeVarDef(def.varDef).control === 'cond'){
+  if (isVarNode(def) && varDefOf(def).control === 'cond'){
     return condOutputIn(ctx, def);
   }
   if (isVarNode(def) && !gateOpenIn(ctx, def)) return null;
@@ -707,11 +730,15 @@ function functionResultIn(ctx, grp){
 /* 解析 fromId 看到的变量值。找不到定义返回 null。
    起点必须是 defValueIn()（可能已被函数分组替换过）。 */
 function resolveVarIn(ctx, name, fromId){
-  const def = findVarDefIn(ctx, name, fromId);
-  if (!def) return null;
-  const base = defValueIn(ctx, def);
-  if (def.id === fromId) return base;
-  const mid = evalFromIn(ctx, def, base, null, fromId);
+  const ref = findVarRefIn(ctx, name, fromId);
+  if (!ref) return null;
+  const n = ref.node;
+  /* ★ 取的是**匹配到的那个**变量，不是节点的第一个 */
+  const shadow = Object.assign({}, n, { varDef: ref.def });
+  const base = defValueIn(ctx, shadow);
+  if (n.id === fromId) return base;
+  /* 拦路开关按节点算 —— 一个节点多个变量时整节点一起被挡 */
+  const mid = evalFromIn(ctx, shadow, base, null, fromId);
   if (mid === VAR_BLOCKED) return null;      // 被关着的开关挡住：逻辑上不通，就是没有值
   return (mid == null) ? base : mid;
 }
@@ -733,7 +760,7 @@ function embeddedCtxOf(embedNode){
    调用方据此退回「嵌入文档的跨层引用」那条路。
    返回 **null** 表示「确实是列表 / 地图，但没有这一项」→ 显示 [未定义]。 */
 function memberValueIn(ctx, def, key, fromId){
-  const v = normalizeVarDef(def.varDef);
+  const v = varDefOf(def);
   const k = String(key == null ? '' : key).trim();
   const at = (x) => interpolateIn(ctx, String(x == null ? '' : x), fromId);
   if (v.control === 'list'){
@@ -832,15 +859,23 @@ function resolveTokenIn(ctx, inner, fromId){
     const owner = (ctx && ctx.byId) ? ctx.byId.get(fromId) : null;
     const refCtx = (typeof tableRefCtx === 'function') ? tableRefCtx(owner, fromId) : null;
     const out = evalFormula(body.slice(1), (nm) => {
-      /* 名字里可能带点：名单.0 / 配置.host —— 先当「变量 + 下标」试 */
+      /* 名字里可能带点，三种意思，按「由近到远」试：
+         ① 变量名.下标     名单.0 / 配置.host
+         ② 变量节点名.变量名 设置.音量   ← 一个节点挂多个变量时用它点名的那个
+         ③ 都不是 → 当普通变量名 */
       const dot = nm.indexOf('.');
       if (dot > 0){
         const head = nm.slice(0, dot), tail = nm.slice(dot + 1);
-        const def = findVarDefIn(ctx, head, fromId);
-        if (def){
-          const got = memberValueIn(ctx, def, tail, fromId);
+        /* ① 变量 + 下标 */
+        const ref = findVarRefIn(ctx, head, fromId);
+        if (ref){
+          const shadow = Object.assign({}, ref.node, { varDef: ref.def });
+          const got = memberValueIn(ctx, shadow, tail, fromId);
           if (got !== undefined) return got;
         }
+        /* ② 变量节点名 + 变量名 */
+        const byTitle = findVarRefByTitle(ctx, head, tail, fromId);
+        if (byTitle) return varRefValueIn(ctx, byTitle, fromId);
       }
       return resolveVarIn(ctx, nm, fromId);
     }, refCtx || undefined);
@@ -856,11 +891,20 @@ function resolveTokenIn(ctx, inner, fromId){
      注意点号是在**第 0 层**找的，所以 {a.b} 里的点不会被误当成外层的分隔符。 */
   const name = interpolateIn(ctx, headRaw, fromId);
   const key  = interpolateIn(ctx, tailRaw, fromId);
-  const def = findVarDefIn(ctx, name, fromId);
-  if (def){
-    const got = memberValueIn(ctx, def, key, fromId);
+  /* ① 按**变量名**找，key 当它的下标（列表 / 地图）。
+        用匹配到的那个变量，不是节点上的第一个。 */
+  const ref = findVarRefIn(ctx, name, fromId);
+  if (ref){
+    const shadow = Object.assign({}, ref.node, { varDef: ref.def });
+    const got = memberValueIn(ctx, shadow, key, fromId);
     if (got !== undefined) return got;
   }
+  /* ② ★ 按**变量节点名**找，key 当它身上的某个变量名 ——
+        一个节点挂了多个变量时用它指名道姓。
+        排在嵌入引用**前面**：变量比嵌入「近」。 */
+  const byTitle = findVarRefByTitle(ctx, name, key, fromId);
+  if (byTitle) return varRefValueIn(ctx, byTitle, fromId);
+  /* ③ 最后才是嵌入节点：{嵌入名.输出名} */
   return resolveEmbedOutput(name, key);
 }
 /* 给外部（和测试）用的薄封装，都走当前文档 */
@@ -1008,7 +1052,7 @@ function sliderValueAt(n, worldX){
   const L = varBoxes(n);
   const b = L.trackBox;
   if (!b) return sliderValue(n.varDef, n.id);
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   const ctx = liveCtx();
   /* ★ 上下限 / 步长**可能写的是 {变量}**，必须走 paramNum 解析。
      以前这里直接拿 v.min / v.max / v.step 做算术 ——

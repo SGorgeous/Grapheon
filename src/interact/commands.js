@@ -927,7 +927,7 @@ function addControlNode(control, x, y, opts){
 /* 点一下勾选项：切换选中 */
 function toggleCheckOption(n, i){
   if (!isVarNode(n)) return null;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.control !== 'check' || i < 0 || i >= Math.max(1, v.options.length)) return null;
   const picked = v.picked.slice();
   const at = picked.indexOf(i);
@@ -939,7 +939,7 @@ function toggleCheckOption(n, i){
 /* 点一下开关：通 / 断 */
 function toggleSwitch(n){
   if (!isVarNode(n)) return null;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.control !== 'switch') return null;
   n.varDef = normalizeVarDef(Object.assign({}, v, { on: !v.on }));
   reindex(); sizeAll(); mark();
@@ -948,7 +948,7 @@ function toggleSwitch(n){
 /* 拖滑条：按世界坐标算出值，实时生效 */
 function setSliderFromPointer(n, worldP){
   if (!isVarNode(n)) return null;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.control !== 'slider') return null;
   const val = sliderValueAt(n, worldP.x);
   if (String(val) === String(sliderValue(v, n.id))) return null;
@@ -974,7 +974,7 @@ function setVarControl(n, control){
      和勾选节点「至少留一个」是一个道理，菜单里也会把最后一项的删除项灰掉。 */
 function addListItem(n){
   if (!isVarNode(n)) return;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   const items = v.items.slice();
   items.push(String(items.length));            // 新项先填个序号，方便改
   setVarDef(n, { items });
@@ -983,7 +983,7 @@ function addListItem(n){
 }
 function removeListItem(n){
   if (!isVarNode(n)) return;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.items.length <= 1){ say('* 列表至少留一项。'); return; }
   const items = v.items.slice(0, v.items.length - 1);
   setVarDef(n, { items });
@@ -992,7 +992,7 @@ function removeListItem(n){
 }
 function addMapPair(n){
   if (!isVarNode(n)) return;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   const pairs = v.pairs.map(p => ({ k:p.k, v:p.v }));
   pairs.push({ k:'key' + pairs.length, v:'' });
   setVarDef(n, { pairs });
@@ -1001,7 +1001,7 @@ function addMapPair(n){
 }
 function removeMapPair(n){
   if (!isVarNode(n)) return;
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   if (v.pairs.length <= 1){ say('* 地图至少留一对。'); return; }
   const pairs = v.pairs.slice(0, v.pairs.length - 1).map(p => ({ k:p.k, v:p.v }));
   setVarDef(n, { pairs });
@@ -1012,7 +1012,7 @@ function removeMapPair(n){
 function setCheckOptions(n, text){
   if (!isVarNode(n)) return;
   const options = String(text || '').split(/[,，\n]/).map(s => s.trim()).filter(s => s !== '');
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   n.varDef = normalizeVarDef(Object.assign({}, v, { options, picked:[] }));
   sizeNode(n);
   reindex(); sizeAll(); mark();

@@ -80,7 +80,7 @@ function shortName(x){
   if (t) return t.length > NAME_MAX ? (t.slice(0, NAME_MAX) + '…') : t;
   /* 变量节点正文常常是空的，那就用变量名 */
   if (x.kind === 'var' || x.kind === 'broadcast'){
-    const nm = normalizeVarDef(x.varDef).name;
+    const nm = varDefOf(x).name;
     return nm ? ('变量 ' + nm) : '变量';
   }
   if (x.kind === 'table') return '表格';

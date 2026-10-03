@@ -9322,6 +9322,63 @@
     ok('MV01p ★ 单变量行为完全不变（求值照旧）',
       interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id) === '12',
       String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id)));
+    /* ── 第 2 步：按名字 / 点名，都要取到**各自的**值 ── */
+    const other = addVarNode('单价', 0, 400, { name:'单价', control:'plain', value:'12' });
+    reindex(); sizeAll();
+    const ctx = buildCtx(doc.nodes, doc.edges, doc.groups);
+    ok('MV01p ★ 第 2 个变量取到自己的值 {画质}',
+      interpolateIn(ctx, '{画质}', n.id) === '高', String(interpolateIn(ctx, '{画质}', n.id)));
+    ok('MV01q ★ 第 3 个变量取到自己的值 {全屏}',
+      interpolateIn(ctx, '{全屏}', n.id) === '1', String(interpolateIn(ctx, '{全屏}', n.id)));
+    ok('MV01r 第 1 个仍然是 70', interpolateIn(ctx, '{音量}', n.id) === '70',
+      String(interpolateIn(ctx, '{音量}', n.id)));
+    ok('MV01s 单变量节点照旧', interpolateIn(ctx, '{单价}', other.id) === '12',
+      String(interpolateIn(ctx, '{单价}', other.id)));
+    /* ★ 点名语法 {节点名.变量名} */
+    ok('MV01t ★ {设置.画质}',
+      interpolateIn(ctx, '{设置.画质}', n.id) === '高', String(interpolateIn(ctx, '{设置.画质}', n.id)));
+    ok('MV01u ★ {设置.全屏}',
+      interpolateIn(ctx, '{设置.全屏}', n.id) === '1', String(interpolateIn(ctx, '{设置.全屏}', n.id)));
+    /* 找不到的会落到「嵌入文档输出」那条老路上，那里给的就是 [未定义] ——
+       这是**既有行为**，不是多变量引入的。 */
+    ok('MV01v 点名不存在的变量时给 [未定义]（既有行为）',
+      interpolateIn(ctx, '{设置.没有}', n.id) === '[未定义]',
+      String(interpolateIn(ctx, '{设置.没有}', n.id)));
+    /* ★ 变量优先于同名嵌入节点 */
+    const em = addNodeAt('设置', 700, 0, 'round');
+    em.kind = 'embed';
+    em.embed = { doc:{ nodes:[{ id:'x1', text:'不该出现', x:0, y:0, w:0, h:0, lines:[''] }], edges:[], groups:[],
+                       outs:[{ id:'o1', name:'音量', text:'{x1}', x:0, y:0, w:0, h:0, lines:[''] }] } };
+    reindex(); sizeAll();
+    ok('MV01w ★★ 变量节点优先于同名嵌入节点',
+      interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{设置.音量}', n.id) === '70',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{设置.音量}', n.id)));
+    /* 和公式配合 */
+    ok('MV01x 公式里引用其一',
+      interpolateIn(ctx, '{=画质 & "模式"}', n.id) === '高模式',
+      String(interpolateIn(ctx, '{=画质 & "模式"}', n.id)));
+    /* 列表 / 地图下标走的是同一套查找 */
+    const L = addVarNode('名单', 0, 800, { name:'名单', control:'list', items:['甲','乙','丙'] });
+    reindex(); sizeAll();
+    ok('MV01y 列表下标仍然对 {名单.2}',
+      interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{名单.2}', L.id) === '丙',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{名单.2}', L.id)));
+    /* 公式里的点名引用 —— 这里曾经是红的：
+       公式的 resolve 只试了「变量名.下标」，不认「变量节点名.变量名」。 */
+    ok('MV01z ★ 公式里的点名引用 {=设置.画质}',
+      interpolateIn(ctx, '{=设置.画质 & "!"}', n.id) === '高!',
+      String(interpolateIn(ctx, '{=设置.画质 & "!"}', n.id)));
+    ok('MV02 公式里点名算数 {=设置.音量 + 1}',
+      interpolateIn(ctx, '{=设置.音量 + 1}', n.id) === '71',
+      String(interpolateIn(ctx, '{=设置.音量 + 1}', n.id)));
+    /* 存取往返之后解析仍然对 */
+    const pk = serialize();
+    deserialize(pk);
+    const bk = doc.nodes.find(x => x.kind === 'var' && nodeVarDefs(x).length === 3);
+    ok('MV02 读回来 {画质} 还对', !!bk && interpolateIn(liveCtx(), '{画质}', bk.id) === '高',
+      bk ? String(interpolateIn(liveCtx(), '{画质}', bk.id)) : '-');
+    ok('MV02b 读回来 {设置.画质} 还对', !!bk && interpolateIn(liveCtx(), '{设置.画质}', bk.id) === '高',
+      bk ? String(interpolateIn(liveCtx(), '{设置.画质}', bk.id)) : '-');
   });
 
   T('CV01 CSV：解析 / 建表 / 导出算完的结果', () => {

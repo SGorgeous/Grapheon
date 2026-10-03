@@ -606,7 +606,7 @@ function drawWifiIcon(g, x, y, size, color){
   g.restore();
 }
 function drawVarNode(g, n, b, selected, hov){
-  const v = normalizeVarDef(n.varDef);
+  const v = varDefOf(n);
   const L = varBoxes(n);
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
   g.save();
