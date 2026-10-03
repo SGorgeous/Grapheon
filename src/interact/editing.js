@@ -140,13 +140,29 @@ function positionEditor(){
     const n = byId(editing.id);
     if (!n){ hideEditor(); return; }
     let box;
-    if (editing.kind === 'varName') box = varBoxes(n).nameBox;
-    else if (editing.kind === 'varValue') box = varBoxes(n).valBox;
+    /* ★ 变量相关的框要按**正在编辑的那一行**取 ——
+       用 varBoxes(n) 的话它只给第一行，双击第二行编辑框会跑到第一行上。 */
+    const vL = (isVarNode(n) && typeof varRowLayout === 'function')
+      ? varRowLayout(n, varEditIndexFor(n)).L : null;
+    if (editing.kind === 'varName') box = (vL && vL.nameBox) || varBoxes(n).nameBox;
+    else if (editing.kind === 'varValue') box = (vL && vL.valBox) || varBoxes(n).valBox;
     else if (editing.kind === 'outName') box = outBoxes(n).nameBox;
-    else if (editing.kind === 'checkOpts') box = varBoxes(n).listBox || outBoxes(n).nameBox;
+    else if (editing.kind === 'checkOpts') box = (vL && vL.listBox) || varBoxes(n).listBox || outBoxes(n).nameBox;
+    else if (editing.kind === 'sliderRange') box = (vL && vL.trackBox) || varBoxes(n).trackBox;
     else if (editing.kind === 'cell') box = tableCellBox(tableGeom(n), editing.row, editing.col);
     else if (editing.kind === 'opOp') box = opBoxes(n).opBox;
-    else box = opBoxes(n).valBoxes[editing.kind === 'opVal' ? 0 : +editing.kind.slice(5)] || opBoxes(n).valBox;
+    else if (/^opVal[0-9]?$/.test(editing.kind))
+      box = opBoxes(n).valBoxes[editing.kind === 'opVal' ? 0 : +editing.kind.slice(5)] || opBoxes(n).valBox;
+    else if (editing.kind === 'port' || editing.kind === 'portLabel' || editing.kind === 'portId'){
+      /* ★ 端口编辑是从右键菜单发起的，画布上**没有对应的输入框** ——
+         原来这里没赋值，box 是 undefined，后面 box.x 直接抛异常，
+         编辑器根本没被定位（错位 + 覆盖）。
+         给它一个**有界的小盒子**：节点标题行那一条。
+         精确对齐到端口方块是下一步的事，至少现在不抛、也不盖住整个节点。 */
+      const b2 = nodeBox(n);
+      box = { x:b2.x, y:b2.y, w:Math.max(120, b2.w), h:Math.max(24, n.lh || 24) };
+    }
+    else box = opBoxes(n).valBox;
     const s = w2s({ x:box.x, y:box.y });
     fs = FS; lh = Math.round(FS * 1.32);
     w = box.w; h = box.h; padX = 4; padY = 4;

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · view/render.js
    canvas 绘制：网格、连线、节点、端口、折叠标记、红心。
@@ -613,6 +613,12 @@ function drawVarNode(g, n, b, selected, hov){
   const rows = varLayoutsFor(n);
   /* 多个变量时逐行画。单变量 rows 只有一项，走的就是原来那条路。 */
   if (rows.length > 1){
+    /* ★ 先铺底 —— 单变量那条路有 fillRect，这条以前漏了，
+       于是多变量节点的背景是透的，和下面的网格 / 别的节点叠在一起。 */
+    g.save();
+    g.fillStyle = C.bg;
+    g.fillRect(b.x, b.y, b.w, b.h);
+    g.restore();
     for (let i = 0; i < rows.length; i++) drawVarRow(g, n, b, rows[i], i, selected, hov);
     g.save();
     g.lineWidth = 3;

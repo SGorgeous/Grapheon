@@ -9819,6 +9819,70 @@
 
     fresh();   /* ★ 收尾清干净 */
   });
+
+  T('MV06 多变量的背景 / 编辑框定位 / 端口编辑框', () => {
+    fresh();
+    const cv = document.querySelector('canvas');
+    const g2 = cv.getContext('2d');
+    const px = (sx, sy) => { const d = g2.getImageData(Math.round(sx), Math.round(sy), 1, 1).data;
+                             return '#' + [d[0],d[1],d[2]].map(v => v.toString(16).padStart(2,'0')).join(''); };
+    const n = addNodeAt('设置', 0, 0, 'round');
+    n.kind = 'var';
+    n.varDefs = [ { name:'甲', control:'plain', value:'1' },
+                  { name:'乙', control:'plain', value:'2' },
+                  { name:'丙', control:'plain', value:'3' } ];
+    reindex(); sizeAll(); draw();
+    const b = nodeBox(n);
+    /* ★ 背景必须被填上 —— 多行分支以前漏了 fillRect，内部是透的，
+       会透出棋盘格（棋盘格是 #1b1b1b，主题底色是 #000000）。 */
+    const inside = px(b.x * view.z + view.x + b.w * view.z / 2, b.y * view.z + view.y + 8);
+    ok('MV06 ★ 多变量节点内部填了底色（不是透出网格）', inside === '#000000', inside);
+    ok('MV06b 和棋盘格的格子色不同（确认不是透出来的）', inside !== '#1b1b1b', inside);
+
+    /* 编辑框按行定位 */
+    const rows = varLayoutsFor(n);
+    /* ★ 下标是全局的，先归零 —— 不设的话会沿用上一个用例留下的下标，
+       编辑框就按那一行定位了（我第一次就是这么写错的）。 */
+    setVarEditIndex(0);
+    startEdit('varValue', n.id, varDefAt(n, 0).value, {});
+    const el = document.getElementById('editor');
+    const top0 = parseFloat(el.style.top);
+    hideEditor();
+    setVarEditIndex(2);
+    startEdit('varValue', n.id, varDefAt(n, 2).value, {});
+    const top2 = parseFloat(el.style.top);
+    hideEditor();
+    ok('MV06c ★ 第 2 行的编辑框在第 0 行下面', top2 > top0 + 10, Math.round(top0) + ' → ' + Math.round(top2));
+    /* ★ 期望值要用**同一个换算函数** w2s 算 —— 自己乘 view.z 会漏掉别的项，
+       我第一版就是这么写错的（算出 170，实际 85，正好差一倍）。 */
+    ok('MV06d 编辑框的 top 等于那一行值框的屏幕 y',
+      Math.abs(top0 - w2s({ x:rows[0].L.valBox.x, y:rows[0].L.valBox.y }).y) < 2
+      && Math.abs(top2 - w2s({ x:rows[2].L.valBox.x, y:rows[2].L.valBox.y }).y) < 2,
+      Math.round(top0) + '/' + Math.round(w2s({ x:rows[0].L.valBox.x, y:rows[0].L.valBox.y }).y)
+      + '  ' + Math.round(top2) + '/' + Math.round(w2s({ x:rows[2].L.valBox.x, y:rows[2].L.valBox.y }).y));
+
+    /* ★ 端口编辑以前 box 是 undefined，box.x 直接抛 */
+    let err = 'ok';
+    try { startEdit('portLabel', n.id, 'in1', { dir:'ins', portId:1 }); } catch(ex){ err = ex.message; }
+    ok('MV06e ★ 端口编辑不再抛异常', err === 'ok', err);
+    const eh = parseFloat(document.getElementById('editor').style.height);
+    ok('MV06f 端口编辑框高度有界（不盖住整节点）', eh < b.h * view.z, Math.round(eh) + ' < ' + Math.round(b.h * view.z));
+    hideEditor();
+
+    /* 单变量：老行为不变 */
+    setVarEditIndex(0);
+    const one = addVarNode('单价', 900, 0, { name:'单价', control:'plain', value:'12' });
+    reindex(); sizeAll();
+    startEdit('varValue', one.id, '12', {});
+    const eo = document.getElementById('editor');
+    const vb = varBoxes(one).valBox;
+    ok('MV06g ★ 单变量：编辑框仍盖在值框上（位置没变）',
+      Math.abs(parseFloat(eo.style.left) - (vb.x * view.z + view.x)) < 2,
+      Math.round(parseFloat(eo.style.left)) + ' vs ' + Math.round(vb.x * view.z + view.x));
+    hideEditor();
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
