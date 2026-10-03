@@ -9621,6 +9621,107 @@
       JSON.stringify(n1.varDefs));
   });
 
+
+  T('MV04 多行渲染：布局只有一个出处，单变量分毫不变', () => {
+    fresh();
+    const near = (a, b) => Math.abs(a - b) < 0.001;
+    const sameBox = (a, b) => !!a && !!b && near(a.x, b.x) && near(a.y, b.y)
+      && near(a.w, b.w) && near(a.h, b.h);
+
+    /* ── 单变量：所有路径都必须和以前一模一样 ── */
+    const one = addVarNode('单价', 0, 0, { name:'单价', control:'plain', value:'12' });
+    reindex(); sizeAll();
+    ok('MV04 单变量：布局只有一行', varLayoutsFor(one).length === 1, String(varLayoutsFor(one).length));
+    ok('MV04b ★ 单变量：varBoxes 和那一行**结构相同**（不比对象同一性）',
+      sameBox(varBoxes(one).nameBox, varLayoutsFor(one)[0].L.nameBox)
+      && sameBox(varBoxes(one).scopeBox, varLayoutsFor(one)[0].L.scopeBox),
+      JSON.stringify(varBoxes(one).nameBox) + ' vs ' + JSON.stringify(varLayoutsFor(one)[0].L.nameBox));
+    ok('MV04c ★ 单变量：高度等于老算法 varLayout 的结果', (() => {
+      const b = nodeBox(one);
+      const old = varLayout({ x:0, y:0, w:b.w }, one.varDef,
+        Math.max(1, one.lines.length) * one.lh).height;
+      return near(varLayoutsHeight(one), old);
+    })(), String(varLayoutsHeight(one)));
+    const hOne = one.h;
+    ok('MV04d 单变量：节点高度是个正数', hOne > 0, String(hOne));
+    ok('MV04e 单变量：varRowAt 在体内给 0', varRowAt(one, {
+      x:nodeBox(one).x + 20, y:varLayoutsFor(one)[0].L.nameBox.y + 4 }) === 0,
+      String(varRowAt(one, { x:nodeBox(one).x + 20, y:varLayoutsFor(one)[0].L.nameBox.y + 4 })));
+
+    /* ── 多变量：叠起来 ── */
+    const n = addNodeAt('设置', 600, 0, 'round');
+    n.kind = 'var';
+    n.varDefs = [
+      { name:'音量', control:'slider', type:'number', value:'70', min:'0', max:'100', step:'1' },
+      { name:'画质', control:'check',  type:'string', options:['低','中','高'], picked:[2] }
+    ];
+    reindex(); sizeAll();
+    const rows = varLayoutsFor(n);
+    ok('MV04f 两个变量：布局给两行', rows.length === 2, String(rows.length));
+    ok('MV04g 第二行在第一行**下面**', rows[1].L.nameBox.y > rows[0].L.nameBox.y,
+      JSON.stringify(rows.map(r => Math.round(r.L.nameBox.y))));
+    ok('MV04h ★ 两行不重叠（上一行的作用域行不压到下一行）',
+      rows[0].L.scopeBox.y + rows[0].L.scopeBox.h <= rows[1].L.nameBox.y + 0.001,
+      JSON.stringify(rows.map(r => [Math.round(r.L.scopeBox.y + r.L.scopeBox.h), Math.round(r.L.nameBox.y)])));
+    ok('MV04i 两行的名字格分别属于各自那个变量',
+      rows[0].def.name === '音量' && rows[1].def.name === '画质',
+      rows.map(r => r.def.name).join(','));
+    ok('MV04j 两个变量的节点比一个高', n.h > hOne, n.h + ' vs ' + hOne);
+    ok('MV04k ★ 节点装得下最后一行（不溢出底边）', (() => {
+      const b = nodeBox(n), last = rows[rows.length - 1].L;
+      return last.scopeBox.y + last.scopeBox.h <= b.y + b.h + 1;
+    })(), JSON.stringify({ h:n.h, 底:Math.round(nodeBox(n).y + nodeBox(n).h),
+                            末行底:Math.round(rows[1].L.scopeBox.y + rows[1].L.scopeBox.h) }));
+    /* 行命中 */
+    const inRow = (i) => varRowAt(n, { x:nodeBox(n).x + 20, y:rows[i].L.nameBox.y + 4 });
+    ok('MV04l varRowAt 认出第 0 行', inRow(0) === 0, String(inRow(0)));
+    ok('MV04m varRowAt 认出第 1 行', inRow(1) === 1, String(inRow(1)));
+    ok('MV04n 节点外面给 -1', varRowAt(n, { x:nodeBox(n).x + 20, y:nodeBox(n).y - 200 }) === -1,
+      String(varRowAt(n, { x:nodeBox(n).x + 20, y:nodeBox(n).y - 200 })));
+    /* 正在编辑的下标会影响绘制（不抛就行） */
+    setVarEditIndex(1);
+    ok('MV04o 编辑下标夹在范围内', varEditIndexFor(n) === 1, String(varEditIndexFor(n)));
+    /* 三个变量也叠得下 */
+    addVarDefTo(n, { name:'全屏', control:'cond', value:'1' });
+    reindex(); sizeAll();
+    const r3 = varLayoutsFor(n);
+    ok('MV04p 三个变量给三行', r3.length === 3, String(r3.length));
+    ok('MV04q 三行两两不重叠', (() => {
+      for (let i = 0; i + 1 < r3.length; i++)
+        if (r3[i].L.scopeBox.y + r3[i].L.scopeBox.h > r3[i + 1].L.nameBox.y + 0.001) return false;
+      return true;
+    })(), JSON.stringify(r3.map(r => [Math.round(r.L.scopeBox.y + r.L.scopeBox.h), Math.round(r.L.nameBox.y)])));
+    ok('MV04r 三个也装得下', (() => {
+      const b = nodeBox(n), last = r3[r3.length - 1].L;
+      return last.scopeBox.y + last.scopeBox.h <= b.y + b.h + 1;
+    })(), String(n.h));
+    /* 删回一个 → 回到单变量形态 */
+    delVarDefFrom(n, 2); delVarDefFrom(n, 1);
+    reindex(); sizeAll();
+    ok('MV04s ★ 删回一个后，布局又只剩一行（回到老路径）',
+      varLayoutsFor(n).length === 1, String(varLayoutsFor(n).length));
+    ok('MV04t 删回一个后 varBoxes 又和老算法一致', (() => {
+      const b = nodeBox(n);
+      const old = varLayout({ x:0, y:0, w:b.w }, n.varDef, Math.max(1, n.lines.length) * n.lh).height;
+      return near(varLayoutsHeight(n), old);
+    })(), String(varLayoutsHeight(n)));
+
+    /* ── 画一帧都不能抛 ── */
+    const noThrow = (label) => {
+      let got = 'ok';
+      try { draw(); } catch(e){ got = '炸:' + e.message; }
+      ok(label, got === 'ok', got);
+    };
+    selectOnly(byId(n.id)); noThrow('MV04u 画单变量节点不抛');
+    addVarDefTo(n, { name:'第二个', value:'2' });
+    addVarDefTo(n, { name:'第三个', control:'check', options:['a','b'], picked:[0] });
+    reindex(); sizeAll();
+    selectOnly(byId(n.id)); noThrow('MV04v 画多变量节点不抛');
+    varEditIndexFor(n);  /* 下标越界也不该抛 */
+    setVarEditIndex(99); noThrow('MV04w 编辑下标越界时画也不抛');
+
+    fresh();   /* ★ 收尾必须清干净 —— 上一版就是漏了这句，把 E06 连累了 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
