@@ -146,7 +146,17 @@ async function insertAsset(it){
   if (it.kind === 'assets'){
     const url = URL.createObjectURL(blob);
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); insertImageBlob(blob, img.naturalWidth, img.naturalHeight); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      /* ★ 这里本来调的是 insertImageBlob —— 那个函数**从来没有被定义过**
+         （整个 src/ 里只有这一处出现），所以点「插入」图片必定抛异常。
+         改成把 Blob 包成 File、走已有的 insertImageFile —— 那条路是被测过的：
+           四条入口（拖拽 / 粘贴 / 打开对话框 / 素材库插入）最后都汇到它。
+         用 tools/check-refs.mjs 扫出来的。 */
+      const f = new File([blob], it.name || 'image.png', { type: blob.type || 'image/png' });
+      const c = viewCenter();
+      insertImageFile(f, { x:Math.round(c.x), y:Math.round(c.y) });
+    };
     img.onerror = () => { URL.revokeObjectURL(url); say('* 这张图读不出来。'); };
     img.src = url;
     return;

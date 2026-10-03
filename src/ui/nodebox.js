@@ -99,7 +99,7 @@ function renderNodeBox(){
     const add = el('div', 'vtab add', '＋');
     add.title = '加一个变量';
     add.onclick = () => {
-      pushUndo('加变量');
+      pushHist();
       addVarDefTo(n, { control:'plain', value:'0' });
       renderNodeBox(); mark();
       say('* 「' + tagOf(n) + '」加了一个变量，现在共 ' + nodeVarDefs(n).length + ' 个。');
@@ -110,7 +110,7 @@ function renderNodeBox(){
       rm.title = '删掉当前这个变量';
       rm.onclick = () => {
         if (!delVarDefFrom(n, cur)){ say('* 一个变量节点至少要留一个变量。'); return; }
-        pushUndo('删变量');
+        pushHist();
         renderNodeBox(); mark();
         say('* 「' + tagOf(n) + '」删掉了一个变量，还剩 ' + nodeVarDefs(n).length + ' 个。');
       };

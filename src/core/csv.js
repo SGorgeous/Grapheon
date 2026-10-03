@@ -157,7 +157,7 @@ function importCSV(){
     const cx = Math.round((canvas.clientWidth / 2 - view.x) / view.z);
     const cy = Math.round((canvas.clientHeight / 2 - view.y) / view.z);
     const title = String(fname || '').replace(/\.(csv|tsv|txt)$/i, '') || '表格';
-    pushUndo('导入 CSV');
+    pushHist();
     const n = addTableNodeFromRows(rows, cx - 160, cy - 100, title);
     reindex(); sizeAll(); selectOnly(n);
     const clipped = (rows.length > CSV_MAX_ROWS || (rows[0] || []).length > CSV_MAX_COLS);
