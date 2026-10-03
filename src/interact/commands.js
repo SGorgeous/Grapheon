@@ -850,7 +850,7 @@ function addOpNode(desc, x, y, opts){
 /* 改变量定义。改完要重算：值会影响所有引用它的节点文本 */
 function setVarDef(n, patch){
   if (!isVarNode(n)) return;
-  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, patch));
+  setVarDefAt(n, patch);
   reindex(); sizeAll(); mark();
 }
 function setOpDef(n, patch){
@@ -927,44 +927,44 @@ function addControlNode(control, x, y, opts){
 /* 点一下勾选项：切换选中 */
 function toggleCheckOption(n, i){
   if (!isVarNode(n)) return null;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   if (v.control !== 'check' || i < 0 || i >= Math.max(1, v.options.length)) return null;
   const picked = v.picked.slice();
   const at = picked.indexOf(i);
   if (at >= 0) picked.splice(at, 1); else picked.push(i);
-  n.varDef = normalizeVarDef(Object.assign({}, v, { picked }));
+  setVarDefAt(n, { picked });
   reindex(); sizeAll(); mark();
   return n.varDef;
 }
 /* 点一下开关：通 / 断 */
 function toggleSwitch(n){
   if (!isVarNode(n)) return null;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   if (v.control !== 'switch') return null;
-  n.varDef = normalizeVarDef(Object.assign({}, v, { on: !v.on }));
+  setVarDefAt(n, { on: !v.on });
   reindex(); sizeAll(); mark();
   return n.varDef;
 }
 /* 拖滑条：按世界坐标算出值，实时生效 */
 function setSliderFromPointer(n, worldP){
   if (!isVarNode(n)) return null;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   if (v.control !== 'slider') return null;
   const val = sliderValueAt(n, worldP.x);
   if (String(val) === String(sliderValue(v, n.id))) return null;
-  n.varDef = normalizeVarDef(Object.assign({}, v, { value:String(val) }));
+  setVarDefAt(n, { value:String(val) });
   reindex(); sizeAll(); mark();
   return val;
 }
 function setSliderRange(n, patch){
   if (!isVarNode(n)) return;
-  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, patch));
+  setVarDefAt(n, patch);
   reindex(); sizeAll(); pushHist(); mark();
   say('* ' + tagOf(n) + '的滑条范围：' + varScopeText(n.varDef) + '。');
 }
 function setVarControl(n, control){
   if (!isVarNode(n)) return;
-  n.varDef = normalizeVarDef(Object.assign({}, n.varDef, { control }));
+  setVarDefAt(n, { control });
   sizeNode(n);
   reindex(); sizeAll(); pushHist(); mark();
   say('* ' + tagOf(n) + '现在是' + VAR_CONTROL_LABEL[control] + '节点。');
@@ -974,7 +974,7 @@ function setVarControl(n, control){
      和勾选节点「至少留一个」是一个道理，菜单里也会把最后一项的删除项灰掉。 */
 function addListItem(n){
   if (!isVarNode(n)) return;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   const items = v.items.slice();
   items.push(String(items.length));            // 新项先填个序号，方便改
   setVarDef(n, { items });
@@ -983,7 +983,7 @@ function addListItem(n){
 }
 function removeListItem(n){
   if (!isVarNode(n)) return;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   if (v.items.length <= 1){ say('* 列表至少留一项。'); return; }
   const items = v.items.slice(0, v.items.length - 1);
   setVarDef(n, { items });
@@ -992,7 +992,7 @@ function removeListItem(n){
 }
 function addMapPair(n){
   if (!isVarNode(n)) return;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   const pairs = v.pairs.map(p => ({ k:p.k, v:p.v }));
   pairs.push({ k:'key' + pairs.length, v:'' });
   setVarDef(n, { pairs });
@@ -1001,7 +1001,7 @@ function addMapPair(n){
 }
 function removeMapPair(n){
   if (!isVarNode(n)) return;
-  const v = varDefOf(n);
+  const v = varDefAt(n, varEditIndexFor(n));
   if (v.pairs.length <= 1){ say('* 地图至少留一对。'); return; }
   const pairs = v.pairs.slice(0, v.pairs.length - 1).map(p => ({ k:p.k, v:p.v }));
   setVarDef(n, { pairs });
@@ -1012,8 +1012,8 @@ function removeMapPair(n){
 function setCheckOptions(n, text){
   if (!isVarNode(n)) return;
   const options = String(text || '').split(/[,，\n]/).map(s => s.trim()).filter(s => s !== '');
-  const v = varDefOf(n);
-  n.varDef = normalizeVarDef(Object.assign({}, v, { options, picked:[] }));
+  const v = varDefAt(n, varEditIndexFor(n));
+  setVarDefAt(n, { options, picked:[] });
   sizeNode(n);
   reindex(); sizeAll(); mark();
 }

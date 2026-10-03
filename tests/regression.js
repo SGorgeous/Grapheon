@@ -9547,6 +9547,79 @@
     reindex(); sizeAll();
     ok('CS02d 空表不产生内容', tableRowsForExport(e).length === 0);
   });
+
+  T('MV03 界面：加 / 删 / 切换变量，单变量行为不变', () => {
+    fresh();
+    const n = addVarNode('音量', 0, 0, { name:'音量', control:'slider', value:'70', min:'0', max:'100', step:'1' });
+    reindex(); sizeAll();
+    /* ★ 只有一个变量时**只写 n.varDef** —— 满世界都在直读写这个字段，
+       建了 varDefs 会让那些直写被无视（K25i/K25j 就是这么红的） */
+    setVarEditIndex(0);
+    setVarDefAt(n, { value:'42' });
+    ok('MV03 单变量时只写 varDef，不建 varDefs', n.varDefs === undefined && n.varDef.value === '42',
+      'varDefs=' + JSON.stringify(n.varDefs) + ' value=' + (n.varDef && n.varDef.value));
+    ok('MV03b 直写 n.varDef 立刻生效（老写法仍然管用）', (() => {
+      n.varDef = normalizeVarDef(Object.assign({}, n.varDef, { value:'9' }));
+      return varDefOf(n).value === '9';
+    })(), varDefOf(n).value);
+    /* 加第二个 */
+    const i2 = addVarDefTo(n, { name:'画质', control:'check', options:['低','中','高'], picked:[2] });
+    reindex(); sizeAll();
+    ok('MV03c 加完是 2 个', nodeVarDefs(n).length === 2, String(nodeVarDefs(n).length));
+    ok('MV03d 加完自动选中新的那个', i2 === 1 && varEditIndexFor(n) === 1, 'i2=' + i2 + ' cur=' + varEditIndexFor(n));
+    ok('MV03e ★ 有两个时才写 varDefs', Array.isArray(n.varDefs) && n.varDefs.length === 2,
+      JSON.stringify(n.varDefs && n.varDefs.length));
+    ok('MV03f varDef 同步成第一个（老代码读得到）', n.varDef.name === '音量', n.varDef.name);
+    /* 切换下标后改的是**那一个** */
+    setVarEditIndex(1);
+    setVarDefAt(n, { picked:[0] });
+    ok('MV03g ★ 改的是第 2 个，第 1 个没动',
+      nodeVarDefs(n)[1].picked.join(',') === '0' && nodeVarDefs(n)[0].value === '9',
+      nodeVarDefs(n)[1].picked.join(',') + ' / ' + nodeVarDefs(n)[0].value);
+    setVarEditIndex(0);
+    setVarDefAt(n, { value:'11' });
+    ok('MV03h ★ 切回第 1 个改，第 2 个没动',
+      nodeVarDefs(n)[0].value === '11' && nodeVarDefs(n)[1].picked.join(',') === '0',
+      nodeVarDefs(n)[0].value + ' / ' + nodeVarDefs(n)[1].picked.join(','));
+    /* 下标越界要夹住 */
+    setVarEditIndex(99);
+    ok('MV03i 下标越界会夹到最后一个', varEditIndexFor(n) === 1, String(varEditIndexFor(n)));
+    setVarEditIndex(-5);
+    ok('MV03j 负下标夹到 0', varEditIndexFor(n) === 0, String(varEditIndexFor(n)));
+    /* 名字改了要能引用 */
+    setVarEditIndex(1);
+    setVarDefAt(n, { name:'清晰度' });
+    reindex(); sizeAll();
+    /* 注意：MV03g 把 picked 改成了 [0]，所以这里是「低」不是「高」 */
+    ok('MV03k 改名之后能按新名字引用',
+      interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{清晰度}', n.id) === '低',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{清晰度}', n.id)));
+    /* 点名用**节点自己的标题**（n.text），不写死 —— 变量节点的标题字段容易想当然 */
+    ok('MV03l 也能用「节点标题.变量名」点名',
+      interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{' + n.text + '.清晰度}', n.id) === '低',
+      'n.text=' + JSON.stringify(n.text) + ' → '
+      + String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{' + n.text + '.清晰度}', n.id)));
+    ok('MV03l2 变量节点的标题就是它的 n.text', typeof n.text === 'string', JSON.stringify(n.text));
+    /* 删 */
+    ok('MV03m 删掉第 2 个', delVarDefFrom(n, 1) === true && nodeVarDefs(n).length === 1,
+      String(nodeVarDefs(n).length));
+    ok('MV03n 只剩一个时又回到只写 varDef', n.varDefs === undefined && n.varDef.name === '音量',
+      'varDefs=' + JSON.stringify(n.varDefs) + ' name=' + (n.varDef && n.varDef.name));
+    ok('MV03o 删到只剩一个就不许再删了', delVarDefFrom(n, 0) === false && nodeVarDefs(n).length === 1,
+      String(nodeVarDefs(n).length));
+    /* 存档：单变量不带 varDefs，多变量才带 */
+    addVarDefTo(n, { name:'第二', value:'2' });
+    reindex(); sizeAll();
+    const pk = serialize();
+    const n0 = pk.nodes.find(x => x.id === n.id);
+    ok('MV03p 存档：两个变量时写 varDefs', Array.isArray(n0.varDefs) && n0.varDefs.length === 2,
+      JSON.stringify(n0.varDefs && n0.varDefs.length));
+    delVarDefFrom(n, 1);
+    reindex(); sizeAll();
+    const n1 = serialize().nodes.find(x => x.id === n.id);
+    ok('MV03q 存档：回到一个变量就不写 varDefs（形态和老版本一致）', n1.varDefs === null,
+      JSON.stringify(n1.varDefs));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

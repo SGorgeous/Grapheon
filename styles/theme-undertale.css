@@ -144,6 +144,18 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 /* 行距也收一点：14px × 十行就是 140px 的空 */
 #exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
 /* 标签列收窄：110px 十行下来，左边空出一大片，右边内容反被挤 */
+/* 变量标签条：一个节点挂多个变量时选编辑哪个 */
+#nodebox .vtabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+#nodebox .vtab{
+  padding:2px 9px;border:2px solid var(--d);color:var(--g);font-size:14px;
+  cursor:none;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#nodebox .vtab:hover{border-color:var(--w);color:var(--w)}
+#nodebox .vtab.on{border-color:var(--y);color:var(--y)}
+#nodebox .vtab.add,#nodebox .vtab.del{color:var(--w);padding:2px 8px}
+#nodebox .vtab.add:hover{color:var(--y);border-color:var(--y)}
+#nodebox .vtab.del:hover{color:var(--r);border-color:var(--r)}
+
 /* 分组标题：一条细线 + 一个小字，把十几行控件分成几块。
    没有它，十一行平铺下来找一样东西要一行行扫。 */
 #exp .gsec,#edgebox .gsec,#endbox .gsec,#nodebox .gsec{

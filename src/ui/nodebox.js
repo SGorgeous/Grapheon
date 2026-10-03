@@ -25,6 +25,7 @@ const nbBorderEl = document.getElementById('nbBorder');
 const nbSizeEl   = document.getElementById('nbSize');
 const nbProgBtn  = document.getElementById('nbProgToggle');
 const nbVarSecEl = document.getElementById('nbVarSec');
+const nbVarTabsEl = document.getElementById('nbVarTabs');
 const nbVarScopeEl = document.getElementById('nbVarScope');
 const nbVarTypeEl  = document.getElementById('nbVarType');
 const nbOprSecEl   = document.getElementById('nbOprSec');
@@ -83,9 +84,43 @@ function renderNodeBox(){
   // ---- 变量定义 ----
   const isVar = (n.kind === 'var' || n.kind === 'broadcast'), isOpr = n.kind === 'op';
   nbVarSecEl.style.display = isVar ? 'block' : 'none';
+  /* ★ 变量标签条：一个节点挂多个变量时，在这里选编辑哪个。
+     没这一条的话，第二个变量既建不出来也改不了。 */
+  if (isVar && nbVarTabsEl){
+    const defs = nodeVarDefs(n);
+    const cur = varEditIndexFor(n);
+    nbVarTabsEl.innerHTML = '';
+    defs.forEach((d, i) => {
+      const b = el('div', 'vtab' + (i === cur ? ' on' : ''), d.name || ('变量' + (i + 1)));
+      b.title = d.name + '（' + (VAR_CONTROL_LABEL[d.control] || d.control) + '）';
+      b.onclick = () => { setVarEditIndex(i); renderNodeBox(); };
+      nbVarTabsEl.appendChild(b);
+    });
+    const add = el('div', 'vtab add', '＋');
+    add.title = '加一个变量';
+    add.onclick = () => {
+      pushUndo('加变量');
+      addVarDefTo(n, { control:'plain', value:'0' });
+      renderNodeBox(); mark();
+      say('* 「' + tagOf(n) + '」加了一个变量，现在共 ' + nodeVarDefs(n).length + ' 个。');
+    };
+    nbVarTabsEl.appendChild(add);
+    if (defs.length > 1){
+      const rm = el('div', 'vtab del', '－');
+      rm.title = '删掉当前这个变量';
+      rm.onclick = () => {
+        if (!delVarDefFrom(n, cur)){ say('* 一个变量节点至少要留一个变量。'); return; }
+        pushUndo('删变量');
+        renderNodeBox(); mark();
+        say('* 「' + tagOf(n) + '」删掉了一个变量，还剩 ' + nodeVarDefs(n).length + ' 个。');
+      };
+      nbVarTabsEl.appendChild(rm);
+    }
+  }
   nbOprSecEl.style.display = isOpr ? 'block' : 'none';
   if (isVar){
-    const v = varDefOf(n);
+    /* 正在编辑的就是这一个（面板顶部那排标签选的） */
+  const v = varDefAt(n, varEditIndexFor(n));
     /* 面板上只留一小行身份说明；「怎么引用」这种教学挪进悬停提示 */
     nbSubEl.textContent = '变量 ' + v.name;
     nbSubEl.title = '别的节点文本里写 {' + v.name + '} 就能引用它';

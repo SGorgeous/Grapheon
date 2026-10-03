@@ -174,6 +174,70 @@ function varRefInNode(n, name){
   for (let i = 0; i < defs.length; i++) if (defs[i].name === name) return { node:n, index:i, def:defs[i] };
   return null;
 }
+/* =========================================================================
+   多变量：按**第几个**来读写。
+   面板上有一个「正在编辑第几个」的下标；所有改动都从 setVarDefAt 走。
+   每次写完都把第一个同步到 n.varDef —— 老代码和存档都只认这个字段。
+   ========================================================================= */
+let varEditIdx = 0;
+const varEditIndex = () => varEditIdx;
+function setVarEditIndex(i){
+  varEditIdx = Math.max(0, Math.floor(+i) || 0);
+  return varEditIdx;
+}
+/* 当前正在编辑的下标，夹在这个节点实际的变量个数之内 */
+function varEditIndexFor(n){
+  const l = nodeVarDefs(n);
+  return Math.max(0, Math.min(varEditIdx, Math.max(0, l.length - 1)));
+}
+const varDefAt = (n, i) => nodeVarDefs(n)[i] || normalizeVarDef(null);
+/* ★★ 往节点上写回变量定义的**唯一出口**。
+   关键：**只有一个变量时只写 n.varDef，不建 varDefs** ——
+   老存档、右键菜单、内联编辑、还有一堆测试都在直接读写 n.varDef；
+   给单变量节点也建 varDefs 的话，那些直写会被 nodeVarDefs 无视
+   （实测就是这么把 K25i/K25j 两条滑条断言弄红的）。
+   多变量时才写 varDefs，同时把第一个同步到 varDef 供老代码读。 */
+function writeVarDefs(n, defs){
+  if (!n) return;
+  if (defs.length <= 1){
+    n.varDef = defs[0] || normalizeVarDef(null);
+    if (n.varDefs) delete n.varDefs;
+    return;
+  }
+  n.varDefs = defs;
+  n.varDef = defs[0];
+}
+
+/* ★ 改这个节点上「正在编辑的那一个」变量。i 给了就用 i。 */
+function setVarDefAt(n, patch, i){
+  const defs = nodeVarDefs(n);
+  if (!defs.length) defs.push(normalizeVarDef(null));
+  let k = (i === undefined || i === null) ? varEditIndexFor(n) : Math.floor(+i) || 0;
+  k = Math.max(0, k);
+  while (defs.length <= k) defs.push(normalizeVarDef(null));
+  defs[k] = normalizeVarDef(Object.assign({}, defs[k], patch || {}));
+  writeVarDefs(n, defs);
+  return defs[k];
+}
+/* 加一个变量，返回它的下标（并把它设为正在编辑的） */
+function addVarDefTo(n, opts){
+  const defs = nodeVarDefs(n);
+  if (!defs.length) defs.push(normalizeVarDef(null));
+  defs.push(normalizeVarDef(Object.assign({ name:'变量' + (defs.length + 1) }, opts || {})));
+  writeVarDefs(n, defs);
+  varEditIdx = defs.length - 1;
+  return defs.length - 1;
+}
+/* 删掉第 i 个；至少留一个。返回是否删掉了 */
+function delVarDefFrom(n, i){
+  const defs = nodeVarDefs(n);
+  if (defs.length <= 1) return false;
+  defs.splice(Math.max(0, Math.min(i, defs.length - 1)), 1);
+  writeVarDefs(n, defs);
+  if (varEditIdx >= defs.length) varEditIdx = defs.length - 1;
+  return true;
+}
+
 /* 拿某个具体变量的值：浅拷贝换掉 varDef，不动任何函数的签名 */
 function varRefValueIn(ctx, ref, fromId){
   if (!ref || !ref.node) return null;

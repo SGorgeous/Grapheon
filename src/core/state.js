@@ -628,7 +628,8 @@ function serialize(){
       /* 变量节点可以挂多个变量 → 写 varDefs；
          同时把第一个写进 varDef，老版本读这份存档也不会瞎。
          广播节点固定单变量，只写 varDef。 */
-      varDefs:(n.kind === 'var') ? nodeVarDefs(n) : null,
+      /* 只有一个变量时不写 varDefs —— 保持存档形态和老版本一模一样 */
+      varDefs:(n.kind === 'var' && nodeVarDefs(n).length > 1) ? nodeVarDefs(n) : null,
       varDef:(n.kind === 'var' || n.kind === 'broadcast') ? nodeVarDef(n) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
@@ -684,7 +685,8 @@ function deserialize(d){
       /* 变量节点可以挂多个变量 → 写 varDefs；
          同时把第一个写进 varDef，老版本读这份存档也不会瞎。
          广播节点固定单变量，只写 varDef。 */
-      varDefs:(n.kind === 'var') ? nodeVarDefs(n) : null,
+      /* 只有一个变量时不写 varDefs —— 保持存档形态和老版本一模一样 */
+      varDefs:(n.kind === 'var' && nodeVarDefs(n).length > 1) ? nodeVarDefs(n) : null,
       varDef:(n.kind === 'var' || n.kind === 'broadcast') ? nodeVarDef(n) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
