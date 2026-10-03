@@ -279,10 +279,23 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
     }
     if (bestC) pts = bestC.pts;
   }
+  /* 收尾清理：
+     ① 扔掉完全重合的点
+     ② **吃掉共线的中间点** —— 并排且对齐的两个节点本来会生成
+        148,24 → 170,24 → 324,24 → 478,24 → 500,24 这么一串共线的点（5 个），
+        其实两个点就够。留着不只是浪费：pts.length 虚高之后，
+        箭头角度、拐点手柄、mid 都可能落在一个根本不存在的「折点」上。 */
   const clean = [pts[0]];
   for (let i = 1; i < pts.length; i++){
     const q = pts[i], p = clean[clean.length - 1];
-    if (Math.abs(q.x - p.x) > 0.5 || Math.abs(q.y - p.y) > 0.5) clean.push(q);
+    if (Math.abs(q.x - p.x) <= 0.5 && Math.abs(q.y - p.y) <= 0.5) continue;
+    const m = clean.length;
+    if (m >= 2){
+      const a2 = clean[m - 2];
+      const cross = (p.x - a2.x) * (q.y - a2.y) - (p.y - a2.y) * (q.x - a2.x);
+      if (Math.abs(cross) < 0.5){ clean[m - 1] = q; continue; }
+    }
+    clean.push(q);
   }
   if (clean.length < 2) clean.push({ x:p3.x + 1, y:p3.y });
   const n = clean.length;
