@@ -112,7 +112,7 @@ body.dsh-ready{cursor:none}
   width:min(900px,calc(100vw - 80px));max-height:calc(100vh - 250px);overflow:auto;
   pointer-events:auto;padding:18px 22px;
 }
-#help h2{margin:0 0 14px;font-size:32px;letter-spacing:2px}
+#help h2{margin:0 0 10px;font-size:20px;letter-spacing:1px;color:var(--y)}
 #help table{border-collapse:collapse;width:100%;font-size:16px}
 #help td{padding:3px 8px;vertical-align:top;line-height:1.45}
 #help td:first-child{color:var(--y);white-space:nowrap;width:215px}
@@ -130,7 +130,8 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
   position:fixed;display:none;z-index:90;left:50%;top:47%;transform:translate(-50%,-50%);
   width:min(700px,calc(100vw - 80px));padding:20px 24px;pointer-events:auto;
 }
-#exp h2,#edgebox h2,#endbox h2,#nodebox h2{margin:0 0 18px;font-size:32px;letter-spacing:2px}
+/* 参数面板的标题收小：它不该比内容还抢眼 */
+#exp h2,#edgebox h2,#endbox h2,#nodebox h2{margin:0 0 10px;font-size:18px;letter-spacing:1px;color:var(--g)}
 #exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 #exp .lab,#edgebox .lab,#endbox .lab,#nodebox .lab{width:110px;flex:none;color:var(--g)}
 #exp .ext{color:var(--g)}
@@ -420,7 +421,7 @@ body.no-heart .ud-btn::before{ content:none; }
   pointer-events:auto;padding:18px 22px;
   display:none;flex-direction:column;
 }
-#logbox h2{margin:0 0 12px;font-size:32px;letter-spacing:2px}
+#logbox h2{margin:0 0 10px;font-size:18px;letter-spacing:1px;color:var(--y)}
 .logbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .logbar .ud-btn.on{border-color:var(--y);color:var(--y)}
 .logacts{margin-top:12px;margin-bottom:0}

@@ -86,7 +86,9 @@ function renderNodeBox(){
   nbOprSecEl.style.display = isOpr ? 'block' : 'none';
   if (isVar){
     const v = normalizeVarDef(n.varDef);
-    nbSubEl.textContent = '变量定义「' + v.name + '」 · 别的节点文本里用 {' + v.name + '} 引用';
+    /* 面板上只留一小行身份说明；「怎么引用」这种教学挪进悬停提示 */
+    nbSubEl.textContent = '变量 ' + v.name;
+    nbSubEl.title = '别的节点文本里写 {' + v.name + '} 就能引用它';
     buildOpts(nbVarScopeEl, SCOPE_OPTS, v.scope, (x) => {
       setVarDef(n, { scope:x }); afterNodeEdit();
       say('* 作用域改成「' + VAR_SCOPE_LABEL[x] + '」。');
@@ -172,6 +174,9 @@ function renderNodeBox(){
   buildOpts(nbFontEl, Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]), effFont(n) || 'auto', (v) => { setNodeStyle(n, { font: v }); afterNodeEdit(); });
   buildSwatches(nbColorEl, effColor(n), (v) => { setNodeStyle(n, { color: v }); afterNodeEdit(); });
   buildSwatches(nbBorderEl, effBorder(n), (v) => { setNodeStyle(n, { border: v }); afterNodeEdit(); });
+  /* 「尺寸」那行本来只写一句「拖节点右下角手柄可改尺寸」——
+     那不是控件，是提示。挪进悬停提示，别占一行。 */
+  nbSizeEl.title = '拖节点右下角的手柄可以改尺寸';
   nbSizeEl.innerHTML = '';
   if (n.fixedW || n.fixedH){
     const d = el('div', 'opt on', '<span class="hrt"></span><span>恢复自适应尺寸</span>');
