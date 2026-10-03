@@ -429,7 +429,8 @@ body.no-heart .ud-btn::before{ content:none; }
   border-top:1px solid var(--d);border-bottom:1px solid var(--d);padding:6px 0;
 }
 .logrow{display:flex;gap:12px;align-items:baseline;padding:3px 4px;font-size:16px;line-height:1.45}
-.logrow:nth-child(even){background:rgba(255,255,255,.03)}
+/* 斑马纹用中性灰：写死成 rgba(255,255,255) 的话，黑白翻转主题下看不见 */
+.logrow:nth-child(even){background:rgba(128,128,128,.08)}
 .logrow .lt{color:var(--g);white-space:nowrap;font-variant-numeric:tabular-nums}
 .logrow .lk{white-space:nowrap;width:48px;color:var(--g)}
 .logrow .lx{flex:1;word-break:break-word}

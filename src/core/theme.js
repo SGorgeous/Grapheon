@@ -54,6 +54,25 @@ const THEMES = {
       grid:  '#fbe6ee'
     }
   },
+  /* 经典的黑白翻转：把 board 的黑底白字整个对调成白底黑字。
+     棋盘格、十字光标、没有红心和星号 —— 性格和 board 一模一样，只是明暗反过来。
+     强调色保留了黄，但**压暗一档** —— 亮黄压在白底上会糊成一片。 */
+  paper: {
+    label: '黑白翻转',
+    grid: 'checker',
+    cursor: 'cross',
+    heart: false,
+    star: false,
+    canvas: {
+      bg:    '#ffffff',
+      white: '#111111',      // 这个字段在各主题里都是「正文色」→ 翻转成黑
+      yellow:'#c08a00',      // 压暗的黄，白底上看得清
+      red:   '#d81b1b',
+      gray:  '#767676',
+      dim:   '#c9c9c9',
+      grid:  '#ececec'
+    }
+  },
   /* 水波：淡蓝浅色底。背景交给荡开的水纹（effect:'ripple'），
      网格用点阵 —— 像水面上的小光点。 */
   ripple: {
@@ -179,7 +198,7 @@ function normalizeThemeObject(o, fallbackLabel){
   return out;
 }
 /* 内置主题的 id，用户主题不许占用 */
-const BUILTIN_THEME_IDS = new Set(['board', 'undertale', 'sakura', 'ripple']);
+const BUILTIN_THEME_IDS = new Set(['board', 'undertale', 'sakura', 'ripple', 'paper']);
 function makeUserThemeId(){
   let id;
   do { id = 'u_' + Math.random().toString(36).slice(2, 8); } while (THEMES[id]);

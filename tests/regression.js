@@ -9173,6 +9173,36 @@
     clearRipples();
     applyTheme('board');
   });
+
+  T('PP01 黑白翻转：就是 board 的明暗对调', () => {
+    const lum = (hex) => { const n = parseInt(hex.slice(1), 16);
+      return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114); };
+    ok('PP01 主题在册', !!THEMES.paper, Object.keys(THEMES).join('/'));
+    ok('PP01b 算内置主题', BUILTIN_THEME_IDS.has('paper'));
+    ok('PP01c 底是白的、字是黑的', lum(THEMES.paper.canvas.bg) > 200 && lum(THEMES.paper.canvas.white) < 60,
+      THEMES.paper.canvas.bg + ' / ' + THEMES.paper.canvas.white);
+    ok('PP01d 正好和 board 反过来', (() => {
+      const b = THEMES.board.canvas, p = THEMES.paper.canvas;
+      return lum(b.bg) < lum(b.white) && lum(p.bg) > lum(p.white);
+    })(), 'board ' + lum(THEMES.board.canvas.bg) + '<' + lum(THEMES.board.canvas.white)
+       + ' / paper ' + lum(THEMES.paper.canvas.bg) + '>' + lum(THEMES.paper.canvas.white));
+    ok('PP01e 性格和 board 一致（棋盘格 / 十字光标 / 无红心星号）',
+      THEMES.paper.grid === THEMES.board.grid && THEMES.paper.cursor === THEMES.board.cursor
+      && THEMES.paper.heart === THEMES.board.heart && THEMES.paper.star === THEMES.board.star,
+      [THEMES.paper.grid, THEMES.paper.cursor, THEMES.paper.heart, THEMES.paper.star].join('/'));
+    ok('PP01f 强调色压暗过 —— 亮黄压白底会糊',
+      lum(THEMES.paper.canvas.yellow) < lum(THEMES.board.canvas.yellow),
+      'board ' + Math.round(lum(THEMES.board.canvas.yellow)) + ' → paper ' + Math.round(lum(THEMES.paper.canvas.yellow)));
+    ok('PP01g 调色板齐全', ['bg','white','yellow','red','gray','dim','grid']
+      .every(k => /^#[0-9a-f]{6}$/i.test(THEMES.paper.canvas[k] || '')), JSON.stringify(THEMES.paper.canvas));
+    /* 套上去画一帧不能抛 */
+    fresh(); applyTheme('paper');
+    let err = 'none';
+    try { draw(); } catch(ex){ err = ex.message; }
+    ok('PP01h 套上去画一帧不抛', err === 'none', err);
+    ok('PP01i 没挂背景特效（它靠棋盘格）', themeEffect() === '', JSON.stringify(themeEffect()));
+    applyTheme('board');
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
