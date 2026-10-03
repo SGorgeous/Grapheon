@@ -511,7 +511,7 @@ function showCtx(x, y, n, e, info){
 function showNewMenu(anchor){
   const r = anchor.getBoundingClientRect();
   showMenu(r.left, r.bottom + 8, [
-    ['空白文件', '一个中心节点', () => newDocument('blank')],
+    ['空白文件', '题目 + 内容，已经连好', () => newDocument('blank')],
     ['示例：全部功能', '带活的变量演示', () => newDocument('demo')],
     ['示例：经典', '最早那份最简的树', () => newDocument('classic')],
     'hr',

@@ -27,7 +27,9 @@ function boot(){
     }
   } catch(e){}
   if (!loaded){
-    loadDemo('all');    // 新示例：功能总览 + 活的变量演示
+    /* ★ 首次打开开**空白文档**（题目 + 内容，已经连好）。
+       示例文档仍然在「新建」菜单里，随时能载入。 */
+    newDocument('blank');
   }
   reindex(); sizeAll();
   initHist();

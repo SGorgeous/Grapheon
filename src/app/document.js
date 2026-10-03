@@ -14,13 +14,18 @@ function newDocument(kind){
     loadDemo(kind === 'classic' ? 'classic' : 'all');
   } else {
     doc = { v:2, nodes:[], edges:[] };
-    // 光杆中心节点也用大号字 —— 显式标，不靠拓扑规则
-    const n = { id:uid('n'), text:'中心主题', x:0, y:0, w:0, h:0, shape:'rect',
+    /* ★ 空白文档 = **两个相连的节点**：上面题目、下面内容。
+       题目是根，所以显式标 big（大号字），不靠拓扑规则去猜。 */
+    const a = { id:uid('n'), text:'题目', x:0, y:0, w:0, h:0, shape:'round',
                 collapsed:false, lines:[''], big:true };
-    doc.nodes.push(n);
+    const b = { id:uid('n'), text:'内容', x:0, y:160, w:0, h:0, shape:'rect',
+                collapsed:false, lines:[''] };
+    doc.nodes.push(a, b);
     sel.clear(); selEdgeId = null; editing = null; hideEditor();
     reindex(); sizeAll();
-    selectOnly(n.id);
+    const e0 = linkNodes(a.id, b.id);
+    reindex(); sizeAll();
+    selectOnly(e0 ? a.id : b.id);
   }
   relayout(); fitView(); initHist(); updateMeta(); mark();
   say(kind === 'demo'

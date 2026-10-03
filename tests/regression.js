@@ -825,9 +825,18 @@
     fresh();
     $('#b-new').click();
     [...ctxEl.querySelectorAll('.item')].find(d => d.textContent.indexOf('空白文件') === 0).click();
-    ok('N02 只剩 1 个节点', doc.nodes.length === 1, doc.nodes.length);
-    ok('N02b 没有连线', doc.edges.length === 0);
-    ok('N02c 光杆中心节点也用大号字', doc.nodes[0].big === true);
+    /* ★ 空白文档改过了：现在是**两个相连的节点** —— 题目 + 内容 */
+    ok('N02 有 2 个节点（题目 + 内容）', doc.nodes.length === 2, doc.nodes.length);
+    ok('N02b 两个节点已经连好', doc.edges.length === 1, doc.edges.length);
+    ok('N02c1 第一个是题目、第二个是内容',
+      doc.nodes[0].text === '题目' && doc.nodes[1].text === '内容',
+      doc.nodes.map(n => n.text).join(' / '));
+    ok('N02c 题目用大号字（根节点），内容不用',
+      doc.nodes[0].big === true && !doc.nodes[1].big,
+      doc.nodes[0].big + ' / ' + doc.nodes[1].big);
+    ok('N02c2 连线方向是题目 → 内容',
+      doc.edges[0].s === doc.nodes[0].id && doc.edges[0].t === doc.nodes[1].id,
+      doc.edges[0].s + ' -> ' + doc.edges[0].t);
     ok('N02d 可以直接开始生长', (() => {
       const b = doc.nodes.length;
       addChild();                       // ★ 加子节点不再占快捷键
