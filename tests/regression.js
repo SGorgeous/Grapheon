@@ -9883,6 +9883,49 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('MV07 重命名编辑框：特殊节点只盖标题行，普通节点才盖满', () => {
+    fresh();
+    const el = document.getElementById('editor');
+    const boxH = (n) => {
+      setVarEditIndex(0);
+      startEdit('node', n.id, String(n.text || ''), {});
+      const h = parseFloat(el.style.height);
+      hideEditor();
+      return h;
+    };
+    /* 普通文本节点：没有 kind 字段 —— 编辑框就是整个节点，和以前一样 */
+    const plain = addNodeAt('普通文本', 0, 0, 'rect');
+    reindex(); sizeAll();
+    const bPlain = nodeBox(plain);
+    ok('MV07 普通节点：编辑框盖满整个节点',
+      Math.abs(boxH(plain) - Math.max(28, Math.round(bPlain.h * view.z))) < 2,
+      boxH(plain) + ' vs ' + Math.max(28, Math.round(bPlain.h * view.z)));
+    /* ★ 特殊节点：只盖标题行 —— 不然会把下面的控件全遮住 */
+    const kinds = [];
+    const pg = addNodeAt('染红', 200, 0, 'round'); pg.kind = 'program';
+    pg.program = normalizeProgram({ op:'color', value:'#ff0000' });
+    kinds.push(['程序', pg]);
+    const v = addVarNode('音量', 400, 0, { name:'音量', value:'1' });
+    kinds.push(['变量', v]);
+    const o = addNodeAt('折后', 600, 0, 'rect'); o.kind = 'out';
+    o.outDef = normalizeOutDef({ name:'折后' });
+    kinds.push(['输出', o]);
+    const t = addTableNodeFromRows(parseCSV('a,b\n1,2'), 800, 0, '表');
+    kinds.push(['表格', t]);
+    reindex(); sizeAll();
+    for (const [tag, n] of kinds){
+      const h = boxH(n);
+      const nodeH = Math.max(28, Math.round(nodeBox(n).h * view.z));
+      const titleH = Math.max(28, Math.round(Math.max(24, n.lh || 24) * view.z));
+      ok('MV07 ★ ' + tag + '节点的编辑框只有标题行高（不盖满）',
+        Math.abs(h - titleH) < 2 && h < nodeH,
+        '编辑框 ' + h + ' / 标题行 ' + titleH + ' / 节点 ' + nodeH);
+      ok('MV07 ★ ' + tag + '节点确实比标题行高（这个断言才有意义）', nodeH > titleH + 4,
+        nodeH + ' vs ' + titleH);
+    }
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

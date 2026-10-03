@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/editing.js
    行内编辑（浮层 textarea）：节点文本 / 连线标签 / 分组标题。
@@ -184,7 +184,12 @@ function positionEditor(){
     if (!n){ hideEditor(); return; }
     const s = w2s({ x:n.x, y:n.y });
     fs = n.fs; lh = n.lh;
-    w = n.w; h = n.h; padX = PADX; padY = PADY;
+    /* ★ 特殊节点（变量 / 程序 / 算符 / 输出 / 表格 / 图片 / 嵌入）身上，
+       能编辑的文字**只有标题行** —— 编辑框盖满整个节点会把下面的控件全遮住。
+       普通文本节点（没有 kind 字段）才盖满 —— 那才是它该有的样子。 */
+    w = n.w;
+    h = (n.kind && n.kind !== 'node') ? Math.max(24, n.lh || 24) : n.h;
+    padX = PADX; padY = PADY;
     x = s.x; y = s.y;
     editor.style.textAlign = 'center';
   }
