@@ -227,25 +227,30 @@ function renderNodeBox(){
 
   // ---- 这个节点身上叠了哪些算符 ----
   const hits = programHits(n.id);
+  /* ★ 这一行必须是**活的** —— 以前是一句固定文案，
+     只看「有没有出边」，所以连到谁、连了几个它永远不变。
+     ★ 程序节点**两条信息都要**：既报「谁作用到我」，也报「我作用到谁」。
+     以前程序节点只报后者，于是把一个外观节点连到程序节点上、
+     画布上看不出变化、面板上也没反应，看着就像「不能用」。
+     两条之间用「　·　」隔开，仍然是一行 —— 不用 innerHTML：
+     内容里有节点正文（用户输入），走 textContent 更稳。 */
+  const parts = [];
+  if (hits.length){
+    const ev = effOf(n);
+    parts.push('被 ' + hits.length + ' 个外观节点作用：' +
+      hits.map(h => '「' + (h.text || '程序') + '」').join('、') +
+      (ev && ev.value != null ? '　当前数值 = ' + ev.value : ''));
+  }
   if (prog){
-    /* ★ 这一行必须是**活的** —— 以前是一句固定文案，
-       只看「有没有出边」，所以连到谁、连了几个它永远不变。
-       下一条（非程序节点）本来就是活的，这条跟着学。 */
     const outs = doc.edges.filter(e => e.s === n.id)
       .map(e => byId(e.t) || byGroup(e.t))
       .filter(Boolean);
-    nbHitsEl.textContent = outs.length
+    parts.push(outs.length
       ? '作用于 ' + outs.map(t => tagOf(t)).join('、')
         + '；多个外观节点按连线先后依次累加。'
-      : '还没连到任何节点：从它拉一条线到目标节点，算符才会生效。';
-  } else if (hits.length){
-    const ev = effOf(n);
-    nbHitsEl.textContent = '被 ' + hits.length + ' 个外观节点作用：' +
-      hits.map(h => '「' + (h.text || '程序') + '」').join('、') +
-      (ev && ev.value != null ? '　当前数值 = ' + ev.value : '');
-  } else {
-    nbHitsEl.textContent = '';
+      : '还没连到任何节点：从它拉一条线到目标节点，算符才会生效。');
   }
+  nbHitsEl.textContent = parts.join('　·　');
 }
 
 /* 数值那一行长什么样，取决于算符改的是什么 */

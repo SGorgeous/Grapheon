@@ -10247,6 +10247,58 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('PA01 程序节点也报「被作用」——效果本来就生效，只是看不见', () => {
+    fresh();
+    const el = document.getElementById('nbHits');
+    const lineOf = (n) => { selectOnly(n.id); openNodeBox(byId(n.id)); renderNodeBox(); return el.textContent; };
+    /* 造两个外观节点，都作用到一个**程序节点**上 */
+    const pg = addNodeAt('目标程序', 0, 0, 'round');
+    pg.kind = 'program'; pg.program = normalizeProgram({ op:'color', value:'#00ff00' });
+    reindex(); sizeAll();
+    const a1 = addNodeAt('染边', -600, -400, 'round');
+    a1.kind = 'program'; a1.program = normalizeProgram({ op:'style', key:'border', mode:'set', value:'#ff00ff' });
+    reindex(); sizeAll();
+    linkNodes(a1.id, pg.id);
+    reindex(); refreshEffects(); sizeAll();
+
+    /* ★ 效果对程序节点**本来就是生效的**（这一组是事实，不是新功能） */
+    ok('PA01 外框色确实作用到了程序节点', effBorder(byId(pg.id)) === '#ff00ff',
+      String(effBorder(byId(pg.id))));
+    ok('PA01b 效果记在 ops 上（画角标的数据来源）', !!effOf(byId(pg.id)).ops, '');
+
+    /* ★ 新增：程序节点的面板要**两条都有** */
+    const t1 = lineOf(byId(pg.id));
+    ok('PA01c ★ 程序节点面板报了「被作用」', t1.indexOf('被 1 个外观节点作用') === 0, t1);
+    ok('PA01d ★ 也报了「我作用到谁」（没有出边时是那句提示）',
+      t1.indexOf('还没连到任何节点') >= 0, t1);
+    ok('PA01e 两条在同一行里，用「　·　」隔开', t1.indexOf('　·　') >= 0, t1);
+    /* 给它加一条出边之后，后半句换成目标名单 */
+    const tgt = addNodeAt('它的目标', 700, 0, 'round');
+    reindex(); sizeAll();
+    linkNodes(pg.id, tgt.id);
+    reindex(); refreshEffects(); sizeAll();
+    const t2 = lineOf(byId(pg.id));
+    ok('PA01f ★ 有了出边之后报出目标名字',
+      t2.indexOf('作用于') >= 0 && t2.indexOf('它的目标') >= 0, t2);
+    ok('PA01g 前半句仍然是「被作用」', t2.indexOf('被 1 个外观节点作用') === 0, t2);
+
+    /* 普通节点：**只**报被作用，不报「作用于」 */
+    const plain = addNodeAt('普通', 1200, 0, 'round');
+    reindex(); sizeAll();
+    linkNodes(a1.id, plain.id);
+    reindex(); refreshEffects(); sizeAll();
+    const t3 = lineOf(byId(plain.id));
+    ok('PA01h 普通节点仍然只报「被作用」',
+      t3.indexOf('被 1 个外观节点作用') === 0 && t3.indexOf('作用于') < 0, t3);
+    ok('PA01i 普通节点没有「还没连到」那句（那是程序节点专属）',
+      t3.indexOf('还没连到任何节点') < 0, t3);
+    ok('PA01j 普通节点也照样吃到效果', effBorder(byId(plain.id)) === '#ff00ff',
+      String(effBorder(byId(plain.id))));
+
+    closeNodeBox();
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -824,14 +824,16 @@ function drawNode(g, n){
   }
 
   // 被程序节点作用过的目标：右上角一个黄点，数值型再把累计结果显示在右下角
-  if (eff && eff.ops && !prog){
+  // ★ 程序节点**也画** —— 外观效果本来就作用得到它身上（探针验过：
+  //   颜色 / 形状 / 位置 / 数值都改到了），以前跳过就完全看不出被作用过。
+  if (eff && eff.ops){
     g.fillStyle = C.yellow;
     g.beginPath();
     const cx = b.x + b.w - 8, cy = b.y - 8;
     g.moveTo(cx, cy - 6); g.lineTo(cx + 6, cy); g.lineTo(cx, cy + 6); g.lineTo(cx - 6, cy);
     g.closePath(); g.fill();
   }
-  if (eff && eff.value != null && !prog){
+  if (eff && eff.value != null){
     setFont(g, FS, 'normal', FONT);
     g.fillStyle = C.yellow;
     g.textAlign = 'right';
