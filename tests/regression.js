@@ -522,10 +522,10 @@
   T('D02 连续同方向生成不重叠', () => {
     fresh();
     const a = nodeByText('GRAPHEON');
-    selectOnly(a.id); key('ArrowRight');
+    selectOnly(a.id); keyRaw('ArrowRight', { ctrlKey:true });
     let cur = byId([...sel][0]);
     const chain = [cur];
-    for (let i = 0; i < 4; i++){ selectOnly(cur.id); key('ArrowRight'); cur = byId([...sel][0]); chain.push(cur); }
+    for (let i = 0; i < 4; i++){ selectOnly(cur.id); keyRaw('ArrowRight', { ctrlKey:true }); cur = byId([...sel][0]); chain.push(cur); }
     const xs = chain.map(n => n.x);
     ok('D02 链上 x 递增', xs.every((v, i) => i === 0 || v > xs[i - 1]), JSON.stringify(xs.map(Math.round)));
     ok('D02b 新生成的这几条没重叠', (() => {
@@ -536,12 +536,13 @@
       return true;
     })());
   });
-  T('D03 Tab 加子节点 / Enter 加兄弟节点', () => {
+  T('D03 加子节点（已无快捷键）/ Enter 加兄弟节点', () => {
     fresh();
     layoutMind();
     const a = nodeByText('节点');
     const b0 = doc.nodes.length;
-    selectOnly(a.id); key('Tab');
+    /* ★ 加子节点不再占快捷键（对齐 Blender 之后 Tab 是折叠），直接调 */
+    selectOnly(a.id); addChild();
     const child = byId([...sel][0]);
     ok('D03 子节点已建立', doc.nodes.length === b0 + 1 && idx.parent.get(child.id) === a.id);
     key('Enter');
@@ -571,7 +572,7 @@
     key('ArrowLeft', { altKey:true });
     ok('D05 Alt+← 不新建', doc.nodes.length === b);
     selectOnly(null);
-    key('ArrowRight'); key('d'); key('w');
+    keyRaw('ArrowRight', { ctrlKey:true }); key('d'); key('w');
     ok('D05b 无选中不新建', doc.nodes.length === b);
   });
   T('D06 删除节点（连同子孙）', () => {
@@ -647,8 +648,26 @@
   T('K02 默认键位完整且动作都存在', () => {
     fresh(); GP.keys.reset();
     const b = GP.keys.bindings;
-    ok('K02 Tab → 子节点', b['tab'] === 'node.child');
-    ok('K02b WASD 与方向键都有', ['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].every(k => !!b[k]));
+    /* ★ 对齐 Blender 之后：Tab = 折叠/展开（进出组的替代），加子节点不再占键 */
+    ok('K02 Tab → 折叠 / 展开', b['tab'] === 'node.collapse', String(b['tab']));
+    ok('K02b1 方向键 = 跳转选择',
+      ['arrowup','arrowleft','arrowdown','arrowright'].every(k => String(b[k] || '').indexOf('node.nav') === 0),
+      ['arrowup','arrowleft','arrowdown','arrowright'].map(k => k + ':' + b[k]).join(' '));
+    /* ⚠ 不能用 Shift+方向键：comboOf 丢掉单独的 Shift（防误按）→ 用 Ctrl 变体 */
+    ok('K02b2 ★ Ctrl+方向键 = 在该方向生成节点',
+      ['ctrl+arrowup','ctrl+arrowleft','ctrl+arrowdown','ctrl+arrowright']
+        .every(k => String(b[k] || '').indexOf('node.spawn') === 0),
+      ['ctrl+arrowup','ctrl+arrowleft','ctrl+arrowdown','ctrl+arrowright'].map(k => k + ':' + b[k]).join(' '));
+    ok('K02b3 ★ WASD 让给 Blender 那套（不再生成节点）',
+      !b['w'] && !b['s'] && !b['d'] && b['a'] === 'sel.all',
+      JSON.stringify({ w:b['w'], a:b['a'], s:b['s'], d:b['d'] }));
+    ok('K02b4 ★ 对齐 Blender 的几个键都在',
+      b['ctrl+a'] === 'ui.addMenu' && b['alt+a'] === 'sel.none' && b['ctrl+i'] === 'sel.invert'
+      && b['ctrl+alt+g'] === 'group.dissolve' && b['x'] === 'node.delete'
+      && b['f'] === 'edge.link' && b['n'] === 'style.open' && b['home'] === 'view.fit'
+      && b['ctrl+space'] === 'ui.toggle',
+      JSON.stringify({ 'ctrl+a':b['ctrl+a'], 'alt+a':b['alt+a'], 'ctrl+i':b['ctrl+i'],
+        'ctrl+alt+g':b['ctrl+alt+g'], x:b['x'], f:b['f'], n:b['n'], home:b['home'], 'ctrl+space':b['ctrl+space'] }));
     ok('K02c e → 样式面板（节点/连线通用）', b['e'] === 'style.open');
     ok('K02d 模式键位已移除', !b['1'] && !b['2'] && !GP.keys.actions['mode.mind'] && !GP.keys.actions['mode.flow']);
     ok('K02e Ctrl+G = 加入分组', b['ctrl+g'] === 'group.create');
@@ -660,9 +679,10 @@
     fresh(); GP.keys.reset();
     const n = nodeByText('节点');
     const before = doc.nodes.length;
-    selectOnly(n.id); keyRaw('d');
+    /* ★ 生成节点现在是 Shift+方向键 */
+    selectOnly(n.id); keyRaw('ArrowRight', { ctrlKey:true });
     if (editing) commitEdit();
-    ok('K03 默认 d 会生成节点', doc.nodes.length === before + 1);
+    ok('K03 默认 Ctrl+→ 会生成节点', doc.nodes.length === before + 1, doc.nodes.length + ' vs ' + before);
     GP.keys.bind('ctrl+d', 'node.delete');
     let b = GP.keys.bindings;
     ok('K03b 原键位已释放', !b['delete'] && !b['backspace']);
@@ -671,7 +691,9 @@
     GP.keys.load();
     ok('K03e load 后仍是改过的键位', GP.keys.bindings['ctrl+d'] === 'node.delete');
     GP.keys.reset();
-    ok('K03f reset 后恢复默认', GP.keys.bindings['d'] === 'node.spawn.right' && !GP.keys.bindings['ctrl+d']);
+    ok('K03f reset 后恢复默认',
+      GP.keys.bindings['ctrl+arrowright'] === 'node.spawn.right' && !GP.keys.bindings['ctrl+d'],
+      'ctrl+arrowright=' + GP.keys.bindings['ctrl+arrowright'] + ' ctrl+d=' + GP.keys.bindings['ctrl+d']);
   });
   T('K04 面板打开时全局快捷键被屏蔽，Esc 例外', () => {
     fresh(); sel.clear();
@@ -806,7 +828,7 @@
     ok('N02c 光杆中心节点也用大号字', doc.nodes[0].big === true);
     ok('N02d 可以直接开始生长', (() => {
       const b = doc.nodes.length;
-      key('Tab');
+      addChild();                       // ★ 加子节点不再占快捷键
       const grew = doc.nodes.length === b + 1;
       if (editing) cancelEdit();
       return grew;
@@ -2570,9 +2592,10 @@
     fresh(); layoutMind();
     const { grp } = twoNodeGroup();
     selectGroup(grp.id);
-    keyRaw(' ');
-    ok('S7 Space 折叠了分组', grp.collapsed === true);
-    keyRaw(' ');
+    /* ★ 对齐 Blender 之后折叠是 Tab（Space 不再占键） */
+    keyRaw('Tab');
+    ok('S7 Tab 折叠了分组', grp.collapsed === true);
+    keyRaw('Tab');
     ok('S7b 再按一次展开', grp.collapsed === false);
   });
   T('S8 折叠着的分组仍然能点；被藏起来的分组点不到', () => {
@@ -6441,16 +6464,16 @@
     document.body.classList.remove('ui-hidden');
     ok('AN01 默认不隐藏', !document.body.classList.contains('ui-hidden'));
     ok('AN01b 有 #uiNote 这个提示元素', !!document.getElementById('uiNote'));
-    keyRaw('n');
-    ok('AN01c 按 N 隐藏了', document.body.classList.contains('ui-hidden'));
-    ok('AN01d 提示语说了怎么恢复', /N/.test(document.getElementById('uiNote').textContent),
+    keyRaw(' ', { ctrlKey:true });
+    ok('AN01c 按 Ctrl+Space 隐藏了', document.body.classList.contains('ui-hidden'));
+    ok('AN01d 提示语说了怎么恢复', /Ctrl\+Space/.test(document.getElementById('uiNote').textContent),
       document.getElementById('uiNote').textContent);
     ok('AN01e #ui 真的看不见了',
       getComputedStyle(document.getElementById('ui')).display === 'none',
       getComputedStyle(document.getElementById('ui')).display);
     ok('AN01f 提示条这时候是可见的',
       getComputedStyle(document.getElementById('uiNote')).display !== 'none');
-    keyRaw('n');
+    keyRaw(' ', { ctrlKey:true });
     ok('AN01g 再按一次回来了', !document.body.classList.contains('ui-hidden'));
     ok('AN01h #ui 回来了',
       getComputedStyle(document.getElementById('ui')).display !== 'none');

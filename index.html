@@ -18,7 +18,7 @@
         shape-rendering="crispEdges"/><path d="M28.00 4.00 H13.33" transform="translate(0,0)" fill="none" stroke="var(--y)"
         stroke-width="5" stroke-linecap="butt" shape-rendering="crispEdges"/></svg><div class="tx"><span class="star">* </span>GRAPHEON<small>NODES / CONNECTIONS</small></div></div>
 
-  <div id="uiNote" class="ud" style="display:none">界面已隐藏 · 按 N 恢复</div>
+  <div id="uiNote" class="ud" style="display:none">界面已隐藏 · 按 Ctrl+Space 恢复</div>
 <div id="topbar">
     <button class="ud-btn" id="b-back" style="display:none">返回</button>
     <button class="ud-btn" id="b-undo">撤销</button>
@@ -314,6 +314,9 @@
     <tr><td>Ctrl + Z</td><td>撤销（Ctrl + Shift + Z 重做）</td></tr>
     <tr><td>顶栏「记录」</td><td>看这次会话里做过的每一件事，可以按分类筛、复制、导出 txt</td></tr>
     <tr><td>H 或 ?</td><td>开关本帮助</td></tr>
+    <tr><td class="sec" colspan="2">— 有两处和 Blender 不一样，原因在这 —</td></tr>
+    <tr><td>Shift + A → Ctrl + A</td><td>Blender 的「添加菜单」是 Shift+A，但本应用的按键归一化<br>会丢掉单独按下的 Shift（防误按）—— Shift+A 会被当成 A（全选）。<br>所以改 Ctrl+A。同理「生成节点」从 Shift+方向键改成 Ctrl+方向键。</td></tr>
+    <tr><td>其余都对上了</td><td>A 全选 / Alt+A 取消 / Ctrl+I 反选 / X 删除 / F 连接 /<br>N 侧栏 / Home 看全部 / Ctrl+G 打包 / Ctrl+Alt+G 解组 / Tab 进出组 / F2 重命名</td></tr>
 
     <tr><td class="sec" colspan="2">— 生成节点 —</td></tr>
     <tr><td>方向键 / WASD</td><td>在「该方向」新建节点并自动连线</td></tr>
@@ -374,15 +377,21 @@
     <tr><td>双击嵌入节点</td><td>进去编辑（改的是副本，原文件不受影响）</td></tr>
     <tr><td>里面按 Esc</td><td>回到外层</td></tr>
 
-    <tr><td class="sec" colspan="2">— 快捷键一览 —</td></tr>
-    <tr><td>方向键 / WASD</td><td>往该方向生成节点</td></tr>
-    <tr><td>Tab / Enter</td><td>子节点 / 兄弟节点</td></tr>
+    <tr><td class="sec" colspan="2">— 快捷键一览（对齐 Blender 节点编辑器）—</td></tr>
+    <tr><td>Ctrl + A</td><td>添加节点（Blender 是 Shift+A，见下方说明）</td></tr>
+    <tr><td>A / Alt + A / Ctrl + I</td><td>全选 / 取消全选 / 反选</td></tr>
+    <tr><td>Ctrl + 方向键</td><td>往该方向生成节点</td></tr>
+    <tr><td>方向键</td><td>跳转选择</td></tr>
+    <tr><td>Enter</td><td>加兄弟节点（加子节点没有快捷键了，走右键菜单）</td></tr>
+    <tr><td>Tab</td><td>折叠 / 展开（Blender 里 Tab 是进出组）</td></tr>
     <tr><td>F2</td><td>重命名（Shift+Enter 换行）</td></tr>
-    <tr><td>E</td><td>样式面板</td></tr>
-    <tr><td>Ctrl + G</td><td>分组</td></tr>
-    <tr><td>Space</td><td>折叠 / 展开</td></tr>
-    <tr><td>Del / Backspace</td><td>删除</td></tr>
-    <tr><td>Ctrl + A</td><td>全选节点</td></tr>
+    <tr><td>X / Del / Backspace</td><td>删除</td></tr>
+    <tr><td>F</td><td>连接选中的两个节点</td></tr>
+    <tr><td>N 或 E</td><td>样式面板</td></tr>
+    <tr><td>C</td><td>组件面板</td></tr>
+    <tr><td>Home</td><td>缩放到全部</td></tr>
+    <tr><td>Ctrl + Space</td><td>隐藏 / 显示界面</td></tr>
+    <tr><td>Ctrl + G / Ctrl + Alt + G</td><td>打包成分组 / 解散分组</td></tr>
     <tr><td>Ctrl + Z / Ctrl + Shift + Z</td><td>撤销 / 重做</td></tr>
     <tr><td>Ctrl + S / Ctrl + O</td><td>保存 JSON / 打开 JSON</td></tr>
     <tr><td>Ctrl + E</td><td>导出面板</td></tr>

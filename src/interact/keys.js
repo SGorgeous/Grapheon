@@ -33,32 +33,56 @@ function comboOf(ev){
   return parts.join('+');
 }
 
+/* ★ 键位对齐 Blender 的节点编辑器（对照见文件头注释）。
+   两个本应用特有的动作让位：
+     · WASD 生成节点 → Shift+方向键（把 A / S / D / W 让给 Blender 的语义）
+     · Ctrl+方向键 跳转 → 方向键直接跳转
+   加子节点（node.child）不再占键位，仍在右键菜单里。 */
 function defaultBindings(){
   return {
-    'tab':        'node.child',
-    'enter':      'node.sibling',
+    /* 添加 / 结构 */
+    'ctrl+a':     'ui.addMenu',      // Blender 是 Shift+A；这个应用的 comboOf 丢掉单 Shift，改 Ctrl+A
+    'enter':      'node.sibling',    // 本应用特有，保留
+    'tab':        'node.collapse',   // Blender: Tab 进出组 → 这里折叠 / 展开
     'f2':         'node.rename',
-  'n':          'ui.toggle',
+    'x':          'node.delete',     // Blender: X 删除
     'delete':     'node.delete',
     'backspace':  'node.delete',
-    'space':      'node.collapse',
-    'w':          'node.spawn.up',
-    'a':          'node.spawn.left',
-    's':          'node.spawn.down',
-    'd':          'node.spawn.right',
-    'arrowup':    'node.spawn.up',
-    'arrowleft':  'node.spawn.left',
-    'arrowdown':  'node.spawn.down',
-    'arrowright': 'node.spawn.right',
-    'ctrl+arrowup':    'node.nav.up',
-    'ctrl+arrowleft':  'node.nav.left',
-    'ctrl+arrowdown':  'node.nav.down',
-    'ctrl+arrowright': 'node.nav.right',
-    'e':          'style.open',
-    'c':          'comps.open',
+
+    /* 选择 */
+    'a':          'sel.all',         // Blender: A 全选
+    'alt+a':      'sel.none',        // Blender: Alt+A 取消全选
+    'ctrl+i':     'sel.invert',      // Blender: Ctrl+I 反选
+
+    /* 分组 */
     'ctrl+g':     'group.create',
+    'ctrl+alt+g': 'group.dissolve',  // Blender: Ctrl+Alt+G 解组
+
+    /* 连线 */
+    'f':          'edge.link',       // Blender: F 连接选中的两个
+
+    /* 视图 */
+    'n':          'style.open',      // Blender: N 侧栏 → 样式面板
+    'ctrl+space': 'ui.toggle',       // Blender: Ctrl+Space 最大化 → 隐藏界面
+    'home':       'view.fit',        // Blender: Home 看全部
     'h':          'ui.help',
     '?':          'ui.help',
+
+    /* 生成（Ctrl+方向键）/ 跳转（方向键）
+       ⚠ 不能用 Shift+方向键：comboOf 会把单独的 Shift 丢掉（防误按），
+          Shift+→ 会被归一成 arrowright，和跳转撞上。 */
+    'ctrl+arrowup':    'node.spawn.up',
+    'ctrl+arrowdown':  'node.spawn.down',
+    'ctrl+arrowleft':  'node.spawn.left',
+    'ctrl+arrowright': 'node.spawn.right',
+    'arrowup':    'node.nav.up',
+    'arrowdown':  'node.nav.down',
+    'arrowleft':  'node.nav.left',
+    'arrowright': 'node.nav.right',
+
+    /* 面板 / 文档 */
+    'e':          'style.open',
+    'c':          'comps.open',
     'escape':     'ui.escape',
     'ctrl+z':     'doc.undo',
     'ctrl+shift+z':'doc.redo',
@@ -66,7 +90,6 @@ function defaultBindings(){
     'ctrl+s':     'doc.save',
     'ctrl+o':     'doc.open',
     'ctrl+e':     'doc.export',
-    'ctrl+a':     'sel.all',
     'ctrl+l':     'layout.tidy'
   };
 }
@@ -88,6 +111,43 @@ const ACTIONS = {
       selectOnly(null); lastClickNode = null;
   }},
   'ui.help':          { label:'操作指南', group:'界面', run(){ openHelp(); } },
+  /* ★ 对齐 Blender：Shift+A 的「添加菜单」 */
+  'ui.addMenu':       { label:'添加节点', group:'结构', run(){
+      const b = document.getElementById('b-new');
+      if (b){ showNewMenu(b); return true; }
+      return false;
+  }},
+  /* ★ 对齐 Blender：Alt+A 取消全选 */
+  'sel.none':         { label:'取消全选', group:'文档', run(){
+      selectOnly(null);
+      mark();
+      say('* 已取消选择。');
+  }},
+  /* ★ 对齐 Blender：Ctrl+I 反选 */
+  'sel.invert':       { label:'反选', group:'文档', run(){
+      const before = new Set(sel);
+      sel.clear();
+      for (const n of doc.nodes) if (!before.has(n.id) && !isHidden(n.id)) sel.add(n.id);
+      for (const g of doc.groups) if (!before.has(g.id)) sel.add(g.id);
+      mark();
+      say(sel.size ? '* 反选：选中了 ' + sel.size + ' 个。' : '* 反选之后什么都没选中。');
+  }},
+  /* ★ 对齐 Blender：F 连接选中的两个节点 */
+  'edge.link':        { label:'连接选中的两个节点', group:'连线', run(){
+      const ids = [...sel].filter(id => byId(id));
+      if (ids.length !== 2){ say('* 先选中两个节点，再按 F 连接。'); return true; }
+      if (doc.edges.some(e => (e.s === ids[0] && e.t === ids[1]) || (e.s === ids[1] && e.t === ids[0]))){
+        say('* 这两个节点已经连着了。'); return true;
+      }
+      const e = linkNodes(ids[0], ids[1]);
+      reindex(); pushHist(); mark();
+      say('* 连上了' + edgeTag(e) + '。');
+  }},
+  /* ★ 对齐 Blender：Home 看全部 */
+  'view.fit':         { label:'缩放到全部', group:'视图', run(){
+      fitView(); mark();
+      say('* 已缩放到全部。');
+  }},
   'comps.open':       { label:'组件面板', group:'样式', run(){ openComps(); } },
   'group.create':     { label:'把选中的节点加入分组', group:'分组', run(){ createGroup(); } },
   'group.dissolve':   { label:'解散选中的分组', group:'分组', run(){
@@ -127,7 +187,7 @@ const ACTIONS = {
   'node.sibling':     { label:'添加兄弟节点', group:'结构', run(){ addSibling(); } },
   'ui.toggle':        { label:'隐藏 / 显示界面', group:'视图', run(){
       const on = document.body.classList.toggle('ui-hidden');
-      say(on ? '* 界面已隐藏。再按一次 N 恢复。' : '* 界面回来了。');
+      say(on ? '* 界面已隐藏。' : '* 界面回来了。');
     } },
   'node.rename':      { label:'重命名', group:'结构', run(){
       if (soleSel()){ startEdit('node', soleSel().id); return; }
