@@ -117,6 +117,15 @@ body.dsh-ready{cursor:none}
 #help td{padding:3px 8px;vertical-align:top;line-height:1.45}
 #help td:first-child{color:var(--y);white-space:nowrap;width:215px}
 #help .sec{color:var(--g);padding-top:14px;font-size:16px}
+/* 「设置」的分节标题和参数面板的 .gsec 统一：小字 + 右侧一条细线。
+   原来两边长得不一样（.sec 没线、.gsec 有线），放一起就露馅。 */
+#set .sec,#help .sec,#nodebox .sec{
+  display:flex;align-items:center;gap:10px;color:var(--g);
+  font-size:13px;letter-spacing:2px;margin:14px 0 8px;
+}
+#set .sec::after,#help .sec::after,#nodebox .sec::after{
+  content:"";flex:1;height:1px;background:var(--d);
+}
 #help .foot{margin-top:14px;color:var(--g);font-size:16px}
 
 #heart{position:fixed;left:0;top:0;z-index:200;pointer-events:none;display:none;fill:var(--r)}
