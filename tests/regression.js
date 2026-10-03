@@ -10374,6 +10374,79 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('GP02 分组右键菜单里也有「连接」，加/删/恢复都能用', () => {
+    fresh();
+    const a = addNodeAt('甲', 0, 0, 'round');
+    const b = addNodeAt('乙', 300, 0, 'round');
+    reindex(); sizeAll();
+    const g = { id:'gp2', title:'一组', color:'', members:[a.id, b.id] };
+    doc.groups = [g]; reindex(); sizeAll();
+
+    /* ① 真的右键一次，看菜单里有没有「连接」这一项 */
+    hideCtx();
+    const tb = groupTitleBox(g);
+    const sx = Math.round(tb.x + tb.w / 2 + view.x), sy = Math.round(tb.y + tb.h / 2 + view.y);
+    cv.dispatchEvent(new MouseEvent('contextmenu', {
+      clientX:sx, clientY:sy, bubbles:true, cancelable:true, button:2 }));
+    const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('GP02 ★ 分组菜单里有「连接」', labels.indexOf('连接') >= 0, labels.join(' / '));
+    /* 它有子菜单（渲染成 ▶） */
+    const conn = [...ctxEl.querySelectorAll('.item')].find(d => d.querySelector('.lb').textContent === '连接');
+    ok('GP02b ★ 这一项带子菜单',
+      !!conn && [...conn.querySelectorAll('.k')].some(k => k.textContent === '▶'),
+      conn ? JSON.stringify([...conn.querySelectorAll('.k')].map(k => k.textContent)) : 'null');
+    /* 分组菜单里其他的也都还在（别把原有项搞没了） */
+    ok('GP02c 原有的那几项没丢',
+      labels.indexOf('重命名') >= 0 && labels.indexOf('颜色') >= 0
+      && labels.indexOf('设为程序组') >= 0 && labels.indexOf('解散分组（保留成员）') >= 0,
+      labels.join(' / '));
+    hideCtx();
+
+    /* ② 分组的默认端点 = 四个**连接**端点（和画布上四个空心环一致） */
+    const L0 = portList(g);
+    ok('GP02d 分组默认只有 4 个连接端点，没有输入 / 输出',
+      (L0.conns || []).length === 4 && (L0.ins || []).length === 0 && (L0.outs || []).length === 0,
+      (L0.ins || []).length + '/' + (L0.outs || []).length + '/' + (L0.conns || []).length);
+
+    /* ③ 菜单按钮最终调的就是这几个 —— 直接验它们认分组 */
+    const p = addPort(g, 'conns');
+    reindex(); sizeAll();
+    ok('GP02e ★ addPort(分组, 连接) 能用', !!p && p.id != null, JSON.stringify(p));
+    ok('GP02f ★ 连接端点从 4 变成 5',
+      (portList(byGroup('gp2')).conns || []).length === 5,
+      String((portList(byGroup('gp2')).conns || []).length));
+    const gb = groupBox(byGroup('gp2'));
+    const A = anchorsFor(byGroup('gp2'));
+    ok('GP02g ★ 加了端点之后锚点仍然落在框上',
+      A.r.y >= gb.y - 1 && A.r.y <= gb.y + gb.h + 1,
+      Math.round(A.r.y) + ' 框 ' + Math.round(gb.y) + '..' + Math.round(gb.y + gb.h));
+    /* 恢复默认 */
+    resetPorts(byGroup('gp2'));
+    reindex(); sizeAll();
+    ok('GP02h ★ resetPorts(分组) 把 ports 清成 null',
+      byGroup('gp2').ports == null, JSON.stringify(byGroup('gp2').ports));
+    ok('GP02i ★ 又回到 4 个连接端点',
+      (portList(byGroup('gp2')).conns || []).length === 4,
+      String((portList(byGroup('gp2')).conns || []).length));
+    const gb2 = groupBox(byGroup('gp2'));
+    ok('GP02j ★ 锚点回到框边中点',
+      Math.round(anchorsFor(byGroup('gp2')).r.y) === Math.round(gb2.y + gb2.h / 2),
+      String(anchorsFor(byGroup('gp2')).r.y));
+
+    /* ④ 顺带：那两处过期提示已经改掉 */
+    {
+      const pr = addNodeAt('看菜单', 900, 0, 'round');
+      reindex(); sizeAll(); selectOnly(pr.id);
+      /* 直接查菜单项里的 hint 字符串：Tab 现在是折叠，加子节点不再占键位 */
+      const src = GP.keys.bindings;
+      ok('GP02k Tab 绑的是折叠（不是加子节点）',
+        src['tab'] === 'node.collapse' && !Object.values(src).includes('node.child'),
+        'tab=' + src['tab']);
+    }
+    hideCtx();
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

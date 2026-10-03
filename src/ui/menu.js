@@ -330,7 +330,7 @@ function showCtx(x, y, n, e, info){
 
     /* ---------------- 结构 ▶ ---------------- */
     const struct = [
-      ['添加子节点', 'Tab', () => addChild()],
+      ['添加子节点', '', () => addChild()],
       ['添加兄弟节点', 'Enter', () => addSibling()],
       'hr'
     ];
@@ -346,7 +346,7 @@ function showCtx(x, y, n, e, info){
       struct.push(['分组', '选中两个以上才能成组（Ctrl+G）', null]);
     }
     struct.push('hr');
-    struct.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Space', () => toggleCollapseOf(n)]);
+    struct.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Tab', () => toggleCollapseOf(n)]);
     items.push(['结构', '子节点 / 兄弟 / 分组 / 折叠', null, struct]);
 
     /* ---------------- 表格 ▶（只有表格节点才有）---------------- */
@@ -395,8 +395,42 @@ function showCtx(x, y, n, e, info){
     })]);
     items.push(['组件…', 'C', () => openComps()]);
     items.push([grp.isFunction ? '取消程序组' : '设为程序组', '', () => toggleFunctionGroup(grp)]);
-    items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Space', () => toggleGroupCollapse(grp)]);
+    items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Tab', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
+    /* ---------------- 连接 ▶（分组也有端点表了）----------------
+       ★ 以前分组只有四向中点、没有任何可改的地方，所以这一段只有节点有。
+         现在 group.ports 和 node.ports 是**同一套结构**，
+         addPort / removePort / resetPorts 本来就只认 .ports 字段，直接能用。
+         没配过 ports 的分组，这里显示的就是它当前生效的默认四向。 */
+    {
+      const PL = portList(grp);
+      const dirLabel = (d) => d === 'ins' ? '输入' : (d === 'outs' ? '输出' : '连接');
+      const sideName = (s) => s === 't' ? '上' : s === 'b' ? '下' : s === 'l' ? '左' : '右';
+      const portItems = [];
+      for (const dir of PORT_DIRS){
+        const list = PL[dir];
+        portItems.push([dirLabel(dir) + '端点（' + list.length + '）', '', null,
+          list.map(p => ['#' + p.id + (p.label ? ' ' + p.label : ''), sideName(p.side),
+            () => startEdit('portLabel', grp.id, p.label, { dir, portId:p.id })])
+          .concat([
+            'hr',
+            ['加一个' + dirLabel(dir) + '端点', '最多 ' + PORT_MAX_PER_DIR + ' 个',
+              () => addPort(grp, dir)],
+            ['删掉最后一个', '至少留一个',
+              () => removePort(grp, dir, list[list.length - 1].id)]
+          ])]);
+      }
+      portItems.push('hr');
+      portItems.push(['端点 ID…', '纯数字，不能重复，决定汇合顺序', null,
+        nodePorts(grp).map(p => [
+          '#' + p.id, sideName(p.side),
+          () => startEdit('portId', grp.id, String(p.id),
+            { dir: PORT_DIRS.filter(d => (portList(grp)[d] || []).indexOf(p) >= 0)[0] || 'ins',
+              portId:p.id })
+        ])]);
+      portItems.push(['恢复默认端点', '回到分组的四向中点', () => resetPorts(grp)]);
+      items.push(['连接', '端点：加 / 删 / 改 ID / 换边', null, portItems]);
+    }
     items.push('hr');
     items.push(['解散分组（保留成员）', 'Del', () => dissolveGroup(grp)]);
   } else if (e){
