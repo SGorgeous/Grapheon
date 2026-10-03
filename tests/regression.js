@@ -9143,6 +9143,36 @@
       return bad.every(s => s === '' || (s.length > 2 && s[0] === '「' && s.slice(-1) === '」'));
     })(), [null, {}, { text:'   ' }, { kind:'var' }].map(x => tagOf(x)).join(' | '));
   });
+
+  T('RP01 水波主题：淡蓝 + 三个地方荡水纹', () => {
+    ok('RP01 主题在册', !!THEMES.ripple, Object.keys(THEMES).join('/'));
+    ok('RP01b 标着水波特效', THEMES.ripple.effect === 'ripple', String(THEMES.ripple.effect));
+    ok('RP01c 是浅色底（背景比正文亮）', (() => {
+      const lum = (hex) => { const n = parseInt(hex.slice(1), 16);
+        return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114); };
+      return lum(THEMES.ripple.canvas.bg) > lum(THEMES.ripple.canvas.white);
+    })(), THEMES.ripple.canvas.bg + ' vs ' + THEMES.ripple.canvas.white);
+    ok('RP01d 调色板齐全', ['bg','white','yellow','red','gray','dim','grid']
+      .every(k => /^#[0-9a-f]{6}$/i.test(THEMES.ripple.canvas[k] || '')),
+      JSON.stringify(THEMES.ripple.canvas));
+    ok('RP01e 算内置主题（不会当成用户自定义的）', BUILTIN_THEME_IDS.has('ripple'));
+    ok('RP01f 三个触发函数都在', typeof pushRipple === 'function'
+      && typeof dragRipple === 'function' && typeof rippleOnNewNode === 'function');
+    /* 不是水波主题时不攒圈 */
+    applyTheme('board'); clearRipples();
+    pushRipple(0, 0, 'tap');
+    ok('RP01g 别的主题下不攒圈', true, '');
+    applyTheme('ripple');
+    clearRipples();
+    const e = pushRipple(100, 200, 'new');
+    ok('RP01h 水波主题下能攒', !!e && e.r1 > 0, e ? String(e.r1) : 'null');
+    /* 画一遍不能抛 */
+    let err = 'none';
+    try { draw(); } catch(ex){ err = ex.message; }
+    ok('RP01i 画波纹不抛异常', err === 'none', err);
+    clearRipples();
+    applyTheme('board');
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -54,6 +54,27 @@ const THEMES = {
       grid:  '#fbe6ee'
     }
   },
+  /* 水波：淡蓝浅色底。背景交给荡开的水纹（effect:'ripple'），
+     网格用点阵 —— 像水面上的小光点。 */
+  ripple: {
+    label: '水波',
+    grid: 'dots',
+    cursor: 'cross',
+    heart: false,
+    star: false,
+    effect: 'ripple',
+    /* 流动点也调成水色，慢一点、淡一点 */
+    flow: { color:'#7fc4e8', speed:44, gap:130, size:2, alpha:0.5 },
+    canvas: {
+      bg:    '#eaf6fd',      // 很淡的天蓝
+      white: '#2f566e',      // 正文：深蓝灰
+      yellow:'#1f8fd0',      // 主色：选中 / 强调
+      red:   '#e2574c',
+      gray:  '#7ba6bf',
+      dim:   '#c8e2f1',
+      grid:  '#d8ebf7'
+    }
+  },
   undertale: {
     label: 'Undertale',
     grid: 'lines',
@@ -158,7 +179,7 @@ function normalizeThemeObject(o, fallbackLabel){
   return out;
 }
 /* 内置主题的 id，用户主题不许占用 */
-const BUILTIN_THEME_IDS = new Set(['board', 'undertale', 'sakura']);
+const BUILTIN_THEME_IDS = new Set(['board', 'undertale', 'sakura', 'ripple']);
 function makeUserThemeId(){
   let id;
   do { id = 'u_' + Math.random().toString(36).slice(2, 8); } while (THEMES[id]);

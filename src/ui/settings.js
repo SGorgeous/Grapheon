@@ -82,7 +82,9 @@ function renderSettings(){
     renderSettings();
   });
   // 背景特效开关（目前只有樱花）
-  const hasFx = themeEffect() === 'sakura';
+  /* 有背景特效的主题都在这里 —— 樱花 / 水波 */
+const FX_THEMES = ['sakura', 'ripple'];
+const hasFx = FX_THEMES.indexOf(themeEffect()) >= 0;
   setFxEl.parentElement.style.display = hasFx ? 'flex' : 'none';
   if (hasFx){
     buildOpts(setFxEl, [[true, '飘落的樱花'], [false, '关掉（省电）']], sakuraEnabled(), (v) => {

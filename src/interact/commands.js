@@ -12,6 +12,9 @@ function addNodeAt(text, x, y, shape){
   const n = { id:uid('n'), text:text || '', x, y, w:0, h:0, shape:shape || 'rect', collapsed:false, lines:[''] };
   doc.nodes.push(n);
   sizeNode(n);
+  /* 水波主题：新节点荡一圈。挂在 addNodeAt 是因为**所有**新建最后都走这儿；
+     尺寸等一帧才稳，所以真正的取中心在 rippleOnNewNode 里延后一帧。 */
+  if (typeof rippleOnNewNode === 'function') rippleOnNewNode(n);
   return n;
 }
 /* aPort / bPort 是端点 id：给了就把这条边钉死在那个端点上。
@@ -816,6 +819,18 @@ const clearDocStack = () => { docStack = []; };
 /* =========================================================================
    变量定义节点 / 运算符节点 / 函数分组
    ========================================================================= */
+/* 水波主题：新节点荡一圈。所有「新建节点」最后都会经过 addNodeAt，
+   所以在 addNodeAt 里挂钩最省事 —— 但那时还没有尺寸，
+   所以用 requestAnimationFrame 等一帧再取中心。 */
+function rippleOnNewNode(n){
+  if (typeof pushRipple !== 'function' || !n) return;
+  const fire = () => {
+    const b = (typeof nodeBox === 'function') ? nodeBox(n) : null;
+    const cx = b ? b.x + b.w / 2 : n.x, cy = b ? b.y + b.h / 2 : n.y;
+    pushRipple(cx, cy, 'new');
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fire); else fire();
+}
 function addVarNode(name, x, y, opts){
   const n = addNodeAt('', x, y, 'rect');
   n.kind = 'var';

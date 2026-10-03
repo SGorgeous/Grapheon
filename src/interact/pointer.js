@@ -105,6 +105,8 @@ canvas.addEventListener('pointerdown', (ev) => {
     mark();
     return;
   }
+  /* 水波主题：点哪儿荡哪儿 */
+  if (typeof pushRipple === 'function') pushRipple(p.x, p.y, 'tap');
   const n = hitNode(p);
   // 变量节点上的勾选 / 滑条 / 开关：先吃掉这次按下，别启动拖动
   if (n && !isHidden(n.id) && n.kind === 'var'){
@@ -187,6 +189,11 @@ window.addEventListener('pointermove', (ev) => {
       if (sn && setSliderFromPointer(sn, p) != null) drag.moved = true;
       mark();
     } else if (drag.mode === 'node' || drag.mode === 'group'){
+    /* 水波主题：拖节点时跟着荡一串（dragRipple 内部按距离节流） */
+    if (drag.mode === 'node' && typeof dragRipple === 'function'){
+      const nn = byId(drag.targetId);
+      if (nn) dragRipple(nn.x + nn.w / 2, nn.y + nn.h / 2);
+    }
       // 节点和分组走同一套：快照 + 位移，整个选择（节点 + 分组，分组递归带后代）一起走
       const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
@@ -248,6 +255,7 @@ window.addEventListener('pointermove', (ev) => {
 window.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   const p = s2w(ev.clientX, ev.clientY);
+  void p;
   if ((drag.mode === 'node' || drag.mode === 'group') && drag.moved){
     // 顺序要紧：先按中心位置同步成员关系（拖出去的就不算成员了），
     // 再让框长大到装得下剩下的成员。反过来的话，刚被移出的节点会把框撑大。
@@ -266,7 +274,7 @@ window.addEventListener('pointerup', (ev) => {
     const ownerId = drag.node.id;
     const tgt = (typeof linkTargetAt === 'function') ? linkTargetAt(p) : null;
     if (tgt && tgt.id !== ownerId && !isEmbed(byId(ownerId))){
-      drag = null; mark();
+      drag = null; if (typeof resetDragRipple === 'function') resetDragRipple(); mark();
       const tn2 = idx.byId.get(tgt.id);
       const tp2 = (tn2 && typeof portIdAtPoint === 'function') ? portIdAtPoint(p, tn2) : null;
       const e = linkNodes(ownerId, tgt.id, null, tp2 ? tp2.id : null);
@@ -281,14 +289,14 @@ window.addEventListener('pointerup', (ev) => {
       say('* ' + tagOf(byId(drag.targetId)) + '的端点 #' + drag.portId + ' 挪到了'
         + ({ t:'上边', b:'下边', l:'左边', r:'右边' })[p2 ? p2.side : 'r'] + '。');
     }
-    drag = null;
+    drag = null; if (typeof resetDragRipple === 'function') resetDragRipple();
     mark();
     return;
   } else if (drag.mode === 'slider'){
     const sn = byId(drag.targetId);
     if (sn) say('* 「' + normalizeVarDef(sn.varDef).name + '」= ' + controlValue(sn.varDef) + '。');
     if (drag.moved) pushHist();
-    drag = null;
+    drag = null; if (typeof resetDragRipple === 'function') resetDragRipple();
     mark();
     return;
   } else if (drag.mode === 'resize' && drag.moved){
@@ -368,7 +376,7 @@ window.addEventListener('pointerup', (ev) => {
     }
     if (e) selEdgeId = e.id;
   }
-  drag = null; marquee = null; linking = null; relink = null; mark();
+  drag = null; if (typeof resetDragRipple === 'function') resetDragRipple(); marquee = null; linking = null; relink = null; mark();
 });
 
 canvas.addEventListener('dblclick', (ev) => {
@@ -454,7 +462,7 @@ canvas.addEventListener('contextmenu', (ev) => {
 });
 
 window.addEventListener('blur', () => {
-  drag = null; marquee = null; linking = null; relink = null; mark();
+  drag = null; if (typeof resetDragRipple === 'function') resetDragRipple(); marquee = null; linking = null; relink = null; mark();
 });
 
 /* =========================================================================

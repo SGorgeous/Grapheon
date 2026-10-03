@@ -26,6 +26,9 @@ function draw(){
   ctx.translate(view.x, view.y);
   ctx.scale(view.z, view.z);
   drawGraph(ctx);
+  /* ★ 波纹画在**世界坐标**里（translate/scale 之内）——
+     平移画布时它跟着内容走，像印在水面上。 */
+  if (typeof drawRipples === 'function') drawRipples(ctx);
   ctx.restore();
   drawMarquee();
   positionEditor();
