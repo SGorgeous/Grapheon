@@ -132,8 +132,12 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 }
 /* 参数面板的标题收小：它不该比内容还抢眼 */
 #exp h2,#edgebox h2,#endbox h2,#nodebox h2{margin:0 0 10px;font-size:18px;letter-spacing:1px;color:var(--g)}
-#exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-#exp .lab,#edgebox .lab,#endbox .lab,#nodebox .lab{width:110px;flex:none;color:var(--g)}
+/* 行距也收一点：14px × 十行就是 140px 的空 */
+#exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+/* 标签列收窄：110px 十行下来，左边空出一大片，右边内容反被挤 */
+#exp .lab,#edgebox .lab,#endbox .lab,#nodebox .lab{
+  width:60px;flex:none;color:var(--g);font-size:14px;
+}
 #exp .ext{color:var(--g)}
 .ud-input{
   flex:1;min-width:0;background:var(--bg);color:var(--y);border:3px solid var(--w);
@@ -196,12 +200,14 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 }
 #nodebox .sub{color:var(--g);margin:-8px 0 14px}
 #nodebox .opts{flex:1;min-width:0;display:flex;gap:18px;flex-wrap:wrap}
-#nodebox .swatches{flex:1;min-width:0;display:flex;gap:10px;flex-wrap:wrap}
+/* 色板：原来 30×26、间距 10，十个方块一行放不下。
+   收成 18×18、间距 6 —— 一行正好十个，一眼看全。 */
+#nodebox .swatches,#set .swatches{flex:1;min-width:0;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .sw{
-  width:30px;height:26px;border:3px solid var(--d);cursor:none;box-sizing:border-box;
+  width:18px;height:18px;border:2px solid var(--d);cursor:none;box-sizing:border-box;
 }
 .sw:hover{border-color:var(--y)}
-.sw.on{border-color:var(--y);outline:3px solid var(--y);outline-offset:1px}
+.sw.on{border-color:var(--y);outline:2px solid var(--y);outline-offset:1px}
 .sw-auto{background:var(--bg);position:relative}
 .sw-auto::after{
   content:"—";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;

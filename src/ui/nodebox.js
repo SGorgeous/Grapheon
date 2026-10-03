@@ -174,16 +174,20 @@ function renderNodeBox(){
   buildOpts(nbFontEl, Object.keys(NODE_FONTS).map(k => [k, NODE_FONT_LABEL[k]]), effFont(n) || 'auto', (v) => { setNodeStyle(n, { font: v }); afterNodeEdit(); });
   buildSwatches(nbColorEl, effColor(n), (v) => { setNodeStyle(n, { color: v }); afterNodeEdit(); });
   buildSwatches(nbBorderEl, effBorder(n), (v) => { setNodeStyle(n, { border: v }); afterNodeEdit(); });
-  /* 「尺寸」那行本来只写一句「拖节点右下角手柄可改尺寸」——
-     那不是控件，是提示。挪进悬停提示，别占一行。 */
+  /* 「尺寸」那行大多数时候**没有可操作的东西** —— 要么只有一句
+     「拖节点右下角手柄可改尺寸」的说明（那不是控件），
+     要么有个「恢复自适应尺寸」按钮。没按钮就把整行收掉，别白占一行。
+     说明本身挂到悬停提示上。 */
   nbSizeEl.title = '拖节点右下角的手柄可以改尺寸';
   nbSizeEl.innerHTML = '';
+  const sizeRow = nbSizeEl.parentElement;
   if (n.fixedW || n.fixedH){
+    if (sizeRow) sizeRow.style.display = '';
     const d = el('div', 'opt on', '<span class="hrt"></span><span>恢复自适应尺寸</span>');
     d.onclick = () => { autoSizeNode(n); afterNodeEdit(); };
     nbSizeEl.appendChild(d);
-  } else {
-    nbSizeEl.appendChild(el('div', 'opt off', '<span class="hrt"></span><span>拖节点右下角手柄可改尺寸</span>'));
+  } else if (sizeRow){
+    sizeRow.style.display = 'none';
   }
 
   // ---- 这个节点身上叠了哪些算符 ----
