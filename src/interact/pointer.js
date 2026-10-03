@@ -110,7 +110,14 @@ canvas.addEventListener('pointerdown', (ev) => {
   const n = hitNode(p);
   // 变量节点上的勾选 / 滑条 / 开关：先吃掉这次按下，别启动拖动
   if (n && !isHidden(n.id) && n.kind === 'var'){
-    const ctl = hitVarControl(n, p);
+    /* ★ 多变量节点：先看点在**哪一行**上，把编辑下标切过去 ——
+     不然点第二行改的还是第一行。 */
+  if (typeof varRowAt === 'function' && typeof nodeVarDefs === 'function'
+      && nodeVarDefs(n).length > 1){
+    const ri = varRowAt(n, p);
+    if (ri >= 0 && ri !== varEditIndexFor(n)) setVarEditIndex(ri);
+  }
+  const ctl = hitVarControl(n, p);
     if (ctl){
       selectOnly(n.id);
       if (ctl.kind === 'check'){ toggleCheckOption(n, ctl.index); pushHist(); return; }

@@ -396,9 +396,13 @@ function drawEmbedNode(g, n, b, selected, hov){
    两个都是「框里有框」：描述在左上角，下面一排小框。
    这里算出来的方框几何，绘制和命中测试共用，不会打架。 */
 function varBoxes(n){
-  const b = nodeBox(n);
-  return varLayout(b, n.varDef, Math.max(1, n.lines.length) * n.lh);
+  /* ★ 走 varLayoutsFor：单变量时它就是 varLayout(b, n.varDef, …)，
+     多变量时给第一行的 —— 老调用点（命中、滑条取值）行为不变。 */
+  const rows = varLayoutsFor(n);
+  return rows[0].L;
 }
+/* 多变量：每一行的框，按行序 */
+function varBoxesAll(n){ return varLayoutsFor(n).map(r => r.L); }
 function opBoxes(n){
   const b = nodeBox(n);
   // 手动拉高过：把多出来的高度摊给算符框和运算值框 —— 内部 UI 跟着拉伸
@@ -606,8 +610,19 @@ function drawWifiIcon(g, x, y, size, color){
   g.restore();
 }
 function drawVarNode(g, n, b, selected, hov){
-  const v = varDefOf(n);
-  const L = varBoxes(n);
+  const rows = varLayoutsFor(n);
+  /* 多个变量时逐行画。单变量 rows 只有一项，走的就是原来那条路。 */
+  if (rows.length > 1){
+    for (let i = 0; i < rows.length; i++) drawVarRow(g, n, b, rows[i], i, selected, hov);
+    g.save();
+    g.lineWidth = 3;
+    g.strokeStyle = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
+    g.strokeRect(b.x, b.y, b.w, b.h);
+    g.restore();
+    return;
+  }
+  const v = rows[0].def;
+  const L = rows[0].L;
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
   g.save();
   g.fillStyle = C.bg;
@@ -650,6 +665,34 @@ function drawVarNode(g, n, b, selected, hov){
   g.lineWidth = 3; g.strokeStyle = stroke;
   g.strokeRect(b.x, b.y, b.w, b.h);
   g.restore();
+}
+/* 多变量：画**一行**变量（名字格 + 控件 + 作用域那行）。
+   标题行和节点外框不在这里 —— 那是整节点的事。 */
+function drawVarRow(g, n, b, row, idx, selected, hov){
+  const v = row.def, L = row.L;
+  /* 正在编辑的那一行垫一层淡底，一眼看出改的是哪个。
+     用中性灰：写死成 rgba(255,255,255,…) 的话，浅色主题下完全看不见。 */
+  const cur = (typeof varEditIndexFor === 'function') && varEditIndexFor(n) === idx;
+  if (cur){
+    g.save();
+    g.fillStyle = 'rgba(128,128,128,.14)';
+    g.fillRect(Math.round(b.x + 2), Math.round(L.nameBox.y - 6),
+               Math.round(b.w - 4), Math.round(L.scopeBox.y + L.scopeBox.h - L.nameBox.y + 12));
+    g.restore();
+  }
+  drawField(g, L.nameBox, v.name, C.yellow);
+  if (v.control === 'check')       drawCheckControl(g, L, v);
+  else if (v.control === 'list')   drawListControl(g, L, v, n.id);
+  else if (v.control === 'map')    drawMapControl(g, L, v, n.id);
+  else if (v.control === 'slider') drawSliderControl(g, L, v, n);
+  else if (v.control === 'switch') drawSwitchControl(g, L, v);
+  else drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
+  setFont(g, FS, 'normal', FONT);
+  g.fillStyle = C.gray;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(varScopeText(v), L.scopeBox.x, L.scopeBox.y + L.scopeBox.h / 2);
+  void selected; void hov;
 }
 function drawOpNode(g, n, b, selected, hov){
   const od = normalizeOpDef(n.opDef);

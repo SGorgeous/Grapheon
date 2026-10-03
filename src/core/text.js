@@ -88,7 +88,8 @@ function sizeVarNode(n){
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
   // ★ fixedH：手动拉过高度就听它的（内部几行由 varLayout 摊开）
-  const natH = Math.round(varLayout({ x:0, y:0, w:n.w }, v, n.lines.length * n.lh).height);
+  /* ★ 多变量时按「每行叠起来」算高；单变量时 varLayoutsHeight 走的就是原来那条 */
+  const natH = Math.round(varLayoutsHeight(n));
   n.h = (+n.fixedH > 0) ? Math.max(natH, Math.round(+n.fixedH)) : natH;
 }
 /* 运算符节点：左上角描述 + 中间「算符 运算值」 */

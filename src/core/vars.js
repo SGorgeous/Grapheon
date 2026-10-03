@@ -1111,6 +1111,56 @@ function varLayout(box, varDef, lineH){
   }
   return R;
 }
+/* =========================================================================
+   多变量节点的布局 —— **唯一的出处**。
+   尺寸、绘制、命中全调它，免得三处各算一套、慢慢漂开。
+
+   只有一个变量时直接返回 varLayout 的结果（就是原来那一条），
+   所以单变量的节点：尺寸、长相、命中区域**分毫不变**。
+   ========================================================================= */
+const VAR_ROW_GAP = 6;
+
+/* 每一行的「行高」（不含标题行）：本体 + 作用域那一条 + 上下留白 */
+function varRowHeight(L, lineH){ return 8 + lineH + L.bodyH + 8 + L.scopeBox.h + 6; }
+
+function varLayoutsFor(n){
+  const b = nodeBox(n);
+  const defs = nodeVarDefs(n);
+  const lineH = Math.max(1, n.lines.length) * n.lh;
+  const list = defs.length ? defs : [normalizeVarDef(null)];
+  /* ★ 单变量：原样返回，一个字节都不变 */
+  if (list.length === 1) return [{ def:list[0], L:varLayout(b, list[0], lineH), first:true }];
+  const out = [];
+  let y = b.y + 8 + lineH;                       // 标题行下面开始叠
+  for (let i = 0; i < list.length; i++){
+    const L = varLayout({ x:b.x, y, w:b.w, h:0 }, list[i], 0);
+    out.push({ def:list[i], L, first:(i === 0) });
+    y += varRowHeight(L, 0) + VAR_ROW_GAP;
+  }
+  return out;
+}
+/* 多变量时的自然高度（单变量走原来的） */
+function varLayoutsHeight(n){
+  const b = nodeBox(n);
+  const defs = nodeVarDefs(n);
+  const lineH = Math.max(1, n.lines.length) * n.lh;
+  if (defs.length <= 1) return varLayout({ x:0, y:0, w:b.w }, defs[0], lineH).height;
+  let total = 8 + lineH;
+  for (const d of defs) total += varRowHeight(varLayout({ x:0, y:0, w:b.w, h:0 }, d, 0), 0) + VAR_ROW_GAP;
+  return total + 4;
+}
+/* 这个世界坐标落在第几行变量上？命中测试用 */
+function varRowAt(n, p){
+  const rows = varLayoutsFor(n);
+  for (let i = 0; i < rows.length; i++){
+    const L = rows[i].L;
+    const top = L.nameBox.y - 8;
+    const bot = L.scopeBox.y + L.scopeBox.h + 8;
+    if (p.y >= top && p.y <= bot) return i;
+  }
+  return -1;
+}
+
 /* 滑条：世界坐标 → 值 */
 function sliderValueAt(n, worldX){
   const L = varBoxes(n);
