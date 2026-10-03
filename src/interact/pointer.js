@@ -22,6 +22,32 @@ canvas.addEventListener('pointerdown', (ev) => {
 
   if (ev.button === 1){ drag = { mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y }; return; }
 
+  // 变量节点每行右侧的 +/-：也在节点**外面**，同样得先判
+  {
+    const vb = (typeof hitVarButton === 'function') ? hitVarButton(p) : null;
+    if (vb){
+      const nv = vb.node;
+      selectOnly(nv.id);
+      if (vb.action === 'add'){
+        pushHist();
+        /* 插在这一行**后面**（和表格的「在下方插一行」一个意思） */
+        const at = addVarDefTo(nv, { control:'plain', value:'0' }, vb.index + 1);
+        setVarEditIndex(at);                  // 选中新加的那个
+        reindex(); sizeAll(); mark(); renderNodeBox();
+        say('* 「' + tagOf(nv) + '」加了一个变量，现在共 ' + nodeVarDefs(nv).length + ' 个。');
+      } else {
+        pushHist();
+        if (!delVarDefFrom(nv, vb.index)){
+          say('* 一个变量节点至少要留一个变量。');
+        } else {
+          reindex(); sizeAll(); mark(); renderNodeBox();
+          say('* 「' + tagOf(nv) + '」删掉了一个变量，还剩 ' + nodeVarDefs(nv).length + ' 个。');
+        }
+      }
+      return;
+    }
+  }
+
   // 表格节点右下角那对加号：在节点**外面**，得先判
   const tb = (typeof hitTableButton === 'function') ? hitTableButton(p) : null;
   if (tb){

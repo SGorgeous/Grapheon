@@ -10158,6 +10158,86 @@
     try { localStorage.removeItem('grapheon.keymap.v2'); localStorage.removeItem('grapheon.keymap.v1'); } catch(e){}
     GP.keys.reset();
   });
+
+  T('MV10 变量节点每行的 +/- 按钮', () => {
+    fresh();
+    const press = (wp) => {
+      const s = w2s(wp);
+      const xy = { clientX:Math.round(s.x), clientY:Math.round(s.y), bubbles:true, cancelable:true,
+                   pointerId:1, pointerType:'mouse', isPrimary:true };
+      cv.dispatchEvent(new PointerEvent('pointerdown', Object.assign({ button:0, buttons:1 }, xy)));
+      /* ★ 必须补一个 pointerup —— 只发 down 的话会留下一个「进行中的拖拽」，
+         污染后面的用例（实测把 X02d 那条端口圆点的断言弄红了）。 */
+      cv.dispatchEvent(new PointerEvent('pointerup', Object.assign({ button:0, buttons:0 }, xy)));
+      if (editing) cancelEdit();
+      reindex(); sizeAll();
+    };
+    const n = addNodeAt('设置', 0, 0, 'round');
+    n.kind = 'var';
+    n.varDefs = [ { name:'甲', control:'plain', value:'1' }, { name:'乙', control:'plain', value:'2' } ];
+    reindex(); sizeAll();
+    selectOnly(n.id);
+    const names = () => nodeVarDefs(byId(n.id)).map(d => d.name).join(',');
+
+    /* 布局 */
+    const btns = varRowButtons(byId(n.id));
+    ok('MV10 两行 → 四个按钮（每行 + 和 −）', btns.length === 4, String(btns.length));
+    const b0 = nodeBox(byId(n.id));
+    ok('MV10b ★ 按钮都在节点**外面**（右侧），不改内部布局',
+      btns.every(x => x.box.x > b0.x + b0.w - 1),
+      JSON.stringify(btns.map(x => Math.round(x.box.x - (b0.x + b0.w)))));
+    ok('MV10c 每行的按钮 y 不一样', btns[0].box.y !== btns[2].box.y,
+      btns[0].box.y + ' / ' + btns[2].box.y);
+    /* 命中：只在选中 / 悬停时才算 */
+    ok('MV10d ★ 命中第 0 行的 ＋',
+      (() => { const h = hitVarButton({ x:btns[1].box.x + 7, y:btns[1].box.y + 7 });
+               return h && h.action + '/' + h.index; })() === 'add/0', '');
+    ok('MV10e ★ 命中第 0 行的 －',
+      (() => { const h = hitVarButton({ x:btns[0].box.x + 7, y:btns[0].box.y + 7 });
+               return h && h.action + '/' + h.index; })() === 'del/0', '');
+    selectOnly(null); hover = null;
+    ok('MV10f ★ 没选中也没悬停时不命中（不然画布上到处是隐形按钮）',
+      hitVarButton({ x:btns[1].box.x + 7, y:btns[1].box.y + 7 }) === null);
+    /* 点 ＋：插在这一行**后面** */
+    selectOnly(n.id);
+    press({ x:btns[1].box.x + 7, y:btns[1].box.y + 7 });
+    ok('MV10g ★ 点第 0 行的 ＋ → 插在第 0 行**后面**',
+      names() === '甲,变量3,乙', names());
+    /* 点最后一行的 ＋：追加到末尾 */
+    selectOnly(n.id);
+    {
+      const b = varRowButtons(byId(n.id));
+      const add2 = b.find(x => x.index === 2 && x.action === 'add');
+      press({ x:add2.box.x + 7, y:add2.box.y + 7 });
+    }
+    ok('MV10h 点最后一行的 ＋ → 追加到末尾', names() === '甲,变量3,乙,变量4', names());
+    /* 点中间的 －：只删那一个 */
+    selectOnly(n.id);
+    {
+      const b = varRowButtons(byId(n.id));
+      const del1 = b.find(x => x.index === 1 && x.action === 'del');
+      press({ x:del1.box.x + 7, y:del1.box.y + 7 });
+    }
+    ok('MV10i ★ 点中间的 － → 只删那一个', names() === '甲,乙,变量4', names());
+    /* 只剩一个时，－ 被拒 */
+    while (nodeVarDefs(byId(n.id)).length > 1) delVarDefFrom(byId(n.id), 1);
+    reindex(); sizeAll(); selectOnly(n.id);
+    {
+      const one = varRowButtons(byId(n.id));
+      press({ x:one[0].box.x + 7, y:one[0].box.y + 7 });
+    }
+    ok('MV10j ★ 只剩一个时 － 被拒绝', nodeVarDefs(byId(n.id)).length === 1,
+      String(nodeVarDefs(byId(n.id)).length));
+    /* 单变量节点：也有一对按钮，形态没变 */
+    const solo = addVarNode('单价', 800, 0, { name:'单价', control:'plain', value:'9' });
+    reindex(); sizeAll();
+    ok('MV10k 单变量节点也有一对按钮', varRowButtons(solo).length === 2, String(varRowButtons(solo).length));
+    const bs = nodeBox(solo);
+    ok('MV10l 单变量：按钮同样在节点外，节点尺寸没受影响',
+      varRowButtons(solo).every(x => x.box.x > bs.x + bs.w - 1), '');
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

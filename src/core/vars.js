@@ -220,13 +220,18 @@ function setVarDefAt(n, patch, i){
   return defs[k];
 }
 /* 加一个变量，返回它的下标（并把它设为正在编辑的） */
-function addVarDefTo(n, opts){
+/* at 给了就**插在那个位置**（节点上每一行的 ＋ 就是这么用的：
+   点第 i 行的 ＋，新变量插到第 i 行**后面**）。
+   不传还是追加到末尾 —— 老调用点行为不变。 */
+function addVarDefTo(n, opts, at){
   const defs = nodeVarDefs(n);
   if (!defs.length) defs.push(normalizeVarDef(null));
-  defs.push(normalizeVarDef(Object.assign({ name:'变量' + (defs.length + 1) }, opts || {})));
+  const d = normalizeVarDef(Object.assign({ name:'变量' + (defs.length + 1) }, opts || {}));
+  const i = (at == null) ? defs.length : Math.max(0, Math.min(Math.floor(at), defs.length));
+  defs.splice(i, 0, d);
   writeVarDefs(n, defs);
-  varEditIdx = defs.length - 1;
-  return defs.length - 1;
+  varEditIdx = i;
+  return i;
 }
 /* 删掉第 i 个；至少留一个。返回是否删掉了 */
 function delVarDefFrom(n, i){
@@ -1170,6 +1175,59 @@ function varRowIndexAt(n, p){
   if (rows.length <= 1) return 0;
   const i = varRowAt(n, p);
   return i >= 0 ? i : varEditIndexFor(n);
+}
+
+/* =========================================================================
+   变量节点每一行右侧的 +/− 按钮 —— 和表格节点一个模式。
+   放在节点**外面**：不改内部布局，单变量节点的形态因此分毫不变。
+   ========================================================================= */
+const VAR_BTN = 15, VAR_BTN_GAP = 6, VAR_BTN_SP = 2;
+const inBtnBox = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
+function varRowButtons(n){
+  if (!isVarNode(n)) return [];
+  const rows = varLayoutsFor(n);
+  const b = nodeBox(n);
+  const s = VAR_BTN, out = [];
+  const half = s / 2 + VAR_BTN_SP / 2;
+  for (let i = 0; i < rows.length; i++){
+    const L = rows[i].L;
+    const cy = L.nameBox.y + L.nameBox.h / 2;
+    const cx = b.x + b.w + VAR_BTN_GAP + s / 2;
+    out.push({ index:i, action:'del', box:{ x:cx - s / 2, y:cy - half - s / 2, w:s, h:s } });
+    out.push({ index:i, action:'add', box:{ x:cx - s / 2, y:cy + half - s / 2, w:s, h:s } });
+  }
+  return out;
+}
+/* 命中：返回 { node, index, action } 或 null。
+   只在选中 / 悬停时才算 —— 和表格按钮一样的规矩。 */
+function hitVarButton(p){
+  for (const n of doc.nodes){
+    if (!isVarNode(n) || isHidden(n.id)) continue;
+    if (!(typeof portsShowLabel === 'function' && portsShowLabel(n))) continue;
+    for (const btn of varRowButtons(n)){
+      if (inBtnBox(btn.box, p)) return { node:n, index:btn.index, action:btn.action };
+    }
+  }
+  return null;
+}
+function drawVarButtons(g, n, color){
+  g.save();
+  g.lineWidth = 2.2;
+  g.lineCap = 'round';
+  for (const btn of varRowButtons(n)){
+    const box = btn.box;
+    g.fillStyle = C.bg;
+    g.fillRect(box.x, box.y, box.w, box.h);
+    g.strokeStyle = (btn.action === 'del') ? (C.dim || color) : color;
+    g.strokeRect(box.x, box.y, box.w, box.h);
+    const mx = box.x + box.w / 2, my = box.y + box.h / 2, r = box.w * 0.22;
+    g.beginPath();
+    g.moveTo(mx - r, my); g.lineTo(mx + r, my);                        // 两个都画横
+    if (btn.action === 'add'){ g.moveTo(mx, my - r); g.lineTo(mx, my + r); }   // 加号才加竖
+    g.stroke();
+  }
+  g.restore();
 }
 
 /* 这个世界坐标落在第几行变量上？命中测试用 */

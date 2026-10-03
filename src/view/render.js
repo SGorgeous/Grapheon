@@ -620,6 +620,8 @@ function drawVarNode(g, n, b, selected, hov){
     g.fillRect(b.x, b.y, b.w, b.h);
     g.restore();
     for (let i = 0; i < rows.length; i++) drawVarRow(g, n, b, rows[i], i, selected, hov);
+    /* 每行右侧的 +/−（和表格节点一样，只在选中或悬停时出现） */
+    if (selected || hov) drawVarButtons(g, n, C.yellow);
     g.save();
     g.lineWidth = 3;
     g.strokeStyle = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
@@ -660,6 +662,8 @@ function drawVarNode(g, n, b, selected, hov){
   else if (v.control === 'slider') drawSliderControl(g, L, v, n);
   else if (v.control === 'switch') drawSwitchControl(g, L, v);
   else drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
+  /* 单变量时也画 —— 有了它，加第二个变量不用先开面板 */
+  if (selected || hov) drawVarButtons(g, n, C.yellow);
   // 作用域 + 控件类型
   setFont(g, FS, 'normal', FONT);
   g.fillStyle = C.gray;
