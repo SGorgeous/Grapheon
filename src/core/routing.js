@@ -199,10 +199,45 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
     if (!best || score < best.score) best = { score, A, B, ka:x, kb:y };
   }
   const A = best.A, B = best.B;
+
+  /* ★ 出桩长度要按**可用跨度**收短 —— 这是「线穿过自己」的根因。
+     两根桩各走 STUB(22)。两个盒子挨得近时 p1 会越过 p2 ——
+     走廊宽度变成负数，折线只能折回来，而折回的那一段
+     正好落在对方（或自己）的盒子里。
+     主流正交走线的做法就是这个：空隙不够就不收桩，
+     直接走一个贴边的 L / Z，而不是先冲进去再折回来。 */
+  const MIN_CORR = 10;                       // 中间至少留这么宽的走廊
+  let stubA = STUB, stubB = STUB;
+  if (A.d[0] !== 0 && B.d[0] !== 0){
+    /* 两端都横向：沿 A 的朝向看，从 A 的边到 B 的边还有多少路 */
+    const span = (B.x - A.x) * A.d[0];
+    /* ★ span <= 0 表示目标在**背后**（端点背着目标）——
+       这种时候桩绝对不能收：收成 0 就成了「从端点上直接掉头穿回去」，
+       比原来的折返还难看。背后绕行交给下面那几条 PAD2 候选去办。 */
+    if (span > 0 && span < stubA + stubB + MIN_CORR){
+      const avail = Math.max(0, span - MIN_CORR);
+      stubA = Math.min(STUB, avail / 2);
+      stubB = Math.min(STUB, avail / 2);
+    }
+  } else if (A.d[1] !== 0 && B.d[1] !== 0){
+    const span = (B.y - A.y) * A.d[1];
+    if (span > 0 && span < stubA + stubB + MIN_CORR){
+      const avail = Math.max(0, span - MIN_CORR);
+      stubA = Math.min(STUB, avail / 2);
+      stubB = Math.min(STUB, avail / 2);
+    }
+  } else {
+    /* 一横一竖：横向那根桩别伸过对方的边 */
+    if (A.d[0] !== 0) stubA = Math.min(STUB, Math.max(0, Math.abs(B.x - A.x) - MIN_CORR));
+    if (B.d[0] !== 0) stubB = Math.min(STUB, Math.max(0, Math.abs(A.x - B.x) - MIN_CORR));
+    if (A.d[1] !== 0) stubA = Math.min(STUB, Math.max(0, Math.abs(B.y - A.y) - MIN_CORR));
+    if (B.d[1] !== 0) stubB = Math.min(STUB, Math.max(0, Math.abs(A.y - B.y) - MIN_CORR));
+  }
+
   const p0 = { x:A.x, y:A.y };
-  const p1 = { x:A.x + A.d[0] * STUB, y:A.y + A.d[1] * STUB };
+  const p1 = { x:A.x + A.d[0] * stubA, y:A.y + A.d[1] * stubA };
   const p3 = { x:B.x, y:B.y };
-  const p2 = { x:B.x + B.d[0] * STUB, y:B.y + B.d[1] * STUB };
+  const p2 = { x:B.x + B.d[0] * stubB, y:B.y + B.d[1] * stubB };
   const h1 = A.d[0] !== 0, h2 = B.d[0] !== 0;
   /* 给一个走廊偏移，造出这条折线。避让只动中间那一段 ——
      两端 p0→p1、p2→p3 是端点朝外的固定短桩，永远不变，
@@ -293,7 +328,12 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
     if (m >= 2){
       const a2 = clean[m - 2];
       const cross = (p.x - a2.x) * (q.y - a2.y) - (p.y - a2.y) * (q.x - a2.x);
-      if (Math.abs(cross) < 0.5){ clean[m - 1] = q; continue; }
+      /* ★ 必须是**方向一致**才合并。
+         三点共线但中间那个是「掉头」（p 在 a2 和 q 之间折返）时，
+         吃掉它等于把折返拉直 —— 线就切进盒子里了。
+         判据：a2→q 的向量和 a2→p 的向量同向（点积 > 0）。 */
+      const dot = (q.x - a2.x) * (p.x - a2.x) + (q.y - a2.y) * (p.y - a2.y);
+      if (Math.abs(cross) < 0.5 && dot > 0){ clean[m - 1] = q; continue; }
     }
     clean.push(q);
   }
