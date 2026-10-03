@@ -47,6 +47,19 @@
   </div>
 </div>
 
+<div id="numbox" class="ud">
+  <div class="sub" id="numboxWho">数值</div>
+  <div class="numboxrow">
+    <input id="numboxRange" type="range">
+    <input id="numboxText" type="text" spellcheck="false" autocomplete="off">
+  </div>
+  <div class="sub" id="numboxHint"></div>
+  <div class="row numboxbtns">
+    <button class="ud-btn" id="numboxOk">确定</button>
+    <button class="ud-btn" id="numboxClear">用默认</button>
+    <button class="ud-btn" id="numboxCancel">取消</button>
+  </div>
+</div>
 <div id="ported" class="ud">
   <div class="sub" id="portedWho">端点</div>
   <div class="row"><span class="lb">ID</span><input id="portedId" type="text" inputmode="numeric"></div>
@@ -503,6 +516,7 @@
 <script src="src/interact/pointer.js"></script>
 <script src="src/interact/keys.js"></script>
 <script src="src/ui/dialogue.js"></script>
+<script src="src/ui/numbox.js"></script>
 <script src="src/ui/menu.js"></script>
 <script src="src/ui/help.js"></script>
 <script src="src/ui/logbox.js"></script>

@@ -349,6 +349,32 @@ function showCtx(x, y, n, e, info){
     struct.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Tab', () => toggleCollapseOf(n)]);
     items.push(['结构', '子节点 / 兄弟 / 分组 / 折叠', null, struct]);
 
+    /* ---------------- 布局 ▶（第一步：先放优先级）----------------
+       第二步会把组件面板里的「外观 / 行为」那几项也搬过来，并按分类排好。 */
+    {
+      const prio = (n.priority == null || n.priority === '') ? '' : String(n.priority);
+      items.push(['布局', '优先级：数值越大越先算', null, [
+        ['优先级…', prio === '' ? '默认（变量 1000 / 输出 900 / 运算 100）' : ('现在 ' + prio),
+          () => openNumBox({
+            title:'优先级', who:tagOf(n),
+            hint:'拖滑条快速试，或直接填精确值。留空 = 用默认（变量 1000 / 输出 900 / 运算 100 / 其余 0）；也可以填 {变量}。',
+            /* ★ step 用 1 不用 10：range 会把程序设的值吸附到步长上，
+               填 1234 却显示 1230 会让人以为没填进去（存是存对了）。
+               既然要「也能精确填空」，就给到 1。 */
+            min:0, max:2000, step:1, value:prio,
+            onOk: (v) => {
+              /* ★ 纯数字要存成**数字** —— priorityOf 只看 typeof === 'number'，
+                 存成字符串 "500" 会走表达式那条路。 */
+              const num = /^-?d+(.d+)?$/.test(v) ? Number(v) : null;
+              n.priority = (v === '') ? null : (num == null ? v : num);
+              reindex(); sizeAll(); pushHist(); mark();
+              say('* ' + tagOf(n) + '的优先级改为 ' + (v === '' ? '默认' : v)
+                + '（生效值 ' + priorityOf(n) + '）。');
+            }
+          })]
+      ]]);
+    }
+
     /* ---------------- 表格 ▶（只有表格节点才有）---------------- */
     if (isTableNode(n)){
       const tt = tableOf(n);

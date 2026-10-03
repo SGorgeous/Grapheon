@@ -10519,6 +10519,116 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('NM01 数值小浮层：滑条 + 填空双向联动', () => {
+    fresh();
+    const el = (id) => document.getElementById(id);
+    const n = addNodeAt('甲', 0, 0, 'round');
+    reindex(); sizeAll();
+
+    ok('NM01 #numbox 这个浮层在', !!el('numbox'));
+    /* ★ 这一组是**实际可见性**，不是内联样式 ——
+       我第一版就是只查了 el.style.display，于是漏掉了
+       「position 没设 → left/top 不生效 → 浮层躺在 (0,0) 还被画布盖住」。
+       计算样式 + 真实占位才抓得住这类问题。 */
+    ok('NM01a ★ 浮层是 fixed 定位（不是 static，否则 left/top 不生效）',
+      getComputedStyle(el('numbox')).position === 'fixed', getComputedStyle(el('numbox')).position);
+    ok('NM01a2 ★ 浮层有 z-index 且压得住画布',
+      parseInt(getComputedStyle(el('numbox')).zIndex || '0', 10) > 0,
+      getComputedStyle(el('numbox')).zIndex);
+    ok('NM01a3 ★ 没打开时计算样式就是 display:none（真的看不见，不只是内联）',
+      getComputedStyle(el('numbox')).display === 'none',
+      getComputedStyle(el('numbox')).display);
+    ok('NM01b 默认是藏着的', !numBoxOpen());
+    /* 打开 */
+    openNumBox({ title:'优先级', who:tagOf(byId(n.id)), min:0, max:2000, step:1, value:'',
+      onOk: (v) => { const num = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : null;
+        byId(n.id).priority = (v === '') ? null : (num == null ? v : num); reindex(); } });
+    ok('NM01c ★ 能打开', numBoxOpen());
+    ok('NM01c2 ★ 打开后计算样式是 block（真的显示出来了）',
+      getComputedStyle(el('numbox')).display === 'block', getComputedStyle(el('numbox')).display);
+    {
+      /* ★ 关键：left/top 有没有生效。position 没写对的话这里会是 (0,0)。 */
+      const r = el('numbox').getBoundingClientRect();
+      ok('NM01c3 ★ 占位跟上了 left/top（不是躺在 0,0）',
+        Math.abs(r.x - parseFloat(el('numbox').style.left)) < 2
+        && Math.abs(r.y - parseFloat(el('numbox').style.top)) < 2,
+        'rect ' + Math.round(r.x) + ',' + Math.round(r.y)
+        + '  style ' + el('numbox').style.left + ',' + el('numbox').style.top);
+      ok('NM01c4 ★ 有真实宽高（画得出来）', r.width > 100 && r.height > 40,
+        Math.round(r.width) + '×' + Math.round(r.height));
+      ok('NM01c5 ★ 落在视口里',
+        r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth + 1 && r.bottom <= window.innerHeight + 1,
+        Math.round(r.left) + ',' + Math.round(r.top) + ' → ' + Math.round(r.right) + ',' + Math.round(r.bottom));
+    }
+    ok('NM01d 标题带上是谁', el('numboxWho').textContent.indexOf('优先级') === 0, el('numboxWho').textContent);
+    ok('NM01e 滑条范围对', el('numboxRange').min === '0' && el('numboxRange').max === '2000',
+      el('numboxRange').min + '..' + el('numboxRange').max);
+    /* 拖滑条 → 文本跟着走 */
+    el('numboxRange').value = '500';
+    el('numboxRange').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('NM01f ★ 拖滑条 → 文本框跟着变', el('numboxText').value === '500', el('numboxText').value);
+    /* 填数字 → 滑条跟着走（step=1，不会吸附） */
+    el('numboxText').value = '1234';
+    el('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('NM01g ★ 填 1234 → 滑条也到 1234（step=1 不吸附）',
+      el('numboxRange').value === '1234', el('numboxRange').value);
+    /* 确定 → 存成数字 */
+    el('numboxOk').click();
+    ok('NM01h 确定之后浮层关了', !numBoxOpen());
+    ok('NM01h2 ★ 关掉后计算样式是 display:none（真的藏了）',
+      getComputedStyle(el('numbox')).display === 'none', getComputedStyle(el('numbox')).display);
+    ok('NM01i ★ 纯数字存成 number（priorityOf 只认 number）',
+      typeof byId(n.id).priority === 'number' && byId(n.id).priority === 1234,
+      typeof byId(n.id).priority + ' ' + byId(n.id).priority);
+    ok('NM01j ★ priorityOf 认它', priorityOf(byId(n.id)) === 1234, String(priorityOf(byId(n.id))));
+    /* 写 {变量} → 存成字符串，滑条不动 */
+    openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'',
+      onOk: (v) => { const num = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : null;
+        byId(n.id).priority = (v === '') ? null : (num == null ? v : num); reindex(); } });
+    el('numboxText').value = '{倍率}';
+    el('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('NM01k 非数字时滑条不动', el('numboxRange').value === '0', el('numboxRange').value);
+    el('numboxOk').click();
+    ok('NM01l ★ {变量} 存成字符串', byId(n.id).priority === '{倍率}',
+      typeof byId(n.id).priority + ' ' + byId(n.id).priority);
+    /* 用默认 */
+    openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'1234',
+      onOk: (v) => { const num = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : null;
+        byId(n.id).priority = (v === '') ? null : (num == null ? v : num); reindex(); } });
+    ok('NM01m 打开时把现值填进文本框', el('numboxText').value === '1234', el('numboxText').value);
+    ok('NM01n 滑条也同步到现值', el('numboxRange').value === '1234', el('numboxRange').value);
+    el('numboxClear').click();
+    ok('NM01o ★ 「用默认」→ null', byId(n.id).priority === null, JSON.stringify(byId(n.id).priority));
+    ok('NM01p 普通节点默认生效值 0', priorityOf(byId(n.id)) === 0, String(priorityOf(byId(n.id))));
+    /* 取消：不回调 */
+    let called = false;
+    openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'', onOk: () => { called = true; } });
+    el('numboxCancel').click();
+    ok('NM01q ★ 取消关掉而且不回调', !numBoxOpen() && !called);
+    /* Esc（走 keys.js 的 ui.escape） */
+    openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'', onOk: () => {} });
+    ok('NM01r 又开出来了', numBoxOpen());
+    window.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true }));
+    ok('NM01s ★ Esc 能关掉', !numBoxOpen());
+    /* 别把各种节点的默认优先级搞坏 */
+    const vv = addVarNode('v2', 900, 0, { name:'v2', control:'plain', value:'1' });
+    reindex(); sizeAll();
+    ok('NM01t 变量节点没设过优先级时是 1000', priorityOf(byId(vv.id)) === 1000, String(priorityOf(byId(vv.id))));
+    /* 菜单里真的有「布局 ▶」 */
+    hideCtx();
+    const b = nodeBox(byId(n.id));
+    cv.dispatchEvent(new MouseEvent('contextmenu', {
+      clientX:Math.round(b.x + 20 + view.x), clientY:Math.round(b.y + 20 + view.y),
+      bubbles:true, cancelable:true, button:2 }));
+    const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('NM01u ★ 节点菜单里有「布局」', labels.indexOf('布局') >= 0, labels.join(' / '));
+    const lay = [...ctxEl.querySelectorAll('.item')].find(d => d.querySelector('.lb').textContent === '布局');
+    ok('NM01v 布局那一项有子菜单 ▶',
+      [...lay.querySelectorAll('.k')].some(k => k.textContent === '▶'));
+    hideCtx();
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

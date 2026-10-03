@@ -42,6 +42,7 @@ const DOCS = [
   ['docs-theme-ripple.png', 'docs-theme-ripple.png'],
   ['docs-blank.png', 'docs-blank.png'],
   ['docs-clip.png', 'docs-clip.png'],
+  ['docs-numbox.png', 'docs-numbox.png'],
 ];
 
 function walk(dir, out = []){

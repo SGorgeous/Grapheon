@@ -97,6 +97,7 @@ function defaultBindings(){
 /* 动作表。overlay:true 表示浮层打开时仍然生效（目前只有 Esc）。 */
 const ACTIONS = {
   'ui.escape':        { label:'关闭浮层 / 取消选择', group:'界面', overlay:true, run(){
+      if (typeof numBoxOpen === 'function' && numBoxOpen()){ closeNumBox(); return; }
       if (nodeBoxEl.style.display === 'block'){ closeNodeBox(); return; }
       if (typeof compsOpen === 'function' && compsOpen()){ closeComps(); return; }
       if (typeof libOpen === 'function' && libOpen()){ closeLib(); return; }

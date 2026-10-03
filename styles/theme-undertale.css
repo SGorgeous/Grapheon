@@ -478,6 +478,14 @@ body.no-heart .ud-btn::before{ content:none; }
 }
 .logrow{display:flex;gap:12px;align-items:baseline;padding:3px 4px;font-size:16px;line-height:1.45}
 /* 斑马纹用中性灰：写死成 rgba(255,255,255) 的话，黑白翻转主题下看不见 */
+/* 数值小浮层：滑条 + 填空并排 */
+#numbox{position:fixed;z-index:92;display:none;min-width:380px;max-width:520px}
+#numbox .numboxrow{display:flex;align-items:center;gap:12px;margin:10px 0}
+#numbox #numboxRange{flex:1;min-width:180px;accent-color:var(--y)}
+#numbox #numboxText{width:132px;flex:0 0 auto}
+#numbox #numboxHint{margin-top:4px;line-height:1.5}
+#numbox .numboxbtns{display:flex;gap:8px;margin-top:12px}
+
 .logrow:nth-child(even){background:rgba(128,128,128,.08)}
 .logrow .lt{color:var(--g);white-space:nowrap;font-variant-numeric:tabular-nums}
 .logrow .lk{white-space:nowrap;width:48px;color:var(--g)}
