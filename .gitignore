@@ -11,5 +11,5 @@ _*/
 dist/
 
 # 提交信息用的临时文件（git commit -F 用完就删，别提交进去）
-_m*.txt
+_*.txt
 msg*.txt
