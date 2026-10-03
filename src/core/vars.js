@@ -777,6 +777,27 @@ function interpolateIn(ctx, text, fromId){
 /* 解析一对花括号**里面**的东西。inner 自己还可能嵌着 {…}。
    —— 这就是递归发生的地方。 */
 function resolveTokenIn(ctx, inner, fromId){
+  /* ★ {=…} 是公式：{=单价 * 数量}、{=ROUND(总价 / 3, 2)}。
+     公式里的变量名**直接写**，不用再套一层花括号（和 Excel 一样）。
+     求值失败给一个显眼的 [公式错误]，不炸整块画布。 */
+  const body = inner.trim();
+  if (body.charAt(0) === '='){
+    if (typeof evalFormula !== 'function') return '[没有公式模块]';
+    const out = evalFormula(body.slice(1), (nm) => {
+      /* 名字里可能带点：名单.0 / 配置.host —— 先当「变量 + 下标」试 */
+      const dot = nm.indexOf('.');
+      if (dot > 0){
+        const head = nm.slice(0, dot), tail = nm.slice(dot + 1);
+        const def = findVarDefIn(ctx, head, fromId);
+        if (def){
+          const got = memberValueIn(ctx, def, tail, fromId);
+          if (got !== undefined) return got;
+        }
+      }
+      return resolveVarIn(ctx, nm, fromId);
+    });
+    return (out === null || out === undefined) ? '[公式错误]' : out;
+  }
   const d = splitDot(inner);
   if (d < 0) return resolveVarIn(ctx, inner, fromId);
   const headRaw = inner.slice(0, d), tailRaw = inner.slice(d + 1);

@@ -283,6 +283,19 @@
 
 <div id="help" class="ud">
   <h2>* 操作指南</h2>
+  <div class="sec">公式（{=…}）</div>
+  <div class="sub">节点正文里写 <b>{=表达式}</b>，变量名直接写，不用再套花括号。出错显示 <b>[公式错误]</b>，不会崩。</div>
+  <table>
+    <tr><td>算术</td><td>+ - * / % ^ 和括号　<b>{=单价 * 数量}</b>、<b>{=2 ^ 10}</b></td></tr>
+    <tr><td>比较</td><td>= &lt;&gt; &lt; &gt; &lt;= &gt;=　<b>{=数量 &gt; 10}</b></td></tr>
+    <tr><td>逻辑</td><td>&amp;&amp; || !　还有 AND / OR / NOT</td></tr>
+    <tr><td>拼文本</td><td>&amp; 或 CONCAT　<b>{=姓 &amp; 名}</b></td></tr>
+    <tr><td>条件</td><td><b>{=IF(数量 &gt; 10, 批发价, 零售价)}</b></td></tr>
+    <tr><td>统计</td><td>SUM AVG MAX MIN COUNT COUNTA</td></tr>
+    <tr><td>数字</td><td>ROUND INT FLOOR CEIL ABS SQRT POW MOD SIGN</td></tr>
+    <tr><td>文本</td><td>LEN CONCAT UPPER LOWER TRIM LEFT RIGHT MID REPT TEXT VALUE</td></tr>
+    <tr><td>列表 / 地图</td><td>用点取　<b>{=名单.0 &amp; 名单.1}</b>、<b>{=配置.单价 * 2}</b></td></tr>
+  </table>
   <table>
     <tr><td class="sec" colspan="2">— 最常用的 —</td></tr>
     <tr><td>双击空白</td><td>新建一个节点</td></tr>
@@ -436,6 +449,7 @@
 <script src="src/view/stage.js"></script>
 <script src="src/core/text.js"></script>
 <script src="src/core/store.js"></script>
+<script src="src/core/formula.js"></script>
 <script src="src/core/vars.js"></script>
 <script src="src/core/ports.js"></script>
 <script src="src/view/table.js"></script>

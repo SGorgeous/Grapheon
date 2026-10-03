@@ -9203,6 +9203,66 @@
     ok('PP01i 没挂背景特效（它靠棋盘格）', themeEffect() === '', JSON.stringify(themeEffect()));
     applyTheme('board');
   });
+
+  T('FM01 公式：{=…} 的解析与求值', () => {
+    const R = (nm) => ({ '单价':12, '数量':4, '总价':96, '姓名':'张三' }[nm]);
+    const E = (src) => evalFormula(src, R);
+    /* 算术 */
+    ok('FM01 乘', E('单价 * 数量') === 48, String(E('单价 * 数量')));
+    ok('FM01b 括号', E('(单价 + 8) * 2') === 40, String(E('(单价 + 8) * 2')));
+    ok('FM01c 除', E('总价 / 数量') === 24, String(E('总价 / 数量')));
+    ok('FM01d 除零给 0（不吐 Infinity/NaN）', E('总价 / 0') === 0, String(E('总价 / 0')));
+    ok('FM01e 幂', E('2 ^ 10') === 1024, String(E('2 ^ 10')));
+    ok('FM01f 取余', E('总价 % 10') === 6, String(E('总价 % 10')));
+    ok('FM01g 一元负号', E('-单价 + 20') === 8, String(E('-单价 + 20')));
+    /* 比较 / 逻辑 —— ★ 这一组曾经全挂：&& 被拆成两个 &、|| 的 | 不在字符集里 */
+    ok('FM01h 大于', E('数量 > 3') === true);
+    ok('FM01i 等于', E('单价 = 12') === true);
+    ok('FM01j 不等 <> 和 != 都认', E('单价 <> 12') === false && E('单价 != 12') === false);
+    ok('FM01k ★ && 要用双字符识别', E('数量 > 2 && 单价 < 20') === true,
+      String(E('数量 > 2 && 单价 < 20')));
+    ok('FM01l ★ || 也一样', E('数量 > 9 || 单价 < 20') === true,
+      String(E('数量 > 9 || 单价 < 20')));
+    ok('FM01m 非', E('!(数量 > 9)') === true);
+    /* 文本 */
+    ok('FM01n & 拼串', E('姓名 & "有" & 数量 & "个"') === '张三有4个', String(E('姓名 & "有" & 数量 & "个"')));
+    ok('FM01o 单双引号都行', E("CONCAT('a', \"b\")") === 'ab', String(E("CONCAT('a', \"b\")")));
+    /* 函数 */
+    ok('FM01p SUM', E('SUM(单价, 数量, 总价)') === 112, String(E('SUM(单价, 数量, 总价)')));
+    ok('FM01q AVG', E('AVG(10, 20, 30)') === 20, String(E('AVG(10, 20, 30)')));
+    ok('FM01r MAX/MIN', E('MAX(3, 9, 5) - MIN(3, 9, 5)') === 6);
+    ok('FM01s ROUND', E('ROUND(总价 / 7, 2)') === 13.71, String(E('ROUND(总价 / 7, 2)')));
+    ok('FM01t ABS/SQRT/MOD', E('ABS(0 - 单价)') === 12 && E('SQRT(144)') === 12 && E('MOD(总价, 10)') === 6);
+    ok('FM01u IF 两边', E('IF(数量 > 2, "多", "少")') === '多' && E('IF(数量 > 9, "多", "少")') === '少');
+    ok('FM01v IF 不短路（两个分支都先算了，所以除零也得给 0）',
+      E('IF(数量 > 9, 总价 / 0, 1)') === 1, String(E('IF(数量 > 9, 总价 / 0, 1)')));
+    ok('FM01w AND/OR/NOT',
+      E('AND(1, 2) && OR(0, 1) && NOT(0)') === true, String(E('AND(1, 2) && OR(0, 1) && NOT(0)')));
+    ok('FM01x LEN / CONCAT / UPPER',
+      E('LEN(姓名)') === 2 && E('CONCAT(姓名, "先生")') === '张三先生' && E('UPPER("abc")') === 'ABC');
+    ok('FM01y LEFT / RIGHT / MID（按码点切，中文不会切半个）',
+      E('MID("abcdef", 3, 2)') === 'cd' && E('LEFT(姓名, 1)') === '张', String(E('MID("abcdef", 3, 2)')));
+    ok('FM01z 常量 PI / TRUE', E('PI > 3 && TRUE') === true);
+    /* 出错要能兜住 */
+    ok('FM02 未知函数返回 null（不抛）', E('NOPE(1)') === null, String(E('NOPE(1)')));
+    ok('FM02b 语法错返回 null', E('1 +') === null, String(E('1 +')));
+    ok('FM02c 空公式返回 null', E('') === null);
+    ok('FM02d 函数表非空', FUNC_NAMES.length >= 30, String(FUNC_NAMES.length) + ' 个');
+    /* 端到端：走 interpolateIn，{=…} 要真的算出来 */
+    fresh();
+    const n1 = addVarNode('单价', 0, 0, { name:'单价', value:'12' });
+    const n2 = addVarNode('数量', 0, 200, { name:'数量', value:'4' });
+    const n3 = addNodeAt('合计 {=单价 * 数量}', 0, 400, 'rect');
+    reindex(); sizeAll();
+    /* ★ 要拿**节点自己的正文**去插值 —— 传 'x' 的话当然只拿到 'x' */
+    const got = interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), n3.text, n3.id);
+    ok('FM03 端到端：节点正文里的 {=…} 会算出来',
+      String(got).indexOf('48') >= 0, String(got));
+    ok('FM03b 求值失败显示 [公式错误] 而不是崩',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{=NOPE(1)}', n3.id)).indexOf('公式错误') >= 0,
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{=NOPE(1)}', n3.id)));
+    void n1; void n2;
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
