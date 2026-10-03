@@ -390,8 +390,8 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
     return q;
   };
   let pts = buildPts(bias);
-  const boxes = (obstacles && obstacles.length <= AVOID_MAX_BOXES) ? obstacles : null;
-  if (boxes && boxes.length){
+  const boxes = (obstacles && obstacles.length <= AVOID_MAX_BOXES) ? obstacles : [];
+  if (boxes.length){
     /* 两类候选：
        ① 挪走廊 —— 偏移中间那段的位置
        ② 绕行   —— 障碍正挡在两端之间时，① 是没用的
@@ -444,16 +444,21 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
       if (cross === 0 && self === 0 && c.d === 0) break;
     }
     if (bestC) pts = bestC.pts;
-    /* ★ 兜底：试遍了候选还是穿（两个盒子重叠 / 紧贴时就会），
-       换成正经的正交寻路。躲的范围是「所有障碍 + 两端自己」——
-       两端自己也得躲，那正是「穿过自己」的来源。 */
-    if (bestC && (bestC.cross > 0 || bestC.self > 0)){
-      const routed = routeOrthoAStar(p0, p1, p2, p3,
-        boxes.concat([a, b].filter(Boolean)));
-      if (routed && pathCrossCountInner(routed, boxes) === 0){
-        pts = routed;
-      }
-    }
+  }
+
+  /* ★★ 兜底：走线穿过**两端自己**时，换成正经的正交寻路。
+     ⚠ 这一段必须在 if (boxes.length) **外面** ——
+        avoidBoxes 按契约把两端排除掉，所以「只有两个节点」时
+        boxes 是空的，原来整块（含这里的检查）都被跳过，
+        于是新文件里两个挨得近的节点必然穿过自己；
+        多放第三个节点之后 obstacles 非空，整块才跑起来
+        —— 这就是「再新建一个节点就正常了」的原因。
+     躲的范围 = 别的障碍 + 两端自己。两端自己也必须躲，
+     那正是「穿过自己」的来源。 */
+  const selfBoxes = [a, b].filter(Boolean);
+  if (selfBoxes.length && pathCrossCountInner(pts, selfBoxes) > 0){
+    const routed = routeOrthoAStar(p0, p1, p2, p3, boxes.concat(selfBoxes));
+    if (routed && pathCrossCountInner(routed, selfBoxes) === 0) pts = routed;
   }
   /* 收尾清理：
      ① 扔掉完全重合的点
