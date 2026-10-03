@@ -687,7 +687,9 @@
     let b = GP.keys.bindings;
     ok('K03b 原键位已释放', !b['delete'] && !b['backspace']);
     ok('K03c ctrl+d 已绑定', b['ctrl+d'] === 'node.delete');
-    ok('K03d 已写进 localStorage', (localStorage.getItem('grapheon.keymap.v1') || '').indexOf('ctrl+d') >= 0);
+    /* ★ 存储键带版本（对齐 Blender 那次升到 v2） */
+    ok('K03d 已写进 localStorage', (localStorage.getItem('grapheon.keymap.v2') || '').indexOf('ctrl+d') >= 0,
+      String(localStorage.getItem('grapheon.keymap.v2')).slice(0, 80));
     GP.keys.load();
     ok('K03e load 后仍是改过的键位', GP.keys.bindings['ctrl+d'] === 'node.delete');
     GP.keys.reset();
@@ -10073,6 +10075,51 @@
     void solo2;
 
     fresh();   /* 收尾清干净 */
+  });
+
+  T('K05 旧存档不能带偏新键位（换表必须升版）', () => {
+    fresh();
+    /* ★ 模拟用户浏览器里那份旧的 v1 存档：
+       它只存「和当时默认值的差异」，如果被叠到新表上，
+       旧键位会一个个复活 —— 实测 w/s/d/space 全回来，
+       而且 ctrl+arrowup 会和新表的「生成节点」撞车。 */
+    try {
+      localStorage.setItem('grapheon.keymap.v1', JSON.stringify({
+        'w':'node.spawn.up', 'a':'node.spawn.left', 's':'node.spawn.down',
+        'd':'node.spawn.right', 'space':'node.collapse', 'ctrl+arrowup':'node.nav.up'
+      }));
+    } catch(e){}
+    GP.keys.load();
+    const b = GP.keys.bindings;
+    ok('K05 ★ ctrl+a 是「添加节点」，没被旧存档带偏',
+      b['ctrl+a'] === 'ui.addMenu', String(b['ctrl+a']));
+    ok('K05b ★ a 是「全选」，旧的 spawn.left 没复活',
+      b['a'] === 'sel.all', String(b['a']));
+    ok('K05c ★ 旧的 WASD 没有复活',
+      !b['w'] && !b['s'] && !b['d'],
+      JSON.stringify({ w:b['w'], s:b['s'], d:b['d'] }));
+    ok('K05d ★ 旧的 space 没有复活（折叠已经让给 Tab）',
+      !b['space'] && b['tab'] === 'node.collapse',
+      'space=' + b['space'] + ' tab=' + b['tab']);
+    ok('K05e ★ ctrl+arrowup 是「生成节点」，没被旧的跳转绑走',
+      b['ctrl+arrowup'] === 'node.spawn.up', String(b['ctrl+arrowup']));
+    ok('K05f 对齐 Blender 的那些新键都在',
+      b['alt+a'] === 'sel.none' && b['ctrl+i'] === 'sel.invert' && b['f'] === 'edge.link'
+      && b['x'] === 'node.delete' && b['home'] === 'view.fit' && b['ctrl+alt+g'] === 'group.dissolve',
+      JSON.stringify({ 'alt+a':b['alt+a'], 'ctrl+i':b['ctrl+i'], f:b['f'], x:b['x'],
+        home:b['home'], 'ctrl+alt+g':b['ctrl+alt+g'] }));
+    /* 存档里指向「已经不存在的动作」的条目要丢掉 */
+    try { localStorage.setItem('grapheon.keymap.v2', JSON.stringify({ 'F9':'这个动作不存在' })); } catch(e){}
+    GP.keys.load();
+    ok('K05g ★ 指向不存在动作的存档条目被丢掉',
+      GP.keys.bindings['F9'] === undefined, String(GP.keys.bindings['F9']));
+    /* 真正的自定义仍然要生效 */
+    try { localStorage.setItem('grapheon.keymap.v2', JSON.stringify({ 'F8':'view.fit' })); } catch(e){}
+    GP.keys.load();
+    ok('K05h ★ 真正的自定义键仍然生效', GP.keys.bindings['F8'] === 'view.fit',
+      String(GP.keys.bindings['F8']));
+    try { localStorage.removeItem('grapheon.keymap.v2'); localStorage.removeItem('grapheon.keymap.v1'); } catch(e){}
+    GP.keys.reset();
   });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {

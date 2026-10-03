@@ -217,7 +217,12 @@ const ACTIONS = {
 };
 
 /* ---------------- 绑定管理（对外 API：GP.keys） ---------------- */
-const BIND_KEY = 'grapheon.keymap.v1';
+/* ★ 存储键带版本号。
+   默认键位表换了一整套时**必须升版** —— 老存档只存「和当时默认值的差异」，
+   把它叠到新表上，旧键位会一个个复活（实测：w/s/d/space 全回来了，
+   ctrl+arrowup 还和新表的生成键撞了车）。
+   v1 → v2：对齐 Blender 那次换表。 */
+const BIND_KEY = 'grapheon.keymap.v2';
 let BINDINGS = defaultBindings();
 
 function loadBindings(){
@@ -227,8 +232,11 @@ function loadBindings(){
     if (raw){
       const patch = JSON.parse(raw);
       for (const combo in patch){
-        if (patch[combo] === null) delete BINDINGS[combo];
-        else BINDINGS[combo] = patch[combo];
+        if (patch[combo] === null){ delete BINDINGS[combo]; continue; }
+        /* ★ 兜底：动作不存在（改名 / 删掉了）就别认这条存档，
+           不然会绑到一个永远不响的键上。 */
+        if (!ACTIONS[patch[combo]]) continue;
+        BINDINGS[combo] = patch[combo];
       }
     }
   } catch (e) {}

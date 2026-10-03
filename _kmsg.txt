@@ -1,0 +1,28 @@
+修：Ctrl+A 还是全选 —— 换键位表必须升存储版本
+
+用户报的：Ctrl+A 依旧是全选，不是「添加节点」。
+
+根因：键位表存在 localStorage，而且只存「和当时默认值的差异」。
+换了一整套默认键位之后，旧 patch 会被叠到新表上，旧键位一个个复活。
+探针实测（模拟浏览器里那份旧存档）：
+    a            = node.spawn.left    ← 旧的 a 回来了
+    w / s / d    = node.spawn.*       ← 旧的 WASD 回来了
+    space        = node.collapse      ← 旧的 space 回来了
+    ctrl+arrowup = node.nav.up        ← 和新表的「生成节点」撞车
+
+修法：
+  1. 存储键升版 v1 → v2 —— 换表时旧存档直接作废。
+     键位表以后每次成批换默认值，都要跟着升版。
+  2. 兜一道：存档里指向「已经不存在的动作」的条目直接丢掉，
+     免得绑到一个永远不响的键上。
+
+实测（旧 v1 存档还在 localStorage 里的情况下）：
+    ctrl+a = ui.addMenu     a = sel.all     w/s/d/space 都不存在
+    ctrl+arrowup = node.spawn.up（没被旧的跳转绑走）
+    alt+a / ctrl+i / f / x / home / ctrl+alt+g 全对
+    真正的自定义键（比如 F8）仍然生效
+
+新增 K05 共 8 条断言。2257 项全过。
+
+注意：你那边可能还要硬刷新一次（Ctrl+F5）——
+如果浏览器缓存了旧 JS，defaultBindings() 还是老的。
