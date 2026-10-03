@@ -121,9 +121,18 @@ const nodePorts = (n) => {
   return L.ins.concat(L.outs, L.conns || []);
 };
 
+/* ★ 端点几何用的盒子：节点用 nodeBox，**分组用 groupBox**。
+   两个盒子都是「跟着实体走」的，所以端点照样自动跟着动，
+   不需要任何同步代码 —— 这和当初选 at 而不是像素坐标是同一个理由。 */
+function portBoxOf(x){
+  if (!x) return { x:0, y:0, w:0, h:0 };
+  if (x.members && typeof groupBox === 'function') return groupBox(x);
+  return (typeof nodeBox === 'function') ? nodeBox(x) : { x:0, y:0, w:0, h:0 };
+}
+
 /* 端点在世界里的位置 */
 function portPoint(n, port){
-  const b = nodeBox(n);
+  const b = portBoxOf(n);
   const at = (port && typeof port.at === 'number') ? port.at : 0.5;
   if (!port || port.side === 'r') return { x:b.x + b.w, y:b.y + b.h * at };
   if (port.side === 'l') return { x:b.x, y:b.y + b.h * at };

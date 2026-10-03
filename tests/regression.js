@@ -10299,6 +10299,81 @@
     closeNodeBox();
     fresh();   /* 收尾清干净 */
   });
+
+  T('GP01 分组也能有端点表（和节点同一套结构）', () => {
+    fresh();
+    const a = addNodeAt('甲', 0, 0, 'round');
+    const b = addNodeAt('乙', 300, 0, 'round');
+    reindex(); sizeAll();
+    const g = { id:'gp1', title:'一组', color:'', members:[a.id, b.id] };
+    doc.groups = [g];
+    reindex(); sizeAll();
+
+    /* ① 没配 ports —— 行为必须和以前**分毫不变**（四向中点） */
+    const gb0 = groupBox(g);
+    const A0 = anchorsFor(g);
+    ok('GP01 没配 ports：右锚点在框右边中点',
+      Math.round(A0.r.y) === Math.round(gb0.y + gb0.h / 2), String(A0.r.y));
+    ok('GP01b 没配 ports：上锚点在框上边中点',
+      Math.round(A0.t.x) === Math.round(gb0.x + gb0.w / 2), String(A0.t.x));
+
+    /* ② 配上 ports —— 位置能自定义了（这就是「和节点一样灵活」） */
+    g.ports = {
+      ins:  [ { id:'in1', label:'入口', side:'l', at:0.25 } ],
+      outs: [ { id:'o1', label:'折后价', side:'r', at:0.2 },
+              { id:'o2', label:'均值',   side:'r', at:0.8 } ]
+    };
+    reindex(); sizeAll();
+    const gb = groupBox(g);
+    const A1 = anchorsFor(g);
+    ok('GP01c ★ 配了 ports：右锚点落到 at=0.2 那个位置',
+      Math.round(A1.r.y) === Math.round(gb.y + gb.h * 0.2), String(A1.r.y));
+    ok('GP01d ★ 左锚点落到 at=0.25 那个位置',
+      Math.round(A1.l.y) === Math.round(gb.y + gb.h * 0.25), String(A1.l.y));
+    /* 端点对象本身 */
+    const L = portList(g);
+    ok('GP01e portList(分组) 给出配的端点', (L.outs || []).length === 2, String((L.outs || []).length));
+    ok('GP01f 端点带标签（id 是自动编的数字，这是既有行为）',
+      L.outs[0].label === '折后价' && typeof L.outs[0].id === 'number',
+      JSON.stringify([L.outs[0].id, L.outs[0].label]));
+    const pt = portPoint(g, L.outs[1]);
+    ok('GP01g ★ portPoint(分组) 用的是**分组的框**（不是 nodeBox）',
+      Math.round(pt.x) === Math.round(gb.x + gb.w) && Math.round(pt.y) === Math.round(gb.y + gb.h * 0.8),
+      Math.round(pt.x) + ',' + Math.round(pt.y));
+
+    /* ③ 节点那边一点没变 */
+    const n0 = byId(a.id);
+    const N = anchorsFor(n0);
+    ok('GP01h 节点照旧（右锚点在节点右边中点）',
+      Math.round(N.r.y) === Math.round(nodeBox(n0).y + nodeBox(n0).h / 2), String(N.r.y));
+
+    /* ④ 删掉 ports 又回默认四向 */
+    delete g.ports;
+    reindex(); sizeAll();
+    const gb2 = groupBox(g);
+    ok('GP01i ★ 删掉 ports 之后又回到默认四向',
+      Math.round(anchorsFor(g).r.y) === Math.round(gb2.y + gb2.h / 2),
+      String(anchorsFor(g).r.y));
+
+    /* ⑤ 存档往返 */
+    g.ports = { outs:[ { id:'o1', label:'折后价', side:'r', at:0.2 } ] };
+    reindex(); sizeAll();
+    const pack = serialize();
+    const g0 = pack.groups.find(x => x.id === 'gp1');
+    ok('GP01j 存档带上 groups[].ports', !!(g0 && g0.ports && g0.ports.outs), JSON.stringify(g0 && g0.ports));
+    deserialize(pack);
+    const g1 = byGroup('gp1');
+    ok('GP01k ★ 读回来 ports 还在',
+      !!(g1 && g1.ports && g1.ports.outs && g1.ports.outs.length === 1),
+      JSON.stringify(g1 && g1.ports));
+    /* 没配的分组，存档里不该多一个字段 */
+    delete g1.ports;
+    const g2 = serialize().groups.find(x => x.id === 'gp1');
+    ok('GP01l 没配 ports 时存档里不写这个字段（老存档形态不变）',
+      g2.ports === undefined, JSON.stringify(g2.ports));
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -650,6 +650,9 @@ function serialize(){
     })),
     groups: (doc.groups || []).map(g => ({
       id:g.id, title:g.title || '', members:g.members.slice(), color:g.color || null,
+    /* ★ 分组也能有端点表（和节点同一套结构）。没配就是 undefined，
+       存档里不会多一个字段 —— 老存档形态不变。 */
+    ports:g.ports || undefined,
       collapsed:!!g.collapsed, isFunction:!!g.isFunction,
       components:normalizeComponents(g.components),
       x:Math.round(g.x), y:Math.round(g.y), w:Math.round(g.w), h:Math.round(g.h)
@@ -706,7 +709,7 @@ function deserialize(d){
     if (!id || seen.has(id)) id = mkId('g', seen); else seen.add(id);
     grpIds.add(id);
     doc.groups.push({ id, title:g.title == null ? '' : String(g.title),
-      members:(g.members || []).slice(), color:g.color || null,
+      members:(g.members || []).slice(), color:g.color || null, ports:g.ports || undefined,
       x:+g.x || 0, y:+g.y || 0, w:+g.w || 0, h:+g.h || 0,
       collapsed:!!g.collapsed, isFunction:!!g.isFunction,
       components:normalizeComponents(g.components) });

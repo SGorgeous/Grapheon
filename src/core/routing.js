@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/routing.js
    连线几何：四向锚点、正交折线（含走廊错位）、贝塞尔。
@@ -37,16 +37,27 @@ function anchorsFor(x){
     return { r:f, l:f, t:f, b:f };
   }
   /* 传进来的是**节点**（不是走线内部的盒子副本）→ 锚点从它的端点表推。
-     分组没有端点表，走下面的 boxAnchors。 */
+     ★ 分组也**可以**有端点表了（x.ports）—— 配了就走同一条路，
+       没配照旧走 boxAnchors（下面那个 return），
+       所以现在所有分组的行为分毫不变。 */
   const n = (typeof byId === 'function' && x.id != null) ? byId(x.id) : null;
   const isNode = !!n && n === x;
-  if (isNode && typeof portList === 'function'){
-    const L = portList(n);
+  const ownsPorts = !!(x.ports && (x.ports.ins || x.ports.outs || x.ports.conns));
+  /* ★ 端点表的主人：节点就是它自己，分组就是分组本身。
+     portPoint / portBoxOf 两边都认（分组走 groupBox）。 */
+  const ent = isNode ? n : x;
+  /* ★ boxAnchors 要的是**盒子** {x,y,w,h}，不是实体。
+     节点传进去没问题（它就是盒子形状），**分组没有 .x** ——
+     传分组进去会直接抛（Cannot read properties of undefined）。
+     只有分组需要先换成 groupBox。 */
+  const asBox = (e) => (e && e.members && typeof portBoxOf === 'function') ? portBoxOf(e) : e;
+  if ((isNode || ownsPorts) && typeof portList === 'function'){
+    const L = portList(ent);
     const A = {};
     for (const dir of PORT_DIRS){
       for (const p of (L[dir] || [])){
         if (A[p.side]) continue;                       // 同边多个端点取第一个，具体靠 aPort 钉
-        const pt = portPoint(n, p);
+        const pt = portPoint(ent, p);
         const o = PORT_OUT[p.side] || PORT_OUT.r;
         A[p.side] = { x:pt.x, y:pt.y, d:[o.x, o.y], id:p.id };
       }
@@ -54,14 +65,14 @@ function anchorsFor(x){
     /* 那条边上没有端点的：退到**离它最近的真实端点** ——
        仍然是真实端点，绝不虚构位置。程序节点只有左右两个端点时，
        上下的锚点就落在左右那两个上，这正是「不许凭空造点」的意思。 */
-    const all = nodePorts(n);
+    const all = nodePorts(ent);
     if (all.length){
       for (const s of PORT_SIDES){
         if (A[s]) continue;
-        const mid = sideMidOf(n, s);
+        const mid = sideMidOf(asBox(ent), s);
         let best = null, bd = Infinity, bs = 'r';
         for (const p of all){
-          const pt = portPoint(n, p);
+          const pt = portPoint(ent, p);
           const d = Math.hypot(pt.x - mid.x, pt.y - mid.y);
           if (d < bd){ bd = d; best = pt; bs = p.side; }
         }
@@ -73,11 +84,11 @@ function anchorsFor(x){
        有空洞的话，调用方写的 anchorsFor(x)[side].x 会直接抛异常 ——
        那是在 draw() 里面，一抛整帧就断，症状是「虚线没了 / 画一半」。
        端点表整个是空的时候（理论上不该发生）退回盒子四向锚点。 */
-    const box = boxAnchors(n);
+    const box = boxAnchors(asBox(ent));
     for (const s of PORT_SIDES){ if (!A[s]) A[s] = box[s]; }
     return A;
   }
-  return boxAnchors(x);
+  return boxAnchors(asBox(x));
 }
 /* ka / kb 是「钉死」的端点边（'r'|'l'|'t'|'b'），传 null 表示按相对位置自动挑 —— 默认就是自动。 */
 function bezierGeom(a, b, ka, kb){
