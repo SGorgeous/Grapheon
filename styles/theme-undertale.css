@@ -135,6 +135,17 @@ body.pressed #cross .dot{opacity:1;fill:var(--y)}
 /* 行距也收一点：14px × 十行就是 140px 的空 */
 #exp .row,#edgebox .row,#endbox .row,#nodebox .row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
 /* 标签列收窄：110px 十行下来，左边空出一大片，右边内容反被挤 */
+/* 分组标题：一条细线 + 一个小字，把十几行控件分成几块。
+   没有它，十一行平铺下来找一样东西要一行行扫。 */
+#exp .gsec,#edgebox .gsec,#endbox .gsec,#nodebox .gsec{
+  color:var(--g);font-size:13px;letter-spacing:2px;margin:14px 0 8px;
+  display:flex;align-items:center;gap:10px;
+}
+#exp .gsec::after,#edgebox .gsec::after,#endbox .gsec::after,#nodebox .gsec::after{
+  content:"";flex:1;height:1px;background:var(--d);
+}
+#exp .gsec:first-of-type,#edgebox .gsec:first-of-type,
+#endbox .gsec:first-of-type,#nodebox .gsec:first-of-type{margin-top:4px}
 #exp .lab,#edgebox .lab,#endbox .lab,#nodebox .lab{
   width:60px;flex:none;color:var(--g);font-size:14px;
 }
