@@ -294,6 +294,9 @@ function showCtx(x, y, n, e, info){
     if (isTableNode(n)){
       const tt = tableOf(n);
       items.push(['表格', tt.rows + ' 行 × ' + tt.cols + ' 列', null, [
+        /* 导出的是**算完的结果** —— 单元格里的 {=…} 会先求值再写进文件 */
+        ['导出为 CSV', '公式导出的是结果', () => exportTableCSV(n)],
+        'hr',
         ['末尾加一行', '行高固定', () => tableAddRow(n)],
         ['末尾加一列', '列宽按内容算', () => tableAddCol(n)],
         'hr',
@@ -452,6 +455,9 @@ function showNewMenu(anchor){
     ['空白文件', '一个中心节点', () => newDocument('blank')],
     ['示例：全部功能', '带活的变量演示', () => newDocument('demo')],
     ['示例：经典', '最早那份最简的树', () => newDocument('classic')],
+    'hr',
+    /* 导入 CSV：选个文件 → 直接变成一个表格节点 */
+    ['从 CSV 导入…', '变成一个表格节点', () => importCSV()],
     'hr',
     [(overlapOn() ? '● ' : '   ') + '防止节点重叠', '拖过去的会把别人弹开', () => setOverlapGuard(!overlapOn())],
     ['弹开所有重叠的节点', '手动清一次', () => {

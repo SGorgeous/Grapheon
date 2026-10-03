@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    GRAPHEON · tests/regression.js
    在真实浏览器里跑的断言套件。用 node tests/run.mjs 执行。
    直接操作全局的模块函数（它们都是普通脚本，共享同一个全局作用域）。
@@ -1939,8 +1939,8 @@
   T('M06 空的「新建」菜单也没问题', () => {
     document.getElementById('b-new').click();
     ok('M06 顶上「新建」菜单打开', ctxEl.style.display === 'block');
-    ok('M06b 里面有空白文件 / 两种示例',
-      [...ctxEl.querySelectorAll('.item')].length === 6, ctxEl.querySelectorAll('.item').length);
+    ok('M06b 里面有空白文件 / 两种示例 / 导入 CSV',
+      [...ctxEl.querySelectorAll('.item')].length === 7, ctxEl.querySelectorAll('.item').length);
     hideCtx();
   });
   T('M07 大面板贴在提示框正上方、右下角对齐', () => {
@@ -9322,6 +9322,74 @@
     ok('MV01p ★ 单变量行为完全不变（求值照旧）',
       interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id) === '12',
       String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id)));
+  });
+
+  T('CV01 CSV：解析 / 建表 / 导出算完的结果', () => {
+    /* 解析 */
+    ok('CV01 基本解析',
+      JSON.stringify(parseCSV('a,b,c\n1,2,3')) === JSON.stringify([['a','b','c'],['1','2','3']]),
+      JSON.stringify(parseCSV('a,b,c\n1,2,3')));
+    ok('CV01b 引号里的逗号和换行', (() => {
+      const r = parseCSV('"a,1","b\n2",c\nx,y,z');
+      return JSON.stringify(r[0]) === JSON.stringify(['a,1','b\n2','c']);
+    })(), JSON.stringify(parseCSV('"a,1","b\n2",c')[0]));
+    ok('CV01c "" 转义成一个引号', parseCSV('"他说""你好""",b')[0][0] === '他说"你好"',
+      parseCSV('"他说""你好""",b')[0][0]);
+    ok('CV01d 认 UTF-8 BOM（Excel 存出来头上有）', parseCSV('\uFEFFa,b')[0][0] === 'a',
+      JSON.stringify(parseCSV('\uFEFFa,b')[0][0]));
+    ok('CV01e 自动认分号（欧洲 Excel）',
+      JSON.stringify(parseCSV('a;b;c\n1;2;3')[0]) === JSON.stringify(['a','b','c']),
+      JSON.stringify(parseCSV('a;b;c\n1;2;3')[0]));
+    ok('CV01f 自动认制表符',
+      JSON.stringify(parseCSV('a\tb\n1\t2')[0]) === JSON.stringify(['a','b']),
+      JSON.stringify(parseCSV('a\tb\n1\t2')[0]));
+    ok('CV01g CRLF 不出多余空行', parseCSV('a,b\r\nc,d').length === 2,
+      String(parseCSV('a,b\r\nc,d').length));
+    ok('CV01h 末尾没换行也收得下', parseCSV('a,b\nc').length === 2,
+      String(parseCSV('a,b\nc').length));
+    ok('CV01i 空文本给空数组', parseCSV('').length === 0 && parseCSV('\n\n').length === 0);
+    /* 写出 */
+    ok('CV01j 该包引号的包引号', toCSV([['a,1','b"2','c\nd']]) === '"a,1","b""2","c\nd"',
+      toCSV([['a,1','b"2','c\nd']]));
+    ok('CV01k 用 CRLF 分行', toCSV([['a'],['b']]) === 'a\r\nb', JSON.stringify(toCSV([['a'],['b']])));
+    /* 建表格节点 */
+    fresh();
+    const rows = parseCSV('名称,单价,数量\n苹果,3,4\n香蕉,5,2');
+    const n = addTableNodeFromRows(rows, 0, 0, '清单');
+    reindex(); sizeAll();
+    ok('CV01l 建成的是表格节点', isTableNode(n), String(n.kind));
+    ok('CV01m 行列数对', tableOf(n).rows === 3 && tableOf(n).cols === 3,
+      tableOf(n).rows + '×' + tableOf(n).cols);
+    ok('CV01n 内容对', displayTableCell(n, 1, 0) === '苹果', displayTableCell(n, 1, 0));
+    /* ★ 公式：导出的是结果不是公式 */
+    const t = tableOf(n);
+    t.cols = 4;
+    t.cells[0][3] = '小计';
+    t.cells[1][3] = '{=3 * 4}';
+    t.cells[2][3] = '{=5 * 2}';
+    n.tableDef = normalizeTableDef(t);
+    reindex(); sizeAll();
+    ok('CV01o 单元格里的公式会算出来', displayTableCell(n, 1, 3) === '12',
+      displayTableCell(n, 1, 3));
+    const csv = tableToCSV(n);
+    ok('CV01p ★★ 导出的是结果，不是公式', csv.indexOf('{=') < 0 && csv.indexOf('12') >= 0, JSON.stringify(csv));
+    ok('CV01q 导出内容正确', csv === '名称,单价,数量,小计\r\n苹果,3,4,12\r\n香蕉,5,2,10',
+      JSON.stringify(csv));
+    /* 全空表不导出 */
+    const e = addNodeAt('空表', 600, 0, 'rect');
+    e.kind = 'table';
+    e.tableDef = normalizeTableDef({ cols:3, rows:3, cells:[] });
+    reindex(); sizeAll();
+    ok('CV01r 全空表导出空数组', tableRowsForExport(e).length === 0,
+      JSON.stringify(tableRowsForExport(e)));
+    /* 列宽 / 行数上限：多的截掉，不能建出超表的节点 */
+    const big = [];
+    for (let i = 0; i < 60; i++) big.push(['r' + i, 'x', 'y', 'z', 'w', 'v', 'u', 't', 's', 'r', 'q', 'p', 'o', 'n']);
+    const bn = addTableNodeFromRows(big, 0, 600, '大表');
+    reindex(); sizeAll();
+    ok('CV01s 超上限的会截到合法范围',
+      tableOf(bn).rows <= 40 && tableOf(bn).cols <= 12,
+      tableOf(bn).rows + '×' + tableOf(bn).cols);
   });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
