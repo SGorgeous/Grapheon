@@ -111,10 +111,13 @@ const ACTIONS = {
       selectOnly(null); lastClickNode = null;
   }},
   'ui.help':          { label:'操作指南', group:'界面', run(){ openHelp(); } },
-  /* ★ 对齐 Blender：Shift+A 的「添加菜单」 */
+  /* ★ 对齐 Blender 的 Shift+A（添加节点）。
+     ⚠ 一开始接错成了顶栏「新建」——那是**换文档**的菜单
+       （空白文件 / 示例文档 / 从 CSV 导入），不是往当前文档里加节点。
+       正确入口是「插入」菜单，它的第一项就是「节点：空白节点，放在视口正中」。 */
   'ui.addMenu':       { label:'添加节点', group:'结构', run(){
-      const b = document.getElementById('b-new');
-      if (b){ showNewMenu(b); return true; }
+      const b = document.getElementById('b-insert');
+      if (b){ showInsertMenu(b); return true; }
       return false;
   }},
   /* ★ 对齐 Blender：Alt+A 取消全选 */

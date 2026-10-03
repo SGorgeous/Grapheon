@@ -10077,6 +10077,25 @@
     fresh();   /* 收尾清干净 */
   });
 
+  T('K05-1 Ctrl+A 打开的是「插入」菜单（加节点），不是「新建」（换文档）', () => {
+    fresh();
+    hideCtx();
+    /* ★ 一开始接错成「新建」菜单了 —— 那是空白文件 / 示例文档，
+       是「换一份文档」，不是「往当前文档里加节点」。 */
+    ok('K05-1 ui.addMenu 绑在 ctrl+a 上', GP.keys.bindings['ctrl+a'] === 'ui.addMenu',
+      String(GP.keys.bindings['ctrl+a']));
+    GP.keys.actions['ui.addMenu'].run();
+    const its = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('K05-1b ★ 打开的是「插入」菜单（第一项是「节点」）',
+      its.length > 0 && its[0] === '节点', its.join(' / '));
+    ok('K05-1c 里面有变量 / 运算符 / 输出这些节点类型',
+      its.some(x => /变量/.test(x)) && its.some(x => /运算符/.test(x)),
+      its.join(' / '));
+    ok('K05-1d ★ 不是「新建」菜单（那里面是空白文件 / 示例文档）',
+      !its.some(x => /空白文件|示例/.test(x)), its.join(' / '));
+    hideCtx();
+    fresh();
+  });
   T('K05 旧存档不能带偏新键位（换表必须升版）', () => {
     fresh();
     /* ★ 模拟用户浏览器里那份旧的 v1 存档：
