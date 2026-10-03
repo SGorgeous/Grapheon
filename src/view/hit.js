@@ -30,8 +30,10 @@ function hitNode(p){
 const inRect = (b, p) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 function hitVarPart(n, p){
   if (!n || !isVarNode(n)) return null;      // 含广播节点
-  const L = varBoxes(n);
-  const v = varDefOf(n);
+  /* ★ 先定在哪一行，再拿那一行的框和变量 —— 双击改值才改的是你双击的那个 */
+  const row = varRowLayout(n, varRowIndexAt(n, p));
+  const L = row.L;
+  const v = row.def;
   // 变量名格子（普通变量和三种控件都有）。
   //   控件节点的 nameBox 在左边，控件本体在它右边。
   //   ⚠ inRect 一定要先判空：老逻辑直接 inRect(L.nameBox) 在控件节点上会抛异常，
@@ -53,9 +55,11 @@ function hitVarPart(n, p){
    和 hitVarPart 分开：那一套返回字符串，已经被断言钉住了，不动它。 */
 function hitVarControl(n, p){
   if (!n || n.kind !== 'var') return null;
-  const v = varDefOf(n);
+  /* ★ 同理按行 —— 不然点第二行的滑条会去判第一行的轨道 */
+  const row = varRowLayout(n, varRowIndexAt(n, p));
+  const v = row.def;
   if (v.control === 'plain') return null;
-  const L = varBoxes(n);
+  const L = row.L;
   if (v.control === 'check'){
     if (!L.listBox || !inRect(L.listBox, p)) return null;
     const i = Math.floor((p.y - L.listBox.y) / CHECK_ROW_H);

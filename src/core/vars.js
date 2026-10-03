@@ -1149,6 +1149,23 @@ function varLayoutsHeight(n){
   for (const d of defs) total += varRowHeight(varLayout({ x:0, y:0, w:b.w, h:0 }, d, 0), 0) + VAR_ROW_GAP;
   return total + 4;
 }
+/* ★ 命中测试 / 滑条取值都按**行**来。
+   多变量节点上点在第二行，必须拿第二行的框和第二个变量；
+   单变量时返回的就是原来那一条 —— 所以老行为分毫不变。 */
+function varRowLayout(n, rowIdx){
+  const rows = varLayoutsFor(n);
+  const want = (rowIdx == null) ? varEditIndexFor(n) : rowIdx;
+  const k = Math.max(0, Math.min(want, rows.length - 1));
+  return rows[k] || rows[0];
+}
+/* 这个世界坐标落在第几行？落不进去就给「正在编辑的那一行」 */
+function varRowIndexAt(n, p){
+  const rows = varLayoutsFor(n);
+  if (rows.length <= 1) return 0;
+  const i = varRowAt(n, p);
+  return i >= 0 ? i : varEditIndexFor(n);
+}
+
 /* 这个世界坐标落在第几行变量上？命中测试用 */
 function varRowAt(n, p){
   const rows = varLayoutsFor(n);
@@ -1162,11 +1179,14 @@ function varRowAt(n, p){
 }
 
 /* 滑条：世界坐标 → 值 */
-function sliderValueAt(n, worldX){
-  const L = varBoxes(n);
+function sliderValueAt(n, worldX, rowIdx){
+  /* ★ 按行取轨道和变量 —— 原来一律用第一行，
+     于是多变量节点上「从变量 0 算值、写进正在编辑的那个」。 */
+  const row = varRowLayout(n, rowIdx);
+  const L = row.L;
   const b = L.trackBox;
-  if (!b) return sliderValue(n.varDef, n.id);
-  const v = varDefOf(n);
+  if (!b) return sliderValue(row.def, n.id);
+  const v = row.def;
   const ctx = liveCtx();
   /* ★ 上下限 / 步长**可能写的是 {变量}**，必须走 paramNum 解析。
      以前这里直接拿 v.min / v.max / v.step 做算术 ——

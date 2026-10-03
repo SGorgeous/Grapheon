@@ -19,10 +19,10 @@ const editValue = (kind, t) => {
   if (kind === 'edge') return t.label || '';
   if (kind === 'group') return t.title || '';
   if (kind === 'nodeDesc') return t.desc || '';
-  if (kind === 'varName') return varDefOf(t).name;
-  if (kind === 'varValue') return varDefOf(t).value;
+  if (kind === 'varName') return varDefAt(t, varEditIndexFor(t)).name;
+  if (kind === 'varValue') return varDefAt(t, varEditIndexFor(t)).value;
   if (kind === 'outName') return normalizeOutDef(t.outDef).name;
-  if (kind === 'checkOpts') return varDefOf(t).options.join(', ');
+  if (kind === 'checkOpts') return varDefAt(t, varEditIndexFor(t)).options.join(', ');
   if (kind === 'cell') return (tableOf(t).cells[editing.row] || [])[editing.col] || '';
   if (kind === 'port'){ const p = portById(t, editing.portId); return p ? ('#' + p.id + (p.label ? ' ' + p.label : '')) : ''; }
   if (kind === 'portLabel') return (portById(t, editing.portId) || {}).label || '';
@@ -30,12 +30,12 @@ const editValue = (kind, t) => {
   if (kind === 'opVal') return normalizeOpDef(t.opDef).operands[0];
   /* 列表：**一行一项**（换行分隔，所以项里可以有逗号）。
      地图：一行一对「key=value」。 */
-  if (kind === 'listItems') return varDefOf(t).items.join('\n');
-  if (kind === 'mapPairs')  return varDefOf(t).pairs
+  if (kind === 'listItems') return varDefAt(t, varEditIndexFor(t)).items.join('\n');
+  if (kind === 'mapPairs')  return varDefAt(t, varEditIndexFor(t)).pairs
     .map(p => p.k + '=' + p.v).join('\n');
   /* 滑条范围：一行填「下限 上限 [步长]」。**每一项都能写 {变量}**。 */
   if (kind === 'sliderRange'){
-    const v = varDefOf(t);
+    const v = varDefAt(t, varEditIndexFor(t));
     return [v.min, v.max, v.step].join(' ');
   }
   if (/^opVal[0-9]+$/.test(kind)) return normalizeOpDef(t.opDef).operands[+kind.slice(5)] || '';
@@ -45,8 +45,10 @@ function editSetValue(kind, t, v){
   if (kind === 'edge') t.label = String(v).replace(/\n/g, ' ').trim();
   else if (kind === 'group') t.title = String(v).replace(/\n/g, ' ');
   else if (kind === 'nodeDesc') t.desc = v;      // 描述允许换行
-  else if (kind === 'varName') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { name:v }));
-  else if (kind === 'varValue') t.varDef = normalizeVarDef(Object.assign({}, t.varDef, { value:v.trim() }));
+  /* ★ 写也要按「正在编辑的那一个」——
+     原来直接写 t.varDef，多变量节点上会被 nodeVarDefs 无视（它优先读 varDefs）。 */
+  else if (kind === 'varName') setVarDefAt(t, { name:v });
+  else if (kind === 'varValue') setVarDefAt(t, { value:v.trim() });
   else if (kind === 'outName') t.outDef = normalizeOutDef({ name:v });
   else if (kind === 'checkOpts') setCheckOptions(t, v);
   else if (kind === 'cell') setTableCell(t, editing.row, editing.col, v.trim());

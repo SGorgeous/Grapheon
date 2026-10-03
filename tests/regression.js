@@ -9722,6 +9722,103 @@
 
     fresh();   /* ★ 收尾必须清干净 —— 上一版就是漏了这句，把 E06 连累了 */
   });
+
+  T('MV05 交互按行：单击 / 双击 / 滑条都属于你点的那一行', () => {
+    fresh();
+    /* 两个变量，上下限**故意不同** —— 串了就看得出来 */
+    const n = addNodeAt('设置', 0, 0, 'round');
+    n.kind = 'var';
+    n.varDefs = [
+      { name:'甲', control:'slider', type:'number', value:'0', min:'0', max:'100', step:'1' },
+      { name:'乙', control:'slider', type:'number', value:'0', min:'0', max:'10',  step:'1' }
+    ];
+    reindex(); sizeAll();
+    /* 模拟 pointer.js 按下时做的两件事 */
+    const press = (p) => {
+      if (nodeVarDefs(n).length > 1){
+        const ri = varRowAt(n, p);
+        if (ri >= 0 && ri !== varEditIndexFor(n)) setVarEditIndex(ri);
+      }
+      return hitVarControl(n, p);
+    };
+    const rows = varLayoutsFor(n);
+    const mid = (b) => ({ x:b.x + b.w / 2, y:b.y + Math.max(2, b.h / 2) });
+    const t0 = mid(rows[0].L.trackBox), t1 = mid(rows[1].L.trackBox);
+
+    ok('MV05 两行轨道在不同高度', Math.round(t0.y) !== Math.round(t1.y),
+      Math.round(t0.y) + ' vs ' + Math.round(t1.y));
+    /* ★ 单击：这一条以前是坏的 —— hitVarControl 一律用第一行的框 */
+    ok('MV05b 点第 0 行命中 slider', (press(t0) || {}).kind === 'slider',
+      JSON.stringify((press(t0) || {}).kind));
+    ok('MV05c ★ 点第 1 行也命中 slider（以前会落到第一行的轨道上判空）',
+      (press(t1) || {}).kind === 'slider', JSON.stringify((press(t1) || {}).kind));
+    ok('MV05d ★ 点第 1 行会把编辑下标切过去', varEditIndexFor(n) === 1, String(varEditIndexFor(n)));
+
+    /* 先让两个值不同，后面的判断才有意义 */
+    setVarEditIndex(0);
+    setSliderFromPointer(n, { x:rows[0].L.trackBox.x + rows[0].L.trackBox.w / 2, y:t0.y });
+    reindex(); sizeAll();
+    setVarEditIndex(1);
+    setSliderFromPointer(n, { x:rows[1].L.trackBox.x + rows[1].L.trackBox.w, y:t1.y });
+    reindex(); sizeAll();
+    const A = varDefAt(n, 0).value, B = varDefAt(n, 1).value;
+    ok('MV05e 两个值确实不同（判断才有意义）', A !== B, A + ' vs ' + B);
+
+    /* ★ 滑条：各用各的上下限 */
+    setVarEditIndex(1);
+    setSliderFromPointer(n, { x:rows[1].L.trackBox.x + rows[1].L.trackBox.w, y:t1.y });
+    reindex(); sizeAll();
+    ok('MV05f ★ 拖第 1 行到最右 = 乙的上限 10（不是甲的 100）',
+      varDefAt(n, 1).value === '10', varDefAt(n, 1).value);
+    ok('MV05g ★ 拖第 1 行没动到甲', varDefAt(n, 0).value === A, varDefAt(n, 0).value);
+    setVarEditIndex(0);
+    setSliderFromPointer(n, { x:rows[0].L.trackBox.x + rows[0].L.trackBox.w, y:t0.y });
+    reindex(); sizeAll();
+    ok('MV05h ★ 拖第 0 行到最右 = 甲的上限 100', varDefAt(n, 0).value === '100', varDefAt(n, 0).value);
+    ok('MV05i ★ 拖第 0 行没动到乙', varDefAt(n, 1).value === '10', varDefAt(n, 1).value);
+
+    /* ★ 双击改值：读的必须是那一行的 */
+    setVarEditIndex(1);
+    ok('MV05j ★ 双击第 1 行的初值来自乙', editValue('varValue', n) === varDefAt(n, 1).value,
+      editValue('varValue', n) + ' vs ' + varDefAt(n, 1).value);
+    setVarEditIndex(0);
+    ok('MV05k ★ 双击第 0 行的初值来自甲', editValue('varValue', n) === varDefAt(n, 0).value,
+      editValue('varValue', n) + ' vs ' + varDefAt(n, 0).value);
+    ok('MV05l 两次读到的不是同一个值',
+      varDefAt(n, 0).value !== varDefAt(n, 1).value, varDefAt(n, 0).value + ' / ' + varDefAt(n, 1).value);
+
+    /* ★ 改名只改那一行，改完还能按新名字引用 */
+    setVarEditIndex(1);
+    editSetValue('varName', n, '乙改');
+    ok('MV05m 改名只改第 1 行', varDefAt(n, 1).name === '乙改', varDefAt(n, 1).name);
+    ok('MV05n 第 0 行没动', varDefAt(n, 0).name === '甲', varDefAt(n, 0).name);
+    ok('MV05o ★ 改完能按新名字引用，拿到的是乙的值',
+      String(interpolateIn(liveCtx(), '{乙改}', n.id)) === varDefAt(n, 1).value,
+      String(interpolateIn(liveCtx(), '{乙改}', n.id)) + ' vs ' + varDefAt(n, 1).value);
+    ok('MV05p ★ 甲的值没被串过去',
+      String(interpolateIn(liveCtx(), '{甲}', n.id)) === varDefAt(n, 0).value,
+      String(interpolateIn(liveCtx(), '{甲}', n.id)) + ' vs ' + varDefAt(n, 0).value);
+
+    /* ★ 单变量：一行都别变 */
+    const one = addVarNode('单价', 0, 700, { name:'单价', control:'slider', value:'50', min:'0', max:'100', step:'1' });
+    reindex(); sizeAll();
+    const r1 = varLayoutsFor(one);
+    ok('MV05q 单变量只有一行', r1.length === 1, String(r1.length));
+    ok('MV05r 单变量点轨道命中 slider',
+      (hitVarControl(one, mid(r1[0].L.trackBox)) || {}).kind === 'slider');
+    ok('MV05s 单变量 varRowIndexAt 恒为 0',
+      varRowIndexAt(one, mid(r1[0].L.trackBox)) === 0, String(varRowIndexAt(one, mid(r1[0].L.trackBox))));
+    ok('MV05t ★ 单变量 varRowLayout 就是原来那一条（结构相同）', (() => {
+      const b = varBoxes(one), r = varRowLayout(one, 0).L;
+      return b.trackBox && r.trackBox && Math.abs(b.trackBox.y - r.trackBox.y) < 0.001
+        && Math.abs(b.trackBox.w - r.trackBox.w) < 0.001;
+    })(), '');
+    setSliderFromPointer(one, { x:r1[0].L.trackBox.x + r1[0].L.trackBox.w, y:r1[0].L.trackBox.y + 2 });
+    reindex(); sizeAll();
+    ok('MV05u 单变量拖到最右 = 上限 100', varDefAt(one, 0).value === '100', varDefAt(one, 0).value);
+
+    fresh();   /* ★ 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
