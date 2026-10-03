@@ -166,6 +166,30 @@ function importCSV(){
   });
 }
 
+/* 一次导出多个表格：每个表一个文件。
+   （合成一个文件的话，两个表的列数不同会串行，读的人得自己切 —— 不如分开。） */
+function exportTablesCSV(nodes){
+  const list = (nodes || []).filter(isTableNode);
+  if (!list.length){ say('* 没有表格节点可以导出。'); return 0; }
+  let done = 0, empty = 0, totalRows = 0;
+  const used = new Set();
+  list.forEach((n, i) => {
+    const rows = tableRowsForExport(n);
+    if (!rows.length){ empty++; return; }
+    /* 文件名去重：同名表格加序号，免得后一个把前一个盖掉 */
+    let base = String(n.text || '表格').replace(/[\\/:*?"<>|]/g, '_').trim() || '表格';
+    if (used.has(base)){ let k = 2; while (used.has(base + '-' + k)) k++; base = base + '-' + k; }
+    used.add(base);
+    setTimeout(() => {
+      downloadBlob(new Blob([toCSV(rows)], { type:'text/csv;charset=utf-8' }), base + '.csv');
+    }, i * 120);                       // 隔一点时间，免得浏览器把连发的下载当成弹窗拦掉
+    done++; totalRows += rows.length;
+  });
+  say('* 导出了 ' + done + ' 个表格（共 ' + totalRows + ' 行，公式已算成结果）'
+    + (empty ? '，' + empty + ' 个是空表跳过了' : '') + '。');
+  return done;
+}
+
 /* 导出：表格节点 → .csv（算完的结果） */
 function exportTableCSV(n){
   if (!n || !isTableNode(n)){ say('* 先选一个表格节点。'); return; }

@@ -9391,6 +9391,105 @@
       tableOf(bn).rows <= 40 && tableOf(bn).cols <= 12,
       tableOf(bn).rows + '×' + tableOf(bn).cols);
   });
+
+  T('RF01 表格引用：行列逻辑和 Excel 一样', () => {
+    /* 列号：双射二十六进制（没有 0，A=1，Z=26，AA=27） */
+    ok('RF01 A→0', colToIndex('A') === 0, String(colToIndex('A')));
+    ok('RF01b Z→25', colToIndex('Z') === 25, String(colToIndex('Z')));
+    ok('RF01c AA→26', colToIndex('AA') === 26, String(colToIndex('AA')));
+    ok('RF01d AZ→51', colToIndex('AZ') === 51, String(colToIndex('AZ')));
+    ok('RF01e BA→52（不是 26×2=52 碰巧，是双射进制）', colToIndex('BA') === 52, String(colToIndex('BA')));
+    ok('RF01f 0→A / 25→Z / 26→AA / 51→AZ / 52→BA',
+      indexToCol(0) === 'A' && indexToCol(25) === 'Z' && indexToCol(26) === 'AA'
+      && indexToCol(51) === 'AZ' && indexToCol(52) === 'BA',
+      [0,25,26,51,52].map(indexToCol).join('/'));
+    ok('RF01g ★ 往返 200 次全对', (() => {
+      for (let i = 0; i < 200; i++) if (colToIndex(indexToCol(i)) !== i) return '第 ' + i + ' 个错';
+      return 'ok';
+    })(), 'ok');
+    /* 识别 */
+    ok('RF01h A1 是引用', isCellRef('A1') === true);
+    ok('RF01i $A$1 也认（绝对引用标记照收、忽略）',
+      JSON.stringify(parseCellRef('$A$1')) === JSON.stringify({ c:0, r:0 }),
+      JSON.stringify(parseCellRef('$A$1')));
+    ok('RF01j AA10（第 27 列第 10 行）',
+      JSON.stringify(parseCellRef('AA10')) === JSON.stringify({ c:26, r:9 }),
+      JSON.stringify(parseCellRef('AA10')));
+    ok('RF01k 1A 不是引用', isCellRef('1A') === false);
+    ok('RF01k2 abc 不是引用', isCellRef('abc') === false);
+    ok('RF01k3 光秃秃的 A 不是引用（没有行号）', isCellRef('A') === false);
+    /* 端到端：在表格节点里引用 */
+    fresh();
+    const rows = parseCSV('数量,单价,小计\n3,4,{=A2*B2}\n5,6,{=A3*B3}\n,,\n合计,{=SUM(A2:A3)},{=SUM(C2:C3)}');
+    const n = addTableNodeFromRows(rows, 0, 0, '账');
+    reindex(); sizeAll();
+    ok('RF01l 表头 A1', displayTableCell(n, 0, 0) === '数量', displayTableCell(n, 0, 0));
+    ok('RF01m ★ 单格引用 {=A2*B2} = 3×4',
+      displayTableCell(n, 1, 2) === '12', displayTableCell(n, 1, 2));
+    ok('RF01n ★ 再来一行 {=A3*B3} = 5×6',
+      displayTableCell(n, 2, 2) === '30', displayTableCell(n, 2, 2));
+    ok('RF01o ★ 区域求和 {=SUM(A2:A3)} = 3+5',
+      displayTableCell(n, 4, 1) === '8', displayTableCell(n, 4, 1));
+    ok('RF01p ★ 引用公式的结果（区域套区域）= 12+30',
+      displayTableCell(n, 4, 2) === '42', displayTableCell(n, 4, 2));
+    /* 区域还能和普通变量混着写 */
+    const v = addVarNode('系数', 0, 600, { name:'系数', value:'10' });
+    reindex(); sizeAll();
+    const t = tableOf(n);
+    t.rows = Math.max(t.rows, 6);
+    t.cells[5] = t.cells[5] || [];
+    t.cells[5][0] = '{=SUM(A2:A3) * 系数}';
+    n.tableDef = normalizeTableDef(t);
+    reindex(); sizeAll();
+    ok('RF01q 区域和变量能混用 = (3+5)×10',
+      displayTableCell(n, 5, 0) === '80', displayTableCell(n, 5, 0));
+    void v;
+    /* 出界 */
+    ok('RF01r 出界给空串', displayTableCell(n, 99, 99) === '', JSON.stringify(displayTableCell(n, 99, 99)));
+    ok('RF01s 出界坐标不会崩', (() => {
+      try { const tt = tableOf(n); displayTableCell(n, tt.rows + 5, tt.cols + 5); return 'ok'; }
+      catch(e){ return '炸:' + e.message; }
+    })(), 'ok');
+    /* ★ 循环引用不能卡死 —— A1 引用 B1，B1 引用 A1 */
+    const m = addNodeAt('环', 900, 0, 'rect');
+    m.kind = 'table';
+    m.tableDef = normalizeTableDef({ cols:2, rows:1, cells:[['{=B1}','{=A1}']] });
+    reindex(); sizeAll();
+    ok('RF01t ★ 循环引用不卡死', (() => {
+      const t0 = Date.now(); displayTableCell(m, 0, 0);
+      return (Date.now() - t0) < 3000 ? 'ok' : '超时';
+    })(), 'ok');
+    /* 普通节点里不该认单元格 —— 那里根本没有表格 */
+    const f = addNodeAt('普通', 0, 900, 'rect');
+    reindex(); sizeAll();
+    ok('RF01u 普通节点里 SUM(A1:A2) 报公式错误（没有单元格）',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{=SUM(A1:A2)}', f.id)) === '[公式错误]',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{=SUM(A1:A2)}', f.id)));
+    /* ★★ 导出：引用算完的结果，不是公式 */
+    const csv = tableToCSV(n);
+    ok('RF01v ★★ 导出的还是结果不是公式',
+      csv.indexOf('{=') < 0 && csv.indexOf('12') >= 0 && csv.indexOf('42') >= 0,
+      JSON.stringify(csv));
+  });
+
+  T('CS02 一次导出多个表格', () => {
+    fresh();
+    const a = addTableNodeFromRows(parseCSV('甲,1\n乙,2'), 0, 0, '表一');
+    const b = addTableNodeFromRows(parseCSV('丙,3\n丁,4'), 400, 0, '表二');
+    reindex(); sizeAll();
+    ok('CS02 两个都是表格节点', isTableNode(a) && isTableNode(b));
+    /* exportTablesCSV 会真去下载，测试里只验「筛选 + 计数」这条逻辑 */
+    const listed = [a, b, addNodeAt('普通', 800, 0, 'rect')].filter(isTableNode);
+    ok('CS02b 只挑表格节点', listed.length === 2, String(listed.length));
+    ok('CS02c 每个表都能算出导出内容',
+      tableRowsForExport(a).length === 2 && tableRowsForExport(b)[0][0] === '丙',
+      JSON.stringify(tableRowsForExport(a)));
+    /* 空表跳过 */
+    const e = addNodeAt('空表', 1200, 0, 'rect');
+    e.kind = 'table'; e.tableDef = normalizeTableDef({ cols:2, rows:2, cells:[] });
+    reindex(); sizeAll();
+    ok('CS02d 空表不产生内容', tableRowsForExport(e).length === 0);
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

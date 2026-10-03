@@ -827,6 +827,10 @@ function resolveTokenIn(ctx, inner, fromId){
   const body = inner.trim();
   if (body.charAt(0) === '='){
     if (typeof evalFormula !== 'function') return '[没有公式模块]';
+    /* ★ 如果这个公式写在**表格节点**的单元格里，就带上单元格引用上下文：
+         A1 / B2 / A1:B10 相对当前表格 —— 和 Excel 一样。 */
+    const owner = (ctx && ctx.byId) ? ctx.byId.get(fromId) : null;
+    const refCtx = (typeof tableRefCtx === 'function') ? tableRefCtx(owner, fromId) : null;
     const out = evalFormula(body.slice(1), (nm) => {
       /* 名字里可能带点：名单.0 / 配置.host —— 先当「变量 + 下标」试 */
       const dot = nm.indexOf('.');
@@ -839,7 +843,7 @@ function resolveTokenIn(ctx, inner, fromId){
         }
       }
       return resolveVarIn(ctx, nm, fromId);
-    });
+    }, refCtx || undefined);
     return (out === null || out === undefined) ? '[公式错误]' : out;
   }
   const d = splitDot(inner);

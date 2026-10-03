@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · ui/exporter.js
    导出面板：范围选择、标题与文件名、PNG 输出。
@@ -206,4 +206,14 @@ expTitleEl.addEventListener('keydown', onExportFieldKey);
 expTitleEl.addEventListener('input', updateExportInfo);
 document.getElementById('expGo').onclick = doExport;
 document.getElementById('expCancel').onclick = closeExport;
+/* CSV：把当前范围里**所有**表格节点一次导出（每个表一个文件） */
+{
+  const b = document.getElementById('expCsv');
+  if (b) b.onclick = () => {
+    const tables = (currentExportSet() || []).filter(x => isTableNode(x));
+    if (!tables.length){ say('* 没有表格节点可以导出。'); return; }
+    exportTablesCSV(tables);
+    closeExport();
+  };
+}
 

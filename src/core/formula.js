@@ -48,17 +48,29 @@ function fCmp(a, b){
   return sa < sb ? -1 : sa > sb ? 1 : 0;
 }
 
+/* 把参数里的「区域」摊平：SUM(A1:B2, 3) → [a,b,c,d,3]。
+   Excel 里 SUM 这类函数就是这么吃区域的。 */
+function fFlat(args){
+  const out = [];
+  for (const a of args || []){
+    if (a && typeof a === 'object' && Array.isArray(a.__range)) out.push(...a.__range);
+    else out.push(a);
+  }
+  return out;
+}
+const fRange = (list) => ({ __range: list });
+
 /* ---------------- 函数库 ----------------
    参数是**已经求过值**的数组。返回数字或字符串。 */
 const FUNCS = {
   /* 统计 */
-  SUM:   (a) => a.reduce((s, v) => s + fToNum(v), 0),
-  AVG:   (a) => a.length ? a.reduce((s, v) => s + fToNum(v), 0) / a.length : 0,
+  SUM:   (a0) => { const a = fFlat(a0); return a.reduce((s, v) => s + fToNum(v), 0); },
+  AVG:   (a0) => { const a = fFlat(a0); return a.length ? a.reduce((s, v) => s + fToNum(v), 0) / a.length : 0; },
   AVERAGE: (a) => FUNCS.AVG(a),
-  MAX:   (a) => a.length ? Math.max(...a.map(fToNum)) : 0,
-  MIN:   (a) => a.length ? Math.min(...a.map(fToNum)) : 0,
-  COUNT: (a) => a.filter(v => String(v).trim() !== '' && !isNaN(Number(v))).length,
-  COUNTA:(a) => a.filter(v => fToStr(v).trim() !== '').length,
+  MAX:   (a0) => { const a = fFlat(a0); return a.length ? Math.max(...a.map(fToNum)) : 0; },
+  MIN:   (a0) => { const a = fFlat(a0); return a.length ? Math.min(...a.map(fToNum)) : 0; },
+  COUNT: (a0) => fFlat(a0).filter(v => String(v).trim() !== '' && !isNaN(Number(v))).length,
+  COUNTA:(a0) => fFlat(a0).filter(v => fToStr(v).trim() !== '').length,
   /* 数字 */
   ROUND: (a) => { const d = a.length > 1 ? Math.round(fToNum(a[1])) : 0;
                   const p = Math.pow(10, d); return Math.round(fToNum(a[0]) * p) / p; },
@@ -73,14 +85,14 @@ const FUNCS = {
   SIGN:  (a) => Math.sign(fToNum(a[0])),
   /* 逻辑 */
   IF:    (a) => fTruthy(a[0]) ? a[1] : a[2],
-  AND:   (a) => a.every(fTruthy),
-  OR:    (a) => a.some(fTruthy),
+  AND:   (a0) => fFlat(a0).every(fTruthy),
+  OR:    (a0) => fFlat(a0).some(fTruthy),
   NOT:   (a) => !fTruthy(a[0]),
   ISBLANK: (a) => fToStr(a[0]).trim() === '',
   /* 文本 */
   LEN:   (a) => [...fToStr(a[0])].length,
-  CONCAT:(a) => a.map(fToStr).join(''),
-  CONCATENATE: (a) => a.map(fToStr).join(''),
+  CONCAT:(a0) => fFlat(a0).map(fToStr).join(''),
+  CONCATENATE: (a0) => fFlat(a0).map(fToStr).join(''),
   UPPER: (a) => fToStr(a[0]).toUpperCase(),
   LOWER: (a) => fToStr(a[0]).toLowerCase(),
   TRIM:  (a) => fToStr(a[0]).trim(),
@@ -122,7 +134,7 @@ function fLex(src){
       t.push({ k:'op', v:(two === '<>' || two === '!=') ? '!=' : (two === '==' ? '=' : two) });
       i += 2; continue;
     }
-    if ('+-*/%^()&|,<>=!'.indexOf(c) >= 0){ t.push({ k:'op', v:c }); i++; continue; }
+    if ('+-*/%^()&|,:<>=!'.indexOf(c) >= 0){ t.push({ k:'op', v:c }); i++; continue; }
     const m = src.slice(i).match(F_NAME);
     if (m){ t.push({ k:'name', v:m[0] }); i += m[0].length; continue; }
     throw new Error('看不懂这个符号：' + c);
@@ -133,7 +145,8 @@ function fLex(src){
 
 /* ---------------- 语法 / 求值（递归下降） ----------------
    resolve(name) 由调用方给 —— 它负责按当前作用域去找变量。 */
-function fParse(tokens, resolve){
+function fParse(tokens, resolve, opts){
+  opts = opts || {};
   let p = 0;
   const peek = () => tokens[p];
   const eat = (v) => { if (tokens[p].k === 'op' && tokens[p].v === v){ p++; return true; } return false; };
@@ -207,6 +220,19 @@ function fParse(tokens, resolve){
     if (t.k === 'name'){
       p++;
       const nm = t.v;
+      /* ★ Excel 式区域 A1:B10 —— 只有**给了区域解析器**（也就是在表格节点里）
+         才认这个冒号；普通节点里冒号仍然是语法错误。 */
+      if (opts.range && isCellRef(nm) && peek().k === 'op' && peek().v === ':'){
+        p++;
+        const t2 = peek();
+        if (t2.k === 'name' && isCellRef(t2.v)){
+          p++;
+          const vals = opts.range(nm, t2.v);
+          if (!vals) throw new Error('区域太大或不对');
+          return fRange(vals);
+        }
+        throw new Error('冒号右边不是单元格');
+      }
       if (peek().k === 'op' && peek().v === '('){
         p++;
         const args = [];
@@ -218,6 +244,11 @@ function fParse(tokens, resolve){
         const fn = FUNCS[nm.toUpperCase()];
         if (!fn) throw new Error('没有这个函数：' + nm);
         return fn(args);
+      }
+      /* ★ 单元格引用：A1 / B2 —— 相对**当前表格节点**，和 Excel 一致 */
+      if (opts.cell && isCellRef(nm)){
+        const cv = opts.cell(nm);
+        return cv === undefined ? '' : cv;
       }
       /* 常量 */
       const up = nm.toUpperCase();
@@ -236,10 +267,10 @@ function fParse(tokens, resolve){
 
 /* 入口：算一段公式（**不含**最外层那个 = 和花括号）。
    出错返回 null —— 调用方会显示 [公式错误]，不炸整块画布。 */
-function evalFormula(src, resolve){
+function evalFormula(src, resolve, opts){
   const s = String(src == null ? '' : src).trim();
   if (!s) return null;
-  try { return fParse(fLex(s), resolve); }
+  try { return fParse(fLex(s), resolve, opts); }
   catch(e){ formulaLastError = e.message; return null; }
 }
 let formulaLastError = '';
