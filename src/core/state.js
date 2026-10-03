@@ -625,7 +625,11 @@ function serialize(){
       image:(n.kind === 'image' && typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
-      varDef:(n.kind === 'var' || n.kind === 'broadcast') ? normalizeVarDef(n.varDef) : null,
+      /* 变量节点可以挂多个变量 → 写 varDefs；
+         同时把第一个写进 varDef，老版本读这份存档也不会瞎。
+         广播节点固定单变量，只写 varDef。 */
+      varDefs:(n.kind === 'var') ? nodeVarDefs(n) : null,
+      varDef:(n.kind === 'var' || n.kind === 'broadcast') ? nodeVarDef(n) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       tableDef:(n.kind === 'table') ? normalizeTableDef(n.tableDef) : null,
@@ -677,7 +681,11 @@ function deserialize(d){
       image:(typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
-      varDef:(n.kind === 'var' || n.kind === 'broadcast') ? normalizeVarDef(n.varDef) : null,
+      /* 变量节点可以挂多个变量 → 写 varDefs；
+         同时把第一个写进 varDef，老版本读这份存档也不会瞎。
+         广播节点固定单变量，只写 varDef。 */
+      varDefs:(n.kind === 'var') ? nodeVarDefs(n) : null,
+      varDef:(n.kind === 'var' || n.kind === 'broadcast') ? nodeVarDef(n) : null,
       opDef:(n.kind === 'op') ? normalizeOpDef(n.opDef) : null,
       outDef:(n.kind === 'out') ? normalizeOutDef(n.outDef) : null,
       tableDef:(n.kind === 'table') ? normalizeTableDef(n.tableDef) : null,

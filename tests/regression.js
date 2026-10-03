@@ -9263,6 +9263,66 @@
       String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{=NOPE(1)}', n3.id)));
     void n1; void n2;
   });
+
+  T('MV01 多变量：数据层地基（第 1 步）', () => {
+    fresh();
+    /* 一个节点挂三个变量 —— UI 还没做，先验数据层 */
+    const n = addNodeAt('设置', 0, 0, 'round');
+    n.kind = 'var';
+    n.varDefs = [
+      { name:'音量', control:'slider', type:'number', value:'70', min:'0', max:'100', step:'1' },
+      { name:'画质', control:'check',  type:'string', options:['低','中','高'], picked:[2] },
+      { name:'全屏', control:'cond',   type:'number', value:'1' }
+    ];
+    reindex(); sizeAll();
+    ok('MV01 nodeVarDefs 给出全部三个', nodeVarDefs(byId(n.id)).length === 3,
+      String(nodeVarDefs(byId(n.id)).length));
+    ok('MV01b 顺序和名字都对', nodeVarDefs(byId(n.id)).map(d => d.name).join(',') === '音量,画质,全屏',
+      nodeVarDefs(byId(n.id)).map(d => d.name).join(','));
+    ok('MV01c nodeVarDef 给第一个（广播和老代码用）', nodeVarDef(byId(n.id)).name === '音量',
+      nodeVarDef(byId(n.id)).name);
+    ok('MV01d 勾选变量的选项规范化过',
+      nodeVarDefs(byId(n.id))[1].options.join(',') === '低,中,高',
+      nodeVarDefs(byId(n.id))[1].options.join(','));
+    ok('MV01e varRefInNode 能定位到第几个', (() => {
+      const r = varRefInNode(byId(n.id), '画质'); return !!r && r.index === 1 && r.def.name === '画质';
+    })(), JSON.stringify(varRefInNode(byId(n.id), '画质') && varRefInNode(byId(n.id), '画质').index));
+    ok('MV01f varRefInNode 找不到给 null', varRefInNode(byId(n.id), '没有这个') === null);
+    /* 老存档：单个 varDef 也要认得 */
+    const m = addNodeAt('老的', 400, 0, 'round');
+    m.kind = 'var'; m.varDef = { name:'旧量', control:'plain', value:'9' };
+    reindex(); sizeAll();
+    ok('MV01g 老存档 varDef 包成一项', nodeVarDefs(byId(m.id)).length === 1,
+      String(nodeVarDefs(byId(m.id)).length));
+    ok('MV01h 老存档的名字读得到', nodeVarDef(byId(m.id)).name === '旧量', nodeVarDef(byId(m.id)).name);
+    ok('MV01i 没有变量的节点给空数组', nodeVarDefs(addNodeAt('普通', 800, 0, 'rect')).length === 0);
+    /* 序列化：写 varDefs + varDef（老版本可读）；广播固定单变量 */
+    const b = addNodeAt('广播', 1200, 0, 'round');
+    b.kind = 'broadcast'; b.varDef = { name:'流', value:'1' };
+    reindex(); sizeAll();
+    const pack = serialize();
+    const n0 = pack.nodes.find(x => x.id === n.id);
+    const b0 = pack.nodes.find(x => x.id === b.id);
+    ok('MV01j 存档写 varDefs', Array.isArray(n0.varDefs) && n0.varDefs.length === 3,
+      JSON.stringify(n0.varDefs && n0.varDefs.length));
+    ok('MV01k 存档同时写 varDef（老版本读得懂）', n0.varDef && n0.varDef.name === '音量',
+      n0.varDef && n0.varDef.name);
+    ok('MV01l 广播节点不写 varDefs', b0.varDefs === null, JSON.stringify(b0.varDefs));
+    ok('MV01m 广播节点照写 varDef', b0.varDef && b0.varDef.name === '流', b0.varDef && b0.varDef.name);
+    /* 存取往返 */
+    deserialize(pack);
+    const back = doc.nodes.find(x => x.kind === 'var' && nodeVarDefs(x).length === 3);
+    ok('MV01n 读回来还是三个', !!back && nodeVarDefs(back).length === 3,
+      back ? String(nodeVarDefs(back).length) : '没找到');
+    ok('MV01o 读回来第一个还是音量', !!back && nodeVarDef(back).name === '音量',
+      back ? nodeVarDef(back).name : '-');
+    /* 单变量行为一点没变 —— 这是第 1 步最重要的保证 */
+    const one = addVarNode('单价', 0, 600, { name:'单价', control:'plain', value:'12' });
+    reindex(); sizeAll();
+    ok('MV01p ★ 单变量行为完全不变（求值照旧）',
+      interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id) === '12',
+      String(interpolateIn(buildCtx(doc.nodes, doc.edges, doc.groups), '{单价}', one.id)));
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

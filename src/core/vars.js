@@ -139,6 +139,35 @@ function normalizeVarDef(v){
   out.value = String(out.value == null ? '' : out.value);
   return out;
 }
+/* =========================================================================
+   一个变量节点上的**全部**变量定义。
+   新存档是 n.varDefs（数组）；老存档是 n.varDef（单个）——
+   这里统一成数组，读的时候两种都认，所以老文档一行都不用改。
+   ========================================================================= */
+function nodeVarDefs(n){
+  if (!n) return [];
+  if (Array.isArray(n.varDefs) && n.varDefs.length) return n.varDefs.map(normalizeVarDef);
+  if (n.varDef) return [normalizeVarDef(n.varDef)];
+  return [];
+}
+/* 只要一个的时候（广播节点固定单变量；老代码也大多按单个用） */
+function nodeVarDef(n){
+  const l = nodeVarDefs(n);
+  return l.length ? l[0] : normalizeVarDef(null);
+}
+/* 这个节点上有没有叫这个名字的变量；有就返回 { node, index, def } */
+function varRefInNode(n, name){
+  const defs = nodeVarDefs(n);
+  for (let i = 0; i < defs.length; i++) if (defs[i].name === name) return { node:n, index:i, def:defs[i] };
+  return null;
+}
+/* 拿某个具体变量的值：浅拷贝换掉 varDef，不动任何函数的签名 */
+function varRefValueIn(ctx, ref, fromId){
+  if (!ref || !ref.node) return null;
+  const shadow = Object.assign({}, ref.node, { varDef: ref.def });
+  return defValueIn(ctx, shadow, fromId);
+}
+
 function normalizeOutDef(o){
   const out = Object.assign({ name:'output' }, o || {});
   out.name = String(out.name == null ? '' : out.name).replace(/[{}.\s]/g, '') || 'output';
@@ -438,10 +467,25 @@ function findVarDefIn(ctx, name, fromId){
   let best = null, bestP = -Infinity;
   for (const n of ctx.nodes){
     if (!isVarNode(n)) continue;
-    if (normalizeVarDef(n.varDef).name !== name) continue;
+    if (nodeVarDef(n).name !== name) continue;
     if (!varVisibleIn(ctx, n, fromId)) continue;
     const p = priorityOf(n);
     if (p > bestP){ bestP = p; best = n; }
+  }
+  return best;
+}
+/* {变量节点名.变量名} —— 一个节点挂多个变量时，用它指名道姓。
+   和 findVarDefIn 一样按优先级挑，同级取文档里靠前的。 */
+function findVarRefByTitle(ctx, nodeName, varName, fromId){
+  let best = null, bestP = -Infinity;
+  for (const n of ctx.nodes){
+    if (!isVarNode(n)) continue;
+    if (String(n.text == null ? '' : n.text) !== nodeName) continue;
+    if (!varVisibleIn(ctx, n, fromId)) continue;
+    const ref = varRefInNode(n, varName);
+    if (!ref) continue;
+    const p = priorityOf(n);
+    if (p > bestP){ bestP = p; best = ref; }
   }
   return best;
 }
