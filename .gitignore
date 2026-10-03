@@ -1,4 +1,4 @@
-﻿# 测试与调试产物
+# 测试与调试产物
 .grapheon-test-profile/
 .grapheon-test.html
 .grapheon-test-profile*/
@@ -14,3 +14,7 @@ dist/
 tag.html
 tag.js
 tag.png
+
+# 提交信息用的临时文件（git commit -F 用完就删，别提交进去）
+_m*.txt
+msg*.txt
