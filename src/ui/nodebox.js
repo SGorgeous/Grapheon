@@ -228,8 +228,15 @@ function renderNodeBox(){
   // ---- 这个节点身上叠了哪些算符 ----
   const hits = programHits(n.id);
   if (prog){
-    nbHitsEl.textContent = doc.edges.some(e => e.s === n.id)
-      ? '算符会沿着从它出发的连线叠加到目标上；多个外观节点按连线先后依次累加。'
+    /* ★ 这一行必须是**活的** —— 以前是一句固定文案，
+       只看「有没有出边」，所以连到谁、连了几个它永远不变。
+       下一条（非程序节点）本来就是活的，这条跟着学。 */
+    const outs = doc.edges.filter(e => e.s === n.id)
+      .map(e => byId(e.t) || byGroup(e.t))
+      .filter(Boolean);
+    nbHitsEl.textContent = outs.length
+      ? '作用于 ' + outs.map(t => tagOf(t)).join('、')
+        + '；多个外观节点按连线先后依次累加。'
       : '还没连到任何节点：从它拉一条线到目标节点，算符才会生效。';
   } else if (hits.length){
     const ev = effOf(n);

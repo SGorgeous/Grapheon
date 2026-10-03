@@ -9926,6 +9926,51 @@
     }
     fresh();   /* 收尾清干净 */
   });
+
+  T('MV08 程序节点面板那行灰字是活的：连着谁就报谁', () => {
+    fresh();
+    const el = document.getElementById('nbHits');
+    const line = () => { renderNodeBox(); return el.textContent; };
+    const pg = addNodeAt('染红', -300, 0, 'round');
+    pg.kind = 'program'; pg.program = normalizeProgram({ op:'color', value:'#ff0000' });
+    const a = addNodeAt('甲目标', 200, -100, 'round');
+    const b = addNodeAt('乙目标', 200, 100, 'round');
+    reindex(); sizeAll();
+    selectOnly(byId(pg.id)); openNodeBox(byId(pg.id));
+
+    /* ① 还没连 */
+    ok('MV08 没连时提示去连线', line().indexOf('还没连到') === 0, line());
+    /* ② 连一个 —— ★ 以前这里是一句固定文案，连到谁都不变 */
+    const e1 = linkNodes(pg.id, a.id); reindex(); sizeAll();
+    ok('MV08b ★ 连上之后报出目标的名字', line().indexOf('甲目标') >= 0, line());
+    /* ③ 连两个 */
+    linkNodes(pg.id, b.id); reindex(); sizeAll();
+    const t2 = line();
+    ok('MV08c ★ 两个目标都报出来',
+      t2.indexOf('甲目标') >= 0 && t2.indexOf('乙目标') >= 0, t2);
+    ok('MV08d ★ 括号只有一层（tagOf 自己就带「」，别再套一层）',
+      (t2.match(/「/g) || []).length === 2 && t2.indexOf('「「') < 0, t2);
+    /* ④ 目标改名 → 跟着变 */
+    byId(a.id).text = '甲改名';
+    reindex(); sizeAll();
+    ok('MV08e ★ 目标改名后这一行跟着变',
+      line().indexOf('甲改名') >= 0 && line().indexOf('甲目标') < 0, line());
+    /* ⑤ 断开一条 → 少一个 */
+    doc.edges = doc.edges.filter(x => x.id !== e1.id);
+    reindex(); sizeAll();
+    ok('MV08f ★ 断开后少一个',
+      line().indexOf('甲改名') < 0 && line().indexOf('乙目标') >= 0, line());
+    /* ⑥ 全断开 → 回到提示 */
+    doc.edges = doc.edges.filter(x => x.s !== pg.id);
+    reindex(); sizeAll();
+    ok('MV08g ★ 全断开回到「还没连到」', line().indexOf('还没连到') === 0, line());
+    /* ⑦ 连到分组也要认 */
+    doc.groups = [ { id:'mg1', title:'一组', color:'', members:[a.id, b.id] } ];
+    linkNodes(pg.id, 'mg1'); reindex(); sizeAll();
+    ok('MV08h ★ 连到分组时报分组名', line().indexOf('一组') >= 0, line());
+    closeNodeBox();
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
