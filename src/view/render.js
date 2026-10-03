@@ -619,7 +619,14 @@ function drawVarNode(g, n, b, selected, hov){
     g.fillStyle = C.bg;
     g.fillRect(b.x, b.y, b.w, b.h);
     g.restore();
+    /* ★ 逐行画的时候裁到节点框内（布局可能比节点宽）。
+       save/restore 和这里同一个函数，配平一眼可见。 */
+    g.save();
+    g.beginPath();
+    g.rect(b.x, b.y, b.w, b.h);
+    g.clip();
     for (let i = 0; i < rows.length; i++) drawVarRow(g, n, b, rows[i], i, selected, hov);
+    g.restore();
     /* 每行右侧的 +/−（和表格节点一样，只在选中或悬停时出现） */
     if (selected || hov) drawVarButtons(g, n, C.yellow);
     g.save();
@@ -643,6 +650,16 @@ function drawVarNode(g, n, b, selected, hov){
   const startY = b.y + 8 + n.lh / 2;
   for (let i = 0; i < n.lines.length; i++) g.fillText(n.lines[i], b.x + VAR_PAD, startY + i * n.lh);
   g.restore();
+  /* ★ 从这里到控件都裁到节点框内（布局可能比节点宽）。
+     下面 broadcast 那条早退分支要记得收掉这一层。 */
+  /* ★ 裁到节点框内：内部布局可能比节点宽（手动缩过之后布局不跟着扁），
+     不裁的话字会跑到节点外面。裁掉的是「看不见」，不是「变形」。
+     ⚠ save/restore 和这里**同一个函数**，配平一眼可见 ——
+       挪进 helper 的话 tools/check-balance 就看不出来了。 */
+  g.save();
+  g.beginPath();
+  g.rect(b.x, b.y, b.w, b.h);
+  g.clip();
   // 变量名格子：普通变量和三种控件**都有**（控件节点的在左边，控件本体在它右边）
   drawField(g, L.nameBox, v.name, C.yellow);
   /* 广播节点：右边显示**实际输出**（只读）—— 值来自输入，不能自己填 */
@@ -651,18 +668,20 @@ function drawVarNode(g, n, b, selected, hov){
     // 右上角一个 wifi 符号 —— 一看就知道这个节点的值是「广播出去」的
     drawWifiIcon(g, b.x + b.w - 18, b.y + 14, 14,
                  entityTint(n, 'node') || effColor(n) || (selected ? C.yellow : C.white));
-    /* ⚠ 这里**不能** restore —— 上面 573 行已经配平过了。
-       多这一次会把 draw() 里 save 的**世界变换**提前弹掉，
-       之后画的东西全落到屏幕坐标上（症状：节点悬浮、缩放不动）。 */
-    return;
-  }
-  if (v.control === 'check')       drawCheckControl(g, L, v);
-  else if (v.control === 'list')   drawListControl(g, L, v, n.id);
-  else if (v.control === 'map')    drawMapControl(g, L, v, n.id);
-  else if (v.control === 'slider') drawSliderControl(g, L, v, n);
-  else if (v.control === 'switch') drawSwitchControl(g, L, v);
+  } else if (v.control === 'check')  drawCheckControl(g, L, v);
+  else if (v.control === 'list')     drawListControl(g, L, v, n.id);
+  else if (v.control === 'map')      drawMapControl(g, L, v, n.id);
+  else if (v.control === 'slider')   drawSliderControl(g, L, v, n);
+  else if (v.control === 'switch')   drawSwitchControl(g, L, v);
   else drawField(g, L.valBox, controlValue(v, n.id), v.type === 'number' ? C.white : C.gray);
-  /* 单变量时也画 —— 有了它，加第二个变量不用先开面板 */
+  /* ⚠ 收掉上面那层 clip，**只有这一处** ——
+     以前广播节点是「画完就 return」，那样会变成 1 个 save 配 2 个 restore，
+     tools/check-balance 按静态数就报失衡。改成单一出口，静态也配平。
+     顺带：这里不能多 restore 一次 —— draw() 里那层世界变换还在栈上，
+     多弹一次会让之后画的东西全落到屏幕坐标（症状：节点悬浮、缩放不动）。 */
+  g.restore();
+  /* 单变量时也画 —— 有了它，加第二个变量不用先开面板。
+     ⚠ 在 clip 之外：按钮在节点**外面**。 */
   if (selected || hov) drawVarButtons(g, n, C.yellow);
   // 作用域 + 控件类型
   setFont(g, FS, 'normal', FONT);

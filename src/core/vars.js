@@ -1134,17 +1134,26 @@ const VAR_ROW_GAP = 6;
 /* 每一行的「行高」（不含标题行）：本体 + 作用域那一条 + 上下留白 */
 function varRowHeight(L, lineH){ return 8 + lineH + L.bodyH + 8 + L.scopeBox.h + 6; }
 
+/* ★ 内部布局的**宽度下限**：12 + 118 + 10 + 80（varLayout 里 bodyW 自己的下限）。
+   节点被手动缩到这个宽度以下时，布局**不跟着扁** ——
+   字号是常量，压扁只会把字挤出节点外面。
+   超出的部分由 drawVarNode 裁掉：看得少了，但没变形，放大回去还在。 */
+const VAR_LAYOUT_MIN_W = VAR_PAD * 2 + VAR_NAME_W + 10 + 80;
+
 function varLayoutsFor(n){
   const b = nodeBox(n);
   const defs = nodeVarDefs(n);
   const lineH = Math.max(1, n.lines.length) * n.lh;
   const list = defs.length ? defs : [normalizeVarDef(null)];
-  /* ★ 单变量：原样返回，一个字节都不变 */
-  if (list.length === 1) return [{ def:list[0], L:varLayout(b, list[0], lineH), first:true }];
+  /* ★ 只有**手动缩过**的节点（有 fixedW）才吃这道下限。
+     自动排版的尺寸本来就是按内容算出来的，动它会改变既有形态。 */
+  const lw = (n.fixedW > 0) ? Math.max(b.w, VAR_LAYOUT_MIN_W) : b.w;
+  /* ★ 单变量：原样返回，一个字节都不变（lw 在没缩过时 === b.w） */
+  if (list.length === 1) return [{ def:list[0], L:varLayout({ x:b.x, y:b.y, w:lw, h:b.h }, list[0], lineH), first:true }];
   const out = [];
   let y = b.y + 8 + lineH;                       // 标题行下面开始叠
   for (let i = 0; i < list.length; i++){
-    const L = varLayout({ x:b.x, y, w:b.w, h:0 }, list[i], 0);
+    const L = varLayout({ x:b.x, y, w:lw, h:0 }, list[i], 0);
     out.push({ def:list[i], L, first:(i === 0) });
     y += varRowHeight(L, 0) + VAR_ROW_GAP;
   }
@@ -1155,9 +1164,10 @@ function varLayoutsHeight(n){
   const b = nodeBox(n);
   const defs = nodeVarDefs(n);
   const lineH = Math.max(1, n.lines.length) * n.lh;
-  if (defs.length <= 1) return varLayout({ x:0, y:0, w:b.w }, defs[0], lineH).height;
+  const lw = (n.fixedW > 0) ? Math.max(b.w, VAR_LAYOUT_MIN_W) : b.w;
+  if (defs.length <= 1) return varLayout({ x:0, y:0, w:lw }, defs[0], lineH).height;
   let total = 8 + lineH;
-  for (const d of defs) total += varRowHeight(varLayout({ x:0, y:0, w:b.w, h:0 }, d, 0), 0) + VAR_ROW_GAP;
+  for (const d of defs) total += varRowHeight(varLayout({ x:0, y:0, w:lw, h:0 }, d, 0), 0) + VAR_ROW_GAP;
   return total + 4;
 }
 /* ★ 命中测试 / 滑条取值都按**行**来。

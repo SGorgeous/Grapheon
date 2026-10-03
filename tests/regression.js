@@ -10447,6 +10447,78 @@
     hideCtx();
     fresh();   /* 收尾清干净 */
   });
+
+  T('CL01 缩小时内部布局不压扁，改成裁切', () => {
+    fresh();
+    const v = addNodeAt('设置', 0, 0, 'round');
+    v.kind = 'var';
+    v.varDefs = [ { name:'单价', control:'plain', value:'12' },
+                  { name:'数量', control:'plain', value:'3' } ];
+    reindex(); sizeAll();
+    /* ⚠ nodeBox() 返回的是**活对象** —— sizeNode 会原地改它。
+       不快照的话 v0/v1/v2 是同一个对象，比大小永远相等。 */
+    const snap = (o) => ({ x:o.x, y:o.y, w:o.w, h:o.h });
+    const v0 = snap(nodeBox(byId(v.id)));
+    const r0 = varLayoutsFor(byId(v.id));
+    ok('CL01 自动尺寸时没吃下限：布局用的宽就是节点宽',
+      r0[0].L.valBox.x + r0[0].L.valBox.w <= v0.x + v0.w + 1,
+      Math.round(r0[0].L.valBox.x + r0[0].L.valBox.w) + ' vs ' + Math.round(v0.x + v0.w));
+
+    /* 手动缩到很窄 */
+    setNodeSize(byId(v.id), 120, 90);
+    reindex(); sizeAll();
+    const v1 = snap(nodeBox(byId(v.id)));
+    const r1 = varLayoutsFor(byId(v.id));
+    ok('CL01b ★ 确实缩下去了', v1.w < 140, String(Math.round(v1.w)));
+    ok('CL01c ★ 名称框宽度没被压扁（还是 VAR_NAME_W）',
+      Math.round(r1[0].L.nameBox.w) === VAR_NAME_W, String(Math.round(r1[0].L.nameBox.w)));
+    ok('CL01d ★ 行高没被压扁（还是 VAR_BOX_H）',
+      Math.round(r1[0].L.nameBox.h) === VAR_BOX_H, String(Math.round(r1[0].L.nameBox.h)));
+    ok('CL01e ★ 值框宽度不小于 varLayout 自己的下限 80',
+      r1[0].L.valBox.w >= 80, String(Math.round(r1[0].L.valBox.w)));
+    /* 布局宽 = 内容下限（12*2 + 118 + 10 + 80 = 232） */
+    /* ★ plain 的值框宽度本来就是个常量 VAR_VAL_W（不吃 bodyW），
+       真正会被节点宽度压扁的是 innerW —— 也就是**作用域那一行**
+       （scopeBox）以及 list / map / slider 的本体。
+       所以这里量 scopeBox：布局宽 = max(节点宽, VAR_LAYOUT_MIN_W)，
+       右边留 VAR_PAD，于是 scopeBox 右边到节点左边的距离正好是 布局宽 - VAR_PAD。 */
+    ok('CL01f ★ 值框宽度是常量 VAR_VAL_W（本来就不吃节点宽）',
+      Math.round(r1[0].L.valBox.w) === VAR_VAL_W, String(Math.round(r1[0].L.valBox.w)));
+    ok('CL01f2 ★ 作用域那行保住了内容下限（这才是会被压扁的地方）',
+      Math.round(r1[0].L.scopeBox.x + r1[0].L.scopeBox.w - v1.x)
+        === Math.max(v1.w, VAR_LAYOUT_MIN_W) - VAR_PAD,
+      '实测 ' + Math.round(r1[0].L.scopeBox.x + r1[0].L.scopeBox.w - v1.x)
+        + '，期望 ' + (Math.max(v1.w, VAR_LAYOUT_MIN_W) - VAR_PAD)
+        + '（节点宽 ' + Math.round(v1.w) + '，下限 ' + VAR_LAYOUT_MIN_W + '）');
+    /* 关键：布局不许伸出节点框（伸出去=字溢出；现在靠 clip 挡住，
+       但布局本身也需要有下限，否则 clip 掉的就是内容而不是"外面"） */
+    ok('CL01g 缩过之后行数 / 顺序没变',
+      varLayoutsFor(byId(v.id)).length === r0.length,
+      varLayoutsFor(byId(v.id)).length + ' vs ' + r0.length);
+    /* 放大回去，内容都还在 */
+    setNodeSize(byId(v.id), 500, 320);
+    reindex(); sizeAll();
+    const v2 = snap(nodeBox(byId(v.id)));
+    ok('CL01h ★ 能放大回去', v2.w > v1.w && v2.h > v1.h,
+      Math.round(v2.w) + '×' + Math.round(v2.h));
+    ok('CL01i ★ 放大回去之后内容还在（行数一样）',
+      varLayoutsFor(byId(v.id)).length === r0.length,
+      String(varLayoutsFor(byId(v.id)).length));
+    /* 画一帧不抛：clip 的 save/restore 必须配平 */
+    draw();
+    ok('CL01j 画一帧不抛（clip 配平）', true);
+    /* 反复缩有稳定下限 */
+    setNodeSize(byId(v.id), 30, 20);
+    reindex(); sizeAll();
+    const w1 = nodeBox(byId(v.id)).w;
+    setNodeSize(byId(v.id), 30, 20);
+    reindex(); sizeAll();
+    const w2 = nodeBox(byId(v.id)).w;
+    ok('CL01k ★ 反复缩有稳定下限', Math.round(w2) === Math.round(w1),
+      Math.round(w2) + ' vs ' + Math.round(w1));
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
