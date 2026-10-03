@@ -177,6 +177,137 @@ function pathCrossCount(pts, boxes){
   return n;
 }
 
+/* 正交连接线寻路（可见性网格 + A*）
+   ─────────────────────────────────────────────────────────────
+   参考 draw.io / Lucidchart 那套 Orthogonal Connector Routing：
+   把所有节点的边（外扩 PAD）当成候选坐标线，它们的交点构成一张路网，
+   在路网上跑 A*（拐弯加惩罚 → 自然选拐点最少的路）。
+   结构上**不可能**穿过盒子 —— 不是「试出来没穿」，是路网里就没有那种边。
+
+   放在 orthoGeom 里当**兜底**：候选打分那套跑完还是穿，才走这里。
+   这样正常情况的行为一点不变（不砸现有断言），只有病态排布才换路。
+   ========================================================================= */
+const GRID_MAX_CELLS = 2600;      // 路网上限，超了就不试（宁可维持现状）
+const GRID_TURN_COST = 34;        // 拐一次弯相当于多走这么多像素
+
+/* 极简二叉堆 */
+function heapPush(h, item){
+  h.push(item);
+  let i = h.length - 1;
+  while (i > 0){
+    const p = (i - 1) >> 1;
+    if (h[p].c <= h[i].c) break;
+    const t = h[p]; h[p] = h[i]; h[i] = t; i = p;
+  }
+}
+function heapPop(h){
+  const top = h[0], last = h.pop();
+  if (h.length){
+    h[0] = last;
+    let i = 0;
+    for (;;){
+      const l = i * 2 + 1, r = l + 1;
+      let m = i;
+      if (l < h.length && h[l].c < h[m].c) m = l;
+      if (r < h.length && h[r].c < h[m].c) m = r;
+      if (m === i) break;
+      const t = h[m]; h[m] = h[i]; h[i] = t; i = m;
+    }
+  }
+  return top;
+}
+
+/* p0/p1/p2/p3 是四个端点；boxes 是**要躲开**的盒子。
+   返回一条正交折线（含 p0 和 p3），或者 null。 */
+function routeOrthoAStar(p0, p1, p2, p3, boxes){
+  if (!boxes || !boxes.length) return null;
+  const PAD = AVOID_PAD;
+
+  /* ── ① 候选坐标线 ── */
+  const xs = new Set([p0.x, p1.x, p2.x, p3.x]);
+  const ys = new Set([p0.y, p1.y, p2.y, p3.y]);
+  for (const b of boxes){
+    xs.add(b.x - PAD); xs.add(b.x + b.w + PAD); xs.add(b.x + b.w / 2);
+    ys.add(b.y - PAD); ys.add(b.y + b.h + PAD); ys.add(b.y + b.h / 2);
+  }
+  const X = [...xs].sort((m, n) => m - n);
+  const Y = [...ys].sort((m, n) => m - n);
+  const W = X.length, H = Y.length;
+  if (W * H > GRID_MAX_CELLS) return null;
+
+  const xi = new Map(); X.forEach((v, i) => xi.set(v, i));
+  const yi = new Map(); Y.forEach((v, i) => yi.set(v, i));
+
+  /* ── ② 这一小段是不是穿盒子 ──
+     坐标线都取在盒子边界（±PAD）上，所以只需看中点：
+     中点在盒内 ⇒ 整段在盒内。 */
+  const inBox = (x, y) => {
+    for (const b of boxes){
+      if (x > b.x - PAD && x < b.x + b.w + PAD && y > b.y - PAD && y < b.y + b.h + PAD) return true;
+    }
+    return false;
+  };
+  const segOK = (x1, y1, x2, y2) => {
+    if (x1 === x2 && y1 === y2) return false;
+    /* 采样几个点，别只看中点（段可能跨过一整个盒子） */
+    const n = Math.max(2, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 8));
+    for (let k = 0; k <= n; k++){
+      const t = k / n;
+      if (inBox(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)) return false;
+    }
+    return true;
+  };
+
+  const si = xi.get(p1.x), sj = yi.get(p1.y);
+  const gi = xi.get(p2.x), gj = yi.get(p2.y);
+  if (si == null || sj == null || gi == null || gj == null) return null;
+
+  /* ── ③ A*（状态 = 格点 + 从哪个方向进的，用来数拐弯） ── */
+  const N = W * H;
+  const dirStart = (p1.x !== p0.x) ? 1 : 2;          // 1=横 2=竖
+  const INF = Infinity;
+  const g = new Float64Array(N * 3).fill(INF);
+  const prev = new Int32Array(N * 3).fill(-1);
+  const key = (i, j, d) => (j * W + i) * 3 + d;
+  const hcost = (i, j) => (Math.abs(X[i] - p2.x) + Math.abs(Y[j] - p2.y));
+  const heap = [];
+  const sk = key(si, sj, dirStart);
+  g[sk] = 0;
+  heapPush(heap, { k:sk, i:si, j:sj, d:dirStart, c:hcost(si, sj) });
+  const DIRS = [[1,0,1],[-1,0,1],[0,1,2],[0,-1,2]];
+  let goalKey = -1, guard = 0;
+  while (heap.length && guard++ < 60000){
+    const cur = heapPop(heap);
+    if (cur.i === gi && cur.j === gj){ goalKey = cur.k; break; }
+    if (cur.c - hcost(cur.i, cur.j) > g[cur.k] + 1e-6) continue;   // 过期条目
+    for (const [dx, dy, d2] of DIRS){
+      const ni = cur.i + dx, nj = cur.j + dy;
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+      if (!segOK(X[cur.i], Y[cur.j], X[ni], Y[nj])) continue;
+      const step = Math.abs(X[ni] - X[cur.i]) + Math.abs(Y[nj] - Y[cur.j]);
+      const turn = (cur.d === d2) ? 0 : GRID_TURN_COST;
+      const nk = key(ni, nj, d2);
+      const ng = g[cur.k] + step + turn;
+      if (ng < g[nk] - 1e-6){
+        g[nk] = ng; prev[nk] = cur.k;
+        heapPush(heap, { k:nk, i:ni, j:nj, d:d2, c:ng + hcost(ni, nj) });
+      }
+    }
+  }
+  if (goalKey < 0) return null;
+
+  /* ── ④ 回溯 ── */
+  const mid = [];
+  let k = goalKey;
+  while (k >= 0){
+    const cell = Math.floor(k / 3);
+    mid.push({ x:X[cell % W], y:Y[Math.floor(cell / W)] });
+    k = prev[k];
+  }
+  mid.reverse();
+  return [p0, ...mid, p3];
+}
+
 function orthoGeom(a, b, bias, ka, kb, obstacles){
   bias = bias || 0;
   const ac = { x:a.x + a.w / 2, y:a.y + a.h / 2 };
@@ -313,6 +444,16 @@ function orthoGeom(a, b, bias, ka, kb, obstacles){
       if (cross === 0 && self === 0 && c.d === 0) break;
     }
     if (bestC) pts = bestC.pts;
+    /* ★ 兜底：试遍了候选还是穿（两个盒子重叠 / 紧贴时就会），
+       换成正经的正交寻路。躲的范围是「所有障碍 + 两端自己」——
+       两端自己也得躲，那正是「穿过自己」的来源。 */
+    if (bestC && (bestC.cross > 0 || bestC.self > 0)){
+      const routed = routeOrthoAStar(p0, p1, p2, p3,
+        boxes.concat([a, b].filter(Boolean)));
+      if (routed && pathCrossCountInner(routed, boxes) === 0){
+        pts = routed;
+      }
+    }
   }
   /* 收尾清理：
      ① 扔掉完全重合的点
