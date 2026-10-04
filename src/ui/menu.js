@@ -790,6 +790,9 @@ function showInsertMenu(anchor){
       say('* 加了节点' + tagOf(n) + '。');
     }],
     ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
+    /* ★ 多媒体节点的正路：文件写进 user/，文档里只记一个文件名（几十个字节）。
+       上面那条「图片…」是内嵌（data:），文档会变大。 */
+    ['引用 user/ 里的文件…', '写进 user/，文档里只记文件名', () => pickFilesIntoUser()],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
     'hr',
     ['变量定义节点', '单一变量 / 滑块 / 列表 / 地图，右键可切', () => {

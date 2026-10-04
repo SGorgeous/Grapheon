@@ -700,6 +700,88 @@ const newImageNode = (url, natW, natH, x, y) => {
 };
 /* 视口正中的世界坐标，用来决定新图片落在哪 */
 const viewCenter = () => s2w(VW / 2, VH / 2 - 60);
+/* =========================================================================
+   把本地文件放进 user/，再建一个**引用**它们的节点
+   ─────────────────────────────────────────────────────────────
+   为什么要有这个入口：
+     相对地址的好处是文档里只有几十个字节，但用户得自己把文件拷进 user/。
+     这个入口替他做：选目录 → 选文件 → 写进去 → 建节点。
+
+   用的是 File System Access API。id 和素材库共用 'grapheon-user' ——
+   那本来就是**同一个文件夹**，共用的话浏览器只需要授权一次。
+   优先复用上次那个句柄（存在 IndexedDB 里），拿不到才弹选择器。
+   ⚠ 这两步都必须在**用户手势**里调（点菜单算），不能自动弹。
+   ========================================================================= */
+async function grabUserDir(){
+  if (typeof window === 'undefined' || typeof window.showDirectoryPicker !== 'function'){
+    say('* 这个浏览器不支持直接写文件夹。');
+    return null;
+  }
+  /* ① 上次用过的那个（权限还要再确认一次，这也得在手势里） */
+  if (typeof loadDirHandle === 'function'){
+    try {
+      const h = await loadDirHandle();
+      if (h && h.requestPermission){
+        const perm = await h.requestPermission({ mode:'readwrite' });
+        if (perm === 'granted') return h;
+      }
+    } catch (e) { /* 拿不到就当没有，走下面 */ }
+  }
+  /* ② 让用户选一个 */
+  try {
+    const h = await window.showDirectoryPicker({ mode:'readwrite', id:'grapheon-user' });
+    if (typeof saveDirHandle === 'function'){ try { await saveDirHandle(h); } catch (e) {} }
+    return h;
+  } catch (e) {
+    return null;                      // 用户取消了
+  }
+}
+async function pickFilesIntoUser(){
+  const dir = await grabUserDir();
+  if (!dir) return false;
+  /* 选文件用 <input type=file> 而不是 showOpenFilePicker ——
+     这个到处都能用，也不用额外的权限确认。 */
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.addEventListener('change', async () => {
+    const files = [...(inp.files || [])];
+    try { inp.remove(); } catch (e) {}
+    if (!files.length) return;
+    const saved = [];
+    for (const f of files){
+      try {
+        const fh = await dir.getFileHandle(f.name, { create:true });
+        const w = await fh.createWritable();
+        await w.write(f);
+        await w.close();
+        saved.push(f.name);
+      } catch (e) { /* 单个失败不挡别的 */ }
+    }
+    if (!saved.length){ say('* 一个都没写进去。'); return; }
+    /* 建节点：放在视口正中，多个就往下排 */
+    const c = viewCenter();
+    let y = Math.round(c.y - (saved.length - 1) * 40);
+    const made = [];
+    for (const nm of saved){
+      const n = addNodeAt(nm, Math.round(c.x - 120), y, 'rect');
+      n.kind = 'image';
+      n.src = nm;                     // ★ 只写文件名，靠 mediaHref 补 user/ 前缀
+      made.push(n);
+      y += 80;
+    }
+    reindex();
+    for (const n of made) sizeNode(n);
+    reindex(); sizeAll();
+    if (made.length) selectOnly(made[0].id);
+    pushHist(); mark();
+    say('* 放进 user/ 了：' + saved.length + ' 个文件。');
+  }, { once:true });
+  inp.click();
+  return true;
+}
 /* 从文件插一张图。at 不给就放视口正中 */
 function insertImageFile(file, at){
   if (!file){ return; }

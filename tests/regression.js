@@ -11238,6 +11238,46 @@
     ok('MT02r 画一帧不抛', true);
     fresh();   /* 收尾清干净 */
   });
+
+  T('MU01 把本地文件放进 user/：入口在，失败也不炸', () => {
+    fresh();
+    ok('MU01 pickFilesIntoUser 在', typeof pickFilesIntoUser === 'function');
+    ok('MU01b grabUserDir 在', typeof grabUserDir === 'function');
+    ok('MU01c 复用语料库那对句柄存取函数（同一个 user 文件夹，只授权一次）',
+      typeof loadDirHandle === 'function' && typeof saveDirHandle === 'function');
+
+    /* 入口在「插入」菜单里 */
+    document.getElementById('b-insert').click();
+    const labels = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('MU01d ★ 插入菜单里有「引用 user/ 里的文件…」',
+      labels.some(x => x.indexOf('引用 user/') >= 0), labels.join(' / '));
+    hideCtx();
+
+    /* ★ 浏览器不支持的时候要**优雅失败**（返回 null + 一句话），不能抛。
+       临时把 showDirectoryPicker 藏掉再恢复 —— 这就是「不支持」的样子。 */
+    const real = window.showDirectoryPicker;
+    let p1 = null;
+    try {
+      try { window.showDirectoryPicker = undefined; } catch (e) {}
+      p1 = grabUserDir();
+    } finally { /* 恢复放在下面的 then 里，因为 grabUserDir 是 async */ }
+    p1.then((r) => {
+      ok('MU01e ★ 不支持时返回 null（不抛）', r === null, String(r));
+      ok('MU01f 提示语说清楚了', /不支持/.test(dlgText.textContent), dlgText.textContent.slice(0, 30));
+      /* 用户取消（AbortError）也不能抛 */
+      window.showDirectoryPicker = () => {
+        const e = new Error('cancel'); e.name = 'AbortError'; return Promise.reject(e);
+      };
+      return grabUserDir().then((r2) => {
+        ok('MU01g ★ 用户取消时也不抛', r2 === null, String(r2));
+        window.showDirectoryPicker = real;
+      });
+    }).catch((ex) => {
+      window.showDirectoryPicker = real;
+      ok('MU01h ★ grabUserDir 不该把异常抛出来', false, String(ex && ex.message));
+    });
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
