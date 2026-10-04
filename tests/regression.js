@@ -10622,10 +10622,16 @@
       clientX:Math.round(b.x + 20 + view.x), clientY:Math.round(b.y + 20 + view.y),
       bubbles:true, cancelable:true, button:2 }));
     const labels = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
-    ok('NM01u ★ 节点菜单里有「布局」', labels.indexOf('布局') >= 0, labels.join(' / '));
-    const lay = [...ctxEl.querySelectorAll('.item')].find(d => d.querySelector('.lb').textContent === '布局');
-    ok('NM01v 布局那一项有子菜单 ▶',
-      [...lay.querySelectorAll('.k')].some(k => k.textContent === '▶'));
+    /* ★ 优先级**并进「结构」**了，不再单独占一个顶层「布局」——
+       顶层名额有限（PM01 卡 <= 8），而且它本来就是结构性的东西。 */
+    ok('NM01u ★ 顶层没有单独的「布局」', labels.indexOf('布局') < 0, labels.join(' / '));
+    const st = [...ctxEl.querySelectorAll('.item')].find(d => d.querySelector('.lb').textContent === '结构');
+    ok('NM01v ★ 「结构」有子菜单 ▶',
+      !!st && [...st.querySelectorAll('.k')].some(k => k.textContent === '▶'));
+    /* 子菜单是**单击**展开的 —— contextmenu 是弹用法提示的，展不开 */
+    st.click();
+    const sub = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('NM01w ★ 优先级在「结构」里', sub.some(x => x.indexOf('优先级') >= 0), sub.join(' / '));
     hideCtx();
     fresh();   /* 收尾清干净 */
   });
@@ -10808,6 +10814,94 @@
     draw();
     ok('FX01u 画一帧不抛', true);
     hideCtx();
+    fresh();   /* 收尾清干净 */
+  });
+
+  T('ST01 条件隐藏进「结构」、线宽进连线菜单、分组有「效果 ▶」', () => {
+    fresh();
+    const A = addNodeAt('甲', 0, 0, 'round');
+    const B = addNodeAt('乙', 400, 0, 'round');
+    reindex(); sizeAll();
+    const E = linkNodes(A.id, B.id);
+    reindex(); sizeAll();
+    const allItems = () => [...document.querySelectorAll('.menu .item')];
+    const labelOf = (d) => d.querySelector('.lb').textContent;
+    const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
+
+    /* ① 节点：条件隐藏在「结构」里，顶层降到 6 项 */
+    hideCtx();
+    showCtx(500, 400, byId(A.id), null, { p:{} });
+    const tops = [...ctxEl.querySelectorAll('.item')].map(labelOf);
+    /* ★ 断言**不变量**而不是一个写死的数字：
+       我一开始写死 6，结果 fresh() 用的是经典示例，
+       那个节点还多一项「连线端点吸附…」，实际是 7。
+       真正要保证的是「没有单独的布局菜单」+「不超过上限」。 */
+    ok('ST01 ★ 顶层没有单独的「布局」（优先级并进「结构」了）',
+      tops.indexOf('布局') < 0, tops.join(' / '));
+    ok('ST01a2 ★ 顶层仍然不超过 8 项', tops.length <= 8, tops.length + ' 项: ' + tops.join(' / '));
+    const st = [...ctxEl.querySelectorAll('.item')].find(d => labelOf(d) === '结构');
+    st.click();      /* ★ 子菜单是单击展开的 */
+    const sub = allItems().map(labelOf);
+    ok('ST01b ★ 优先级在「结构」里', sub.some(x => x.indexOf('优先级') >= 0), sub.join(' / '));
+    ok('ST01c ★ 条件隐藏在「结构」里', sub.some(x => x.indexOf('条件隐藏') >= 0), sub.join(' / '));
+    allItems().find(d => labelOf(d).indexOf('条件隐藏') >= 0).click();
+    ok('ST01d 条件隐藏浮层开了', numBoxOpen());
+    ok('ST01e 一个字段', rows().length === 1, String(rows().length));
+    ok('ST01f 是纯文本字段（条件要能写表达式，不给滑条）',
+      !rows()[0].querySelector('.nbrange') && !!rows()[0].querySelector('.nbtext'));
+    rows()[0].querySelector('.nbtext').value = '{隐藏}';
+    document.getElementById('numboxOk').click();
+    ok('ST01g ★ 条件隐藏挂上且值对',
+      compOn(byId(A.id), 'hideIf') && compRaw(byId(A.id), 'hideIf', 'when') === '{隐藏}',
+      String(compRaw(byId(A.id), 'hideIf', 'when')));
+
+    /* ② 连线：线宽在连线菜单里（组件入口换掉了） */
+    hideCtx();
+    /* ⚠ 连线要从 doc.edges 里找 —— byId 只查节点，我探针就在这栽过一次 */
+    const eo = doc.edges.find(x => x.id === E.id);
+    showCtx(700, 300, null, eo, { p:null });
+    const etops = [...ctxEl.querySelectorAll('.item')].map(labelOf);
+    ok('ST01h ★ 连线菜单里有「线宽…」', etops.some(x => x.indexOf('线宽') >= 0), etops.join(' / '));
+    ok('ST01i ★ 连线菜单里没有「组件」了', !etops.some(x => x.indexOf('组件') >= 0), etops.join(' / '));
+    allItems().find(d => labelOf(d).indexOf('线宽') >= 0).click();
+    ok('ST01j 线宽浮层开了', numBoxOpen());
+    ok('ST01k 滑条上限 20', rows()[0].querySelector('.nbrange').max === '20',
+      rows()[0].querySelector('.nbrange').max);
+    rows()[0].querySelector('.nbtext').value = '6';
+    rows()[0].querySelector('.nbtext').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('ST01l 填 6 → 滑条跟着', rows()[0].querySelector('.nbrange').value === '6',
+      rows()[0].querySelector('.nbrange').value);
+    document.getElementById('numboxOk').click();
+    ok('ST01m ★ 线宽挂上且存成数字 6',
+      compOn(doc.edges.find(x => x.id === E.id), 'width')
+      && compNumber(doc.edges.find(x => x.id === E.id), 'width', 'value', 'edge', 0) === 6,
+      String(compNumber(doc.edges.find(x => x.id === E.id), 'width', 'value', 'edge', 0)));
+
+    /* ③ 分组：收在一个「效果 ▶」子菜单里 */
+    hideCtx();
+    doc.groups = [ { id:'stg1', title:'一组', color:'', members:[A.id, B.id] } ];
+    reindex(); sizeAll();
+    showCtx(300, 300, null, null, { group:byGroup('stg1') });
+    const gtops = [...ctxEl.querySelectorAll('.item')].map(labelOf);
+    ok('ST01n ★ 分组菜单里有「效果」子菜单', gtops.indexOf('效果') >= 0, gtops.join(' / '));
+    ok('ST01o ★ 分组菜单里没有「组件」了', !gtops.some(x => x.indexOf('组件') >= 0), gtops.join(' / '));
+    [...ctxEl.querySelectorAll('.item')].find(d => labelOf(d) === '效果').click();
+    const gsub = allItems().map(labelOf);
+    ok('ST01p ★ 分组能挂 染色 / 透明度 / 描边 / 角标 / 条件隐藏',
+      ['染色', '透明度', '自定义描边', '角标', '条件隐藏'].every(k => gsub.some(x => x.indexOf(k) >= 0)),
+      gsub.join(' / '));
+    ok('ST01q ★ 分组没有「线宽」（那是连线专属，作用域过滤掉了）',
+      !gsub.some(x => x.indexOf('线宽') >= 0), gsub.join(' / '));
+    allItems().find(d => labelOf(d).indexOf('透明度') >= 0).click();
+    ok('ST01r 分组的透明度浮层也能开', numBoxOpen());
+    rows()[0].querySelector('.nbtext').value = '30';
+    document.getElementById('numboxOk').click();
+    ok('ST01s ★ 分组透明度挂上且值对',
+      compOn(byGroup('stg1'), 'opacity')
+      && compNumber(byGroup('stg1'), 'opacity', 'value', 'group', 0) === 30,
+      String(compNumber(byGroup('stg1'), 'opacity', 'value', 'group', 0)));
+    hideCtx();
+    draw();
     fresh();   /* 收尾清干净 */
   });
   /* ==================== 收尾 ==================== */

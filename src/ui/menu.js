@@ -180,6 +180,87 @@ function pushCommonItems(items, target, kind, renameHint){
   }
 }
 
+/* =========================================================================
+   组件效果 → 右键菜单项（第二步：从组件面板搬进菜单）
+   没挂上：点一下挂上（用默认值）；挂上了：● 开头，点开小浮层改参数。
+   字段类型直接映射到浮层（number → 滑条+填空，color → 色块+填空，text → 填空）。
+
+   scope 决定哪些效果可用（effectDef(id).scopes）；
+   who   是显示给用户看的「是谁」—— 节点是 tagOf(n)，连线是 edgeTag(e)。
+
+   ⚠ 这里**不用正则** —— 我的写文件管线吃过反斜杠（\d 变成 d），
+     正则静默失配过一次。数字判断走 nbAsNumber。
+   ========================================================================= */
+function effectMenuItems(entity, scope, ids, who){
+  const out = [];
+  for (const id of ids){
+    const def = effectDef(id);
+    if (!def || def.scopes.indexOf(scope) < 0) continue;
+    const on = compOn(entity, id);
+    const props = def.props || [];
+    const fields = props.map(p => {
+      const isNum = p.type === 'number';
+      const lab = p.label || p.key;
+      return {
+        key: p.key, label: lab,
+        type: p.type === 'color' ? 'color' : (isNum ? 'number' : 'text'),
+        min: isNum ? 0 : undefined,
+        /* 透明度的量程是 0~100，别的数字（粗细 / 线宽）按 0~20 给 */
+        max: isNum ? (lab.indexOf('透明') >= 0 ? 100 : 20) : undefined,
+        step: 1,
+        placeholder: p.refable ? '留空 = 默认；也可以写 {变量}' : '留空 = 默认'
+      };
+    });
+    const values = {};
+    for (const p of props) values[p.key] = (p.def == null ? '' : String(p.def));
+    if (on){
+      for (const p of props){
+        const raw = compRaw(entity, id, p.key);
+        if (raw != null && raw !== '') values[p.key] = String(raw);
+      }
+    }
+    out.push([(on ? '● ' : '   ') + def.label + (props.length ? '…' : ''),
+      on ? '点开改参数' : (def.hint || ''),
+      () => {
+        if (!props.length){
+          if (on){ removeComponent(entity, id); say('* ' + who + '的' + def.label + '已关掉。'); }
+          else { setComponent(entity, id, {}); say('* ' + who + '挂上了' + def.label + '。'); }
+          reindex(); sizeAll(); pushHist(); mark();
+          return;
+        }
+        openValueBox({
+          title: def.label, who, hint: def.hint || '',
+          fields, values,
+          onOk: (vals) => {
+            const next = {};
+            let any = false;
+            for (const p of props){
+              const v = String(vals[p.key] == null ? '' : vals[p.key]);
+              if (v === '') continue;
+              const num = nbAsNumber(v);
+              next[p.key] = (p.type === 'number' && num != null) ? num : v;
+              any = true;
+            }
+            if (!any){
+              removeComponent(entity, id);
+              say('* ' + who + '的' + def.label + '已关掉。');
+            } else {
+              setComponent(entity, id, next);
+              say('* ' + who + '的' + def.label + '已设置。');
+            }
+            reindex(); sizeAll(); pushHist(); mark();
+          }
+        });
+      }]);
+  }
+  return out;
+}
+/* 把这几个效果收进**一个**「效果 ▶」子菜单（顶层项不多的地方用） */
+function effectSubMenu(items, entity, scope, ids, who){
+  const list = effectMenuItems(entity, scope, ids, who);
+  if (list.length) items.push(['效果', '不改结构，只盖一层：' + list.map(x => x[0].replace(/^[●\s]+/, '')).join(' / '), null, list]);
+}
+
 function showCtx(x, y, n, e, info){
   info = info || {};
   const items = [];
@@ -197,76 +278,7 @@ function showCtx(x, y, n, e, info){
 
     /* ---------------- 外观 ▶ ---------------- */
     const look = [];
-    /* ★ 组件效果 → 菜单项。
-       没挂上：点一下挂上（用默认值）；挂上了：● 开头，点开小浮层改参数。
-       字段类型直接映射到浮层（number → 滑条+填空，color → 色块+填空，text → 填空）。
-       ⚠ 这里**不用正则** —— 我的 PowerShell 写文件管线吃过反斜杠，
-         \d 变成 d 让正则静默失配过一次。数字判断走 nbAsNumber。 */
-    const fxItems = (ids) => {
-      const out = [];
-      for (const id of ids){
-        const def = effectDef(id);
-        if (!def || def.scopes.indexOf('node') < 0) continue;
-        const on = compOn(n, id);
-        const props = def.props || [];
-        const fields = props.map(p => {
-          const isNum = p.type === 'number';
-          const lab = p.label || p.key;
-          return {
-            key: p.key, label: lab,
-            type: p.type === 'color' ? 'color' : (isNum ? 'number' : 'text'),
-            min: isNum ? 0 : undefined,
-            /* 透明度的量程是 0~100，别的数字（粗细 / 线宽）按 0~20 给 */
-            max: isNum ? (lab.indexOf('透明') >= 0 ? 100 : 20) : undefined,
-            step: 1,
-            placeholder: p.refable ? '留空 = 默认；也可以写 {变量}' : '留空 = 默认'
-          };
-        });
-        const values = {};
-        for (const p of props) values[p.key] = (p.def == null ? '' : String(p.def));
-        if (on){
-          for (const p of props){
-            const raw = compRaw(n, id, p.key);
-            if (raw != null && raw !== '') values[p.key] = String(raw);
-          }
-        }
-        out.push([(on ? '● ' : '   ') + def.label + (props.length ? '…' : ''),
-          on ? '点开改参数' : (def.hint || ''),
-          () => {
-            if (!props.length){
-              if (on){ removeComponent(n, id); say('* ' + tagOf(n) + '的' + def.label + '已关掉。'); }
-              else { setComponent(n, id, {}); say('* ' + tagOf(n) + '挂上了' + def.label + '。'); }
-              reindex(); sizeAll(); pushHist(); mark();
-              return;
-            }
-            openValueBox({
-              title: def.label, who: tagOf(n), hint: def.hint || '',
-              fields, values,
-              onOk: (vals) => {
-                const next = {};
-                let any = false;
-                for (const p of props){
-                  const v = String(vals[p.key] == null ? '' : vals[p.key]);
-                  if (v === '') continue;
-                  const num = nbAsNumber(v);
-                  next[p.key] = (p.type === 'number' && num != null) ? num : v;
-                  any = true;
-                }
-                if (!any){
-                  removeComponent(n, id);
-                  say('* ' + tagOf(n) + '的' + def.label + '已关掉。');
-                } else {
-                  setComponent(n, id, next);
-                  say('* ' + tagOf(n) + '的' + def.label + '已设置。');
-                }
-                reindex(); sizeAll(); pushHist(); mark();
-              }
-            });
-          }]);
-      }
-      return out;
-    };
-    look.push(...fxItems(['tint', 'outline', 'badge']));
+    look.push(...effectMenuItems(n, 'node', ['tint', 'outline', 'badge'], tagOf(n)));
     look.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
       [(n.shape === 'round'   ? '● ' : '   ') + '圆角矩形',   '', () => setShape('round')],
@@ -449,33 +461,32 @@ function showCtx(x, y, n, e, info){
     }
     struct.push('hr');
     struct.push([(n.collapsed ? '展开' : '折叠') + '子树', 'Tab', () => toggleCollapseOf(n)]);
-    items.push(['结构', '子节点 / 兄弟 / 分组 / 折叠', null, struct]);
-
-    /* ---------------- 布局 ▶（第一步：先放优先级）----------------
-       第二步会把组件面板里的「外观 / 行为」那几项也搬过来，并按分类排好。 */
+    /* ★ 优先级并进「结构」—— 它本来就是结构性的东西。
+       之前它单独占一个顶层「布局」菜单，既和「结构」重复，
+       又占掉顶层名额（PM01 卡 <= 8）。 */
     {
       const prio = (n.priority == null || n.priority === '') ? '' : String(n.priority);
-      items.push(['布局', '优先级：数值越大越先算', null, [
-        ['优先级…', prio === '' ? '默认（变量 1000 / 输出 900 / 运算 100）' : ('现在 ' + prio),
-          () => openNumBox({
-            title:'优先级', who:tagOf(n),
-            hint:'拖滑条快速试，或直接填精确值。留空 = 用默认（变量 1000 / 输出 900 / 运算 100 / 其余 0）；也可以填 {变量}。',
-            /* ★ step 用 1 不用 10：range 会把程序设的值吸附到步长上，
-               填 1234 却显示 1230 会让人以为没填进去（存是存对了）。
-               既然要「也能精确填空」，就给到 1。 */
-            min:0, max:2000, step:1, value:prio,
-            onOk: (v) => {
-              /* ★ 纯数字要存成**数字** —— priorityOf 只看 typeof === 'number'，
-                 存成字符串 "500" 会走表达式那条路。 */
-              const num = /^-?d+(.d+)?$/.test(v) ? Number(v) : null;
-              n.priority = (v === '') ? null : (num == null ? v : num);
-              reindex(); sizeAll(); pushHist(); mark();
-              say('* ' + tagOf(n) + '的优先级改为 ' + (v === '' ? '默认' : v)
-                + '（生效值 ' + priorityOf(n) + '）。');
-            }
-          })]
-      ]]);
+      struct.push(['优先级…', prio === '' ? '默认（变量 1000 / 输出 900 / 运算 100）' : ('现在 ' + prio),
+        () => openNumBox({
+          title:'优先级', who:tagOf(n),
+          hint:'拖滑条快速试，或直接填精确值。留空 = 用默认（变量 1000 / 输出 900 / 运算 100 / 其余 0）；也可以填 {变量}。',
+          min:0, max:2000, step:1, value:prio,
+          onOk: (v) => {
+            /* ★ 不用正则判断数字 —— 我的写文件管线吃过反斜杠，
+               把 \d 变成 d 让正则静默失配过一次。Number() 没这个问题。 */
+            const num = Number(String(v == null ? '' : v).trim());
+            const isNum = (String(v == null ? '' : v).trim() !== '' && isFinite(num));
+            n.priority = (v === '') ? null : (isNum ? num : v);
+            reindex(); sizeAll(); pushHist(); mark();
+            say('* ' + tagOf(n) + '的优先级改为 ' + (v === '' ? '默认' : v)
+              + '（生效值 ' + priorityOf(n) + '）。');
+          }
+        })]);
     }
+    /* ★ 条件隐藏归「行为」一类，但它也是「这个节点什么时候不出现」，
+       放进「结构」比另开一个顶层菜单合适（顶层名额有限）。 */
+    struct.push(...effectMenuItems(n, 'node', ['hideIf'], tagOf(n)));
+    items.push(['结构', '子节点 / 兄弟 / 分组 / 折叠 / 优先级 / 条件隐藏', null, struct]);
 
     /* ---------------- 表格 ▶（只有表格节点才有）---------------- */
     if (isTableNode(n)){
@@ -521,7 +532,8 @@ function showCtx(x, y, n, e, info){
     items.push(['颜色', '', null, colorSub(grp.color, (v) => {
       grp.color = v; mark(); pushHist(); say('* ' + tagOf(grp) + '的颜色改为' + (v || '默认') + '。');
     })]);
-    items.push(['组件…', 'C', () => openComps()]);
+    /* 分组也能挂外观 / 行为那几项（作用域过滤在 effectMenuItems 里） */
+    effectSubMenu(items, grp, 'group', ['tint', 'opacity', 'outline', 'badge', 'hideIf'], tagOf(grp));
     items.push([grp.isFunction ? '取消程序组' : '设为程序组', '', () => toggleFunctionGroup(grp)]);
     items.push([(grp.collapsed ? '展开' : '折叠') + '分组', 'Tab', () => toggleGroupCollapse(grp)]);
     items.push(['收缩到刚好包住成员', '', () => tidyGroup(grp)]);
@@ -565,7 +577,9 @@ function showCtx(x, y, n, e, info){
     items.push(['连线样式…', 'E', () => openEdgeBox()]);
     items.push(['编辑标签', '双击', () => startEdit('edge', e.id)]);
     items.push('hr');
-    items.push(['组件…', 'C', () => openComps()]);
+    /* 线宽是**连线专属**的效果，直接放这一层（第 3 步从组件面板搬过来）。
+       ⚠ 连线不能用 tagOf —— 它只认节点和分组，连线的名字要用 edgeTag。 */
+    items.push(...effectMenuItems(e, 'edge', ['width'], edgeTag(e)));
   items.push(['箭头', '', null, radioSub(
       ARROW_KINDS.map(k => [k, ARROW_LABEL[k]]), e.arrow,
       (v) => { setEdgeStyle(e, { arrow:v }); pushHist(); say('* 箭头：' + ARROW_LABEL[v]); })]);
