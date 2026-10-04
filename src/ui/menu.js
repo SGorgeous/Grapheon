@@ -796,12 +796,19 @@ function showInsertMenu(anchor){
     ['网页链接…', '填 https:// 地址，Ctrl+左键打开', () => {
       openValueBox({
         title:'网页链接', who:'新节点',
-        hint:'填 http:// 或 https:// 开头的地址。建好之后 Ctrl + 左键打开（和 Word 里一样）。',
-        fields:[{ key:'url', label:'地址', type:'text', placeholder:'https://example.com' }],
+        hint:'http:// 或 https:// 开头的地址。**没写协议头的话会自动补 https://**'
+           + '（example.com → https://example.com）。'
+           + '建好之后 Ctrl + 左键打开（和 Word 里一样）。',
+        fields:[{ key:'url', label:'地址', type:'text', placeholder:'example.com 或 https://example.com' }],
         values:{ url:'' },
         onOk: (vals) => {
-          const v = String(vals.url == null ? '' : vals.url).trim();
-          if (!v) return;
+          const typed = String(vals.url == null ? '' : vals.url).trim();
+          if (!typed) return;
+          /* ★ 没写 http(s):// 就自动补 https://（用户要的）。
+             只在**这个入口**补 —— 「相对地址…」和「换源…」不能补：
+             那两处的 pic.png 是相对地址、data: 是内嵌数据，
+             补上 https:// 就全坏了。 */
+          const v = (typeof mediaUrlOf === 'function') ? mediaUrlOf(typed) : typed;
           if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
             say('* 这个地址不让用。');
             return;
@@ -811,7 +818,8 @@ function showInsertMenu(anchor){
           n.kind = 'image'; n.src = v;
           reindex(); sizeNode(n); reindex(); sizeAll();
           selectOnly(n.id); pushHist(); mark();
-          say('* 加了网页节点。');
+          /* 补过就明说补成了什么（长地址不进提示语，底栏放不下） */
+          say(v !== typed ? '* 加了网页节点，已补成 https:// 开头。' : '* 加了网页节点。');
         }
       });
     }],

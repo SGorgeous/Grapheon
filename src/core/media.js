@@ -101,6 +101,38 @@ function mediaSchemeOf(s){
   const h = t.indexOf('#'); if (h >= 0 && h < i) return '';
   return t.slice(0, i);
 }
+/* ★ 这个名字像不像协议头？RFC 3986 规定协议头只能是字母。
+   为什么单独有这个判断：`example.com:8080` 里 ':' 前面的 "example.com"
+   会被 mediaSchemeOf 抠出来，但那是**主机:端口**，不是协议头。
+   不区分的话：① 白名单会把它当未知协议**拒掉**（明明是能用的地址）；
+             ② 「网页链接…」也不会给它补 https://。 */
+function mediaIsScheme(sc){
+  const t = String(sc == null ? '' : sc);
+  if (t === '') return false;
+  for (let i = 0; i < t.length; i++){
+    const c = t.charAt(i);
+    if (c < 'a' || c > 'z') return false;
+  }
+  return true;
+}
+/* =========================================================================
+   补全网页链接：用户填 example.com 就当成 https://example.com。
+   只在「网页链接…」那个入口用 ——
+   「相对地址…」和「换源…」**不能**补：那两处的 pic.png 是相对地址、
+   data: 是内嵌数据，补上 https:// 就全坏了。
+   ========================================================================= */
+function mediaUrlOf(raw){
+  const t = String(raw == null ? '' : raw).trim();
+  if (t === '') return '';
+  const low = t.toLowerCase();
+  if (low.indexOf('http://') === 0 || low.indexOf('https://') === 0) return t;
+  if (t.indexOf('//') === 0) return 'https:' + t;          // 协议相对地址
+  const sc = mediaSchemeOf(t);
+  /* 已经写了别的协议头（ftp: javascript: file: …）就原样返回，
+     让白名单去决定收不收 —— 不在这一步替用户改。 */
+  if (mediaIsScheme(sc)) return t;
+  return 'https://' + t;
+}
 /* ★ 只放行这几种协议头。
    为什么要有这道闸：多媒体节点的源会被拿去 new Image() / <video> / window.open，
    `javascript:` 这类一旦进去，Ctrl+左键就成了执行脚本的入口。
@@ -112,7 +144,10 @@ function mediaSrcAllowed(raw){
   const t = String(raw == null ? '' : raw).trim();
   if (t === '') return false;
   const sc = mediaSchemeOf(t);
-  if (sc === '') return true;              // 相对地址
+  /* ★ 得「像协议头」才算协议头 —— example.com:8080 里冒号前面那截是
+     **主机:端口**，不是协议。不这么判的话这种地址会被当未知协议拒掉
+     （明明是能用的地址）。 */
+  if (!mediaIsScheme(sc)) return true;     // 相对地址
   /* data: 单独看 —— 只放行「图 / 视频 / 音频」这三类 MIME。
      data:text/html 之类的要拦：那个源可能被 window.open 打开，
      等于给了一个执行任意页面内容的入口。

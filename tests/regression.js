@@ -11460,6 +11460,113 @@
     fresh();                 /* 先清干净 */
     videoRec = realVideoRec; /* 再撤桩 */
   });
+
+  T('MW02 网页链接自动补 http(s)://', () => {
+    fresh();
+    /* ⑤ 那一步会建一个 pic.png 节点，得先把加载器关掉 */
+    const unmute = muteMediaLoaders();
+
+    /* ① 补全规则 */
+    ok('MW02 没写协议头 → 补 https://',
+      mediaUrlOf('example.com') === 'https://example.com', mediaUrlOf('example.com'));
+    ok('MW02b 带路径也补', mediaUrlOf('example.com/docs') === 'https://example.com/docs',
+      mediaUrlOf('example.com/docs'));
+    ok('MW02c 前后空格先 trim', mediaUrlOf('  b.com  ') === 'https://b.com', mediaUrlOf('  b.com  '));
+    ok('MW02d 已经是 http:// 的不动', mediaUrlOf('http://a.com') === 'http://a.com', mediaUrlOf('http://a.com'));
+    ok('MW02e 已经是 https:// 的不动', mediaUrlOf('https://a.com') === 'https://a.com', mediaUrlOf('https://a.com'));
+    ok('MW02f ★ 大小写不影响判断（HTTP:// 也算写了）',
+      mediaUrlOf('HTTP://A.COM') === 'HTTP://A.COM', mediaUrlOf('HTTP://A.COM'));
+    ok('MW02g 协议相对地址 //a.com → https://a.com',
+      mediaUrlOf('//a.com') === 'https://a.com', mediaUrlOf('//a.com'));
+    ok('MW02h 空串还是空串', mediaUrlOf('') === '' && mediaUrlOf(null) === '', mediaUrlOf(null));
+    ok('MW02i ★ 别的协议头**不替用户改**，原样留着交给白名单',
+      mediaUrlOf('ftp://a.com') === 'ftp://a.com' && mediaUrlOf('javascript:alert(1)') === 'javascript:alert(1)',
+      mediaUrlOf('ftp://a.com'));
+
+    /* ② ★ 顺手修的 bug：host:port 被误判成协议头
+          example.com:8080 里冒号前面那截不是协议，是主机。 */
+    ok('MW02j ★ example.com:8080 不是「未知协议」，能通过白名单',
+      mediaSrcAllowed('example.com:8080'), String(mediaSrcAllowed('example.com:8080')));
+    ok('MW02k 127.0.0.1:8000/x 也能', mediaSrcAllowed('127.0.0.1:8000/x'), 'false');
+    ok('MW02l 带端口的地址会被补全（说明它被当成相对地址了）',
+      mediaUrlOf('www.a.cn:8080/x') === 'https://www.a.cn:8080/x', mediaUrlOf('www.a.cn:8080/x'));
+    ok('MW02m ★ 但危险的协议头照样拦（没被这个修复放松）',
+      !mediaSrcAllowed('javascript:alert(1)') && !mediaSrcAllowed('vbscript:x')
+      && !mediaSrcAllowed('about:blank'), '');
+    ok('MW02n ftp 还是拦（只是不由补全去改它）',
+      mediaUrlOf('ftp://a.com') === 'ftp://a.com' && !mediaSrcAllowed('ftp://a.com'), '');
+    ok('MW02o mediaIsScheme：只认全字母',
+      mediaIsScheme('https') && !mediaIsScheme('example.com') && !mediaIsScheme('') && !mediaIsScheme('a1'),
+      '');
+
+    /* ③ 走菜单那条路：填 example.com → 节点里存的是补好的地址 */
+    const allItems = () => [...document.querySelectorAll('.menu .item')];
+    const labelOf = (d) => d.querySelector('.lb').textContent;
+    const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    const b1 = doc.nodes.length;
+    rows()[0].querySelector('.nbtext').value = 'example.com/docs';
+    document.getElementById('numboxOk').click();
+    ok('MW02p ★ 建了节点', doc.nodes.length === b1 + 1, String(doc.nodes.length));
+    const n = doc.nodes[doc.nodes.length - 1];
+    ok('MW02q ★ 节点里存的是补好的 https:// 地址',
+      mediaSrcOf(n) === 'https://example.com/docs', mediaSrcOf(n));
+    ok('MW02r 类型判成网页', mediaKindOf(n) === 'link', mediaKindOf(n));
+    skipDlg();
+    ok('MW02s 提示语说了补过', /补成/.test(dlgText.textContent), dlgText.textContent);
+
+    /* ④ 已经写了协议头 → 原样，提示语不提补 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    rows()[0].querySelector('.nbtext').value = 'http://plain.com';
+    document.getElementById('numboxOk').click();
+    const n2 = doc.nodes[doc.nodes.length - 1];
+    ok('MW02t ★ http:// 原样保留', mediaSrcOf(n2) === 'http://plain.com', mediaSrcOf(n2));
+    skipDlg();
+    ok('MW02u 提示语不提补', !/补成/.test(dlgText.textContent), dlgText.textContent);
+
+    /* ⑤ ★ 「相对地址…」**不能**补 —— 那儿的 pic.png 是 user/ 里的文件，
+          补上 https:// 就全坏了。这是这个功能最容易搞错的地方。 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('相对地址') >= 0).click();
+    rows()[0].querySelector('.nbtext').value = 'pic.png';
+    document.getElementById('numboxOk').click();
+    const n3 = doc.nodes[doc.nodes.length - 1];
+    ok('MW02v ★ 相对地址不会被补成 https://（还是给你补 user/ 前缀）',
+      mediaSrcOf(n3) === 'pic.png' && mediaHrefOf(n3) === 'user/pic.png',
+      mediaSrcOf(n3) + ' → ' + mediaHrefOf(n3));
+
+    /* ⑥ 危险地址：补全之后仍然拦住 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    const b4 = doc.nodes.length;
+    rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
+    document.getElementById('numboxOk').click();
+    ok('MW02w ★ javascript: 补全不动它，白名单照样拦',
+      doc.nodes.length === b4, String(doc.nodes.length));
+
+    hideCtx();
+    draw();
+    ok('MW02x 画一帧不抛', true);
+    fresh();          /* 先清干净 */
+    unmute();         /* 再开回来 */
+  });
+  /* ★ 测试里凡是会**建相对地址节点**的，都先用它把加载器关掉。
+     不关的话渲染器会真的去抓 user/xxx.png —— 抓不到就是 ERR_FILE_NOT_FOUND，
+     被测试框架算成失败。这个坑今天踩了四次（MV01/MW01/MV02/MW02），
+     所以固化成一对辅助，别再靠记性。
+     ⚠ 撤销要留到 fresh() **之后**：先撤桩再画，照样会去抓。 */
+  /* ⚠ 写成**函数声明**而不是 const 箭头函数 ——
+     它会提升。写成 const 的话，定义在文件末尾、
+     而 MW02 在它前面调用，就落在暂时性死区（TDZ）里报错了。 */
+  function muteMediaLoaders(){
+    const save = { imageRec, videoRec };
+    imageRec = () => null;
+    videoRec = () => null;
+    return function unmute(){ imageRec = save.imageRec; videoRec = save.videoRec; };
+  }
+
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
