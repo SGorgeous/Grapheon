@@ -18,6 +18,11 @@ const COPY = [
   ['index.html', 'index.html'],
   ['styles', 'styles'],
   ['src', 'src'],
+  /* ★ user/ 是多媒体节点的本地引用目录。
+     包里的 index.html 旁边必须有这个目录，写 `pic.png` 这种相对地址才找得到。
+     用户自己的素材不在仓库里（.gitignore 只留说明文件），
+     所以包里也只有那个说明 —— 拿到包的人把素材丢进去就行。 */
+  ['user', 'user'],
 ];
 /* 只有这个是运行时真要的（index.html 的 favicon）。
    另外三个 SVG 是 make-logo.mjs 的输出、没被任何页面引用，已经归档到 archive/assets/。 */
