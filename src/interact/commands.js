@@ -703,44 +703,66 @@ const viewCenter = () => s2w(VW / 2, VH / 2 - 60);
 /* =========================================================================
    把本地文件放进 user/，再建一个**引用**它们的节点
    ─────────────────────────────────────────────────────────────
-   为什么要有这个入口：
-     相对地址的好处是文档里只有几十个字节，但用户得自己把文件拷进 user/。
-     这个入口替他做：选目录 → 选文件 → 写进去 → 建节点。
+   ★ 这个功能的第一版**点了没反应**，原因值得记下来：
+     showDirectoryPicker 和 <input type=file>.click() 都要求
+     **用户手势**（transient activation）。而：
+       ① 第一版在弹选择器**之前**先 `await loadDirHandle()` 去读 IndexedDB ——
+          await 一次就把手势用掉了，选择器被**静默忽略**。
+       ② 就算拿到了句柄，同一次点击里又接着点文件选择框 ——
+          第一件事已经用掉手势，第二件同样静默失败。
+     浏览器这两种情况都**不报错**，表现就是「点了没反应」。
 
-   用的是 File System Access API。id 和素材库共用 'grapheon-user' ——
-   那本来就是**同一个文件夹**，共用的话浏览器只需要授权一次。
-   优先复用上次那个句柄（存在 IndexedDB 里），拿不到才弹选择器。
-   ⚠ 这两步都必须在**用户手势**里调（点菜单算），不能自动弹。
+   ★ 所以现在的规矩是：
+     · 句柄在**启动时**预读一次放进内存（preloadUserDir，不用手势）
+     · 点菜单时**同步**就知道有没有句柄，全程不 await 任何东西
+     · **一次点击只做一件需要手势的事**：
+         有句柄 → 这次只选文件
+         没句柄 → 这次只选目录，然后提示「再点一次」
    ========================================================================= */
-async function grabUserDir(){
+let userDirHandle = null;
+
+async function preloadUserDir(){
+  if (userDirHandle) return userDirHandle;
+  if (typeof loadDirHandle !== 'function') return null;
+  try {
+    const h = await loadDirHandle();
+    if (!h) return null;
+    /* queryPermission 不需要手势，可以放心在这里问 */
+    if (h.queryPermission){
+      const p = await h.queryPermission({ mode:'readwrite' });
+      if (p !== 'granted') return null;
+    }
+    userDirHandle = h;
+    return h;
+  } catch (e) { return null; }
+}
+
+async function pickFilesIntoUser(){
+  /* ① 句柄已经在内存里 —— 这次点击只用来**选文件**（一次手势，够了） */
+  if (userDirHandle){
+    openFilePickerIntoUser(userDirHandle);
+    return true;
+  }
+  /* ② 还没有句柄 —— 这次点击只用来**选目录**。
+        必须在手势里立刻调，前面不能有任何 await。 */
   if (typeof window === 'undefined' || typeof window.showDirectoryPicker !== 'function'){
     say('* 这个浏览器不支持直接写文件夹。');
-    return null;
+    return false;
   }
-  /* ① 上次用过的那个（权限还要再确认一次，这也得在手势里） */
-  if (typeof loadDirHandle === 'function'){
-    try {
-      const h = await loadDirHandle();
-      if (h && h.requestPermission){
-        const perm = await h.requestPermission({ mode:'readwrite' });
-        if (perm === 'granted') return h;
-      }
-    } catch (e) { /* 拿不到就当没有，走下面 */ }
-  }
-  /* ② 让用户选一个 */
+  let h = null;
   try {
-    const h = await window.showDirectoryPicker({ mode:'readwrite', id:'grapheon-user' });
-    if (typeof saveDirHandle === 'function'){ try { await saveDirHandle(h); } catch (e) {} }
-    return h;
+    h = await window.showDirectoryPicker({ mode:'readwrite', id:'grapheon-user' });
   } catch (e) {
-    return null;                      // 用户取消了
+    return false;                       // 用户取消了，什么都不做
   }
+  userDirHandle = h;
+  if (typeof saveDirHandle === 'function'){ try { await saveDirHandle(h); } catch (e) {} }
+  say('* 记住了 user/。再点一次就能选文件。');
+  return true;
 }
-async function pickFilesIntoUser(){
-  const dir = await grabUserDir();
-  if (!dir) return false;
-  /* 选文件用 <input type=file> 而不是 showOpenFilePicker ——
-     这个到处都能用，也不用额外的权限确认。 */
+
+/* 选文件 → 写进 user/ → 建节点引用它们（相对地址，文档里只占几十字节） */
+function openFilePickerIntoUser(dir){
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.multiple = true;
@@ -780,7 +802,6 @@ async function pickFilesIntoUser(){
     say('* 放进 user/ 了：' + saved.length + ' 个文件。');
   }, { once:true });
   inp.click();
-  return true;
 }
 /* 从文件插一张图。at 不给就放视口正中 */
 function insertImageFile(file, at){

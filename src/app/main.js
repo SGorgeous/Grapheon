@@ -17,6 +17,11 @@ function boot(){
   loadAnimPref();       // 连线流动动画开关
   loadDefaults();      // 新节点的默认外观 / 新连线样式
   loadExportPrefs();    // 上次用过的文件名 / 标题 / 导出范围
+  /* ★ user/ 目录的句柄在这里预读一次（不用手势，启动时读没事）。
+     点菜单时才有句柄可以**同步**判断 —— showDirectoryPicker 要求用户手势，
+     而 await 一次 IndexedDB 就足以把手势用掉，然后选择器被静默忽略
+     （症状就是「点了没反应」）。 */
+  if (typeof preloadUserDir === 'function') preloadUserDir();
   resize();
   let loaded = false;
   try {
