@@ -287,25 +287,30 @@ function roundRect(g, x, y, w, h, r){
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
 }
-/* 图片缓存：按 data URL 存，加载完 mark() 一帧重画。
-   同一张图被多个节点用也只解码一次。 */
+/* 图片缓存：按**解析后的地址**存，加载完 mark() 一帧重画。
+   同一张图被多个节点用也只解码一次。
+
+   ★ 键用 mediaHrefOf(n) 而不是 n.src —— 不同写法的同一个文件
+     （pic.png 和 user/pic.png）才会共用一份解码结果。
+     地址是相对地址时，mediaHrefOf 会补上 user/ 前缀。 */
 const imgCache = new Map();
 function imageRec(n){
-  if (!n || !n.image) return null;
-  let rec = imgCache.get(n.image);
+  const href = (typeof mediaHrefOf === 'function') ? mediaHrefOf(n) : (n && n.src);
+  if (!href) return null;
+  let rec = imgCache.get(href);
   if (!rec){
     rec = { img:new Image(), ok:false, bad:false };
     rec.img.onload  = () => { rec.ok = true; mark(); };
     rec.img.onerror = () => { rec.bad = true; mark(); };
-    rec.img.src = n.image;
-    imgCache.set(n.image, rec);
+    rec.img.src = href;
+    imgCache.set(href, rec);
   }
   return rec;
 }
 const imageReady = (n) => { const r = imageRec(n); return !!(r && r.ok); };
 /* 等所有图片解码完（导出前用：不然导出的是「加载中」占位） */
 function ensureImagesLoaded(){
-  const pending = [...doc.nodes].filter(n => n.kind === 'image' && n.image && !imageReady(n));
+  const pending = [...doc.nodes].filter(n => n.kind === 'image' && mediaSrcOf(n) && !imageReady(n));
   if (!pending.length) return Promise.resolve();
   return Promise.all(pending.map(n => new Promise(res => {
     const r = imageRec(n);

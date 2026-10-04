@@ -693,7 +693,7 @@ function imageToDataURL(file, cb){
 const newImageNode = (url, natW, natH, x, y) => {
   const n = addNodeAt('', x, y, 'rect');
   n.kind = 'image';
-  n.image = url; n.imgW = natW; n.imgH = natH || 1;
+  n.src = url; n.imgW = natW; n.imgH = natH || 1;
   n.desc = '';
   sizeNode(n);
   return n;
@@ -720,7 +720,7 @@ function replaceImage(n, file){
   if (!n || n.kind !== 'image' || !file) return;
   imageToDataURL(file, (url, natW, natH) => {
     if (!url){ say('* 这张图片读不出来。'); return; }
-    n.image = url; n.imgW = natW; n.imgH = natH || 1;
+    n.src = url; n.imgW = natW; n.imgH = natH || 1;
     sizeNode(n); pushHist(); mark();
     say('* 换好了（' + natW + '×' + natH + '）。');
   });

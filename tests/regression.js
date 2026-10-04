@@ -625,7 +625,7 @@
     fresh(); layoutMind();
     const n = addNodeAt('', 0, 0, 'rect');
     n.kind = 'image';
-    n.image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    n.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     n.imgW = 4; n.imgH = 4;
     sizeNode(n);
     reindex(); sizeAll();
@@ -2842,7 +2842,7 @@
     fresh(); layoutMind();
     const n = mkImg(0, 0, { name:'架构图', desc:'模块依赖关系' });
     ok('Z01 kind 是 image', n.kind === 'image');
-    ok('Z01b 图片存下来了', /^data:image\/png/.test(n.image), String(n.image).slice(0, 30));
+    ok('Z01b 图片存下来了', n.src.indexOf('data:image/png') === 0, String(n.src).slice(0, 30));
     ok('Z01c 记了原始尺寸', n.imgW === 400 && n.imgH === 300);
     ok('Z01d 名称就是节点文字', n.text === '架构图');
     ok('Z01e 描述也存下来了', n.desc === '模块依赖关系');
@@ -2956,30 +2956,61 @@
     const snap = JSON.parse(JSON.stringify(serialize()));
     const raw = snap.nodes.find(x => x.id === n.id);
     ok('Z09 序列化带 image / imgW / imgH / desc',
-      /^data:image\//.test(raw.image) && raw.imgW === 400 && raw.imgH === 300 && raw.desc === '说明文字',
+      String(raw.src).indexOf('data:image/') === 0 && raw.imgW === 400 && raw.imgH === 300 && raw.desc === '说明文字',
       JSON.stringify({ w:raw.imgW, h:raw.imgH, d:raw.desc }));
     deserialize(snap);
     const n2 = byId(n.id);
     ok('Z09b 往返后还是图片节点', n2.kind === 'image');
-    ok('Z09c 图片和尺寸都在', n2.image === n.image && n2.imgW === 400 && n2.imgH === 300);
+    ok('Z09c 图片和尺寸都在', n2.src === n.src && n2.imgW === 400 && n2.imgH === 300);
     ok('Z09d 描述还在', n2.desc === '说明文字', n2.desc);
     ok('Z09e 手动宽度也保留了', n2.fixedW === 260 && n2.w === 260, n2.w);
   });
-  T('Z10 不是 data:image 的东西不会被当图片', () => {
+  T('Z10 源的协议白名单：外链保留，危险协议拦掉', () => {
     fresh(); layoutMind();
     const n = addNodeAt('x', 0, 0, 'rect');
     n.kind = 'image';
-    n.image = 'https://example.com/a.png';       // 外链：不内嵌，存/读都会丢掉
+    /* ★ 契约翻转了。以前「只收 data:image/」，外链会被静默丢掉 ——
+       那是内嵌时代的规矩。现在多媒体节点要支持相对地址 / http / data，
+       所以外链**必须保留**下来（只存字符串，几十个字节）。 */
+    n.src = 'https://example.com/a.png';
     n.imgW = 100; n.imgH = 100;
     const snap = JSON.parse(JSON.stringify(serialize()));
-    ok('Z10 外链不会被写进存档', snap.nodes.find(x => x.id === n.id).image === null,
-      String(snap.nodes.find(x => x.id === n.id).image));
+    ok('Z10 ★ 外链现在会写进存档（契约翻转：以前会被丢掉）',
+      snap.nodes.find(x => x.id === n.id).src === 'https://example.com/a.png',
+      String(snap.nodes.find(x => x.id === n.id).src));
+    ok('Z10a2 相对地址也照样存',
+      (() => { const m = addNodeAt('y', 300, 0, 'rect'); m.kind = 'image'; m.src = 'pic.png';
+        const s2 = JSON.parse(JSON.stringify(serialize()));
+        return s2.nodes.find(x => x.id === m.id).src === 'pic.png'; })());
+    /* ★ 但危险协议头仍然要拦 —— 这个源会被拿去 new Image() / <video> / window.open，
+       `javascript:` 一旦进去，Ctrl+左键就成了执行脚本的入口。
+       这是旧契约里**唯一值得留下**的东西，换了个写法而已。 */
     const bad = { v:2, nid:1,
-      nodes:[{ id:'n1', text:'', x:0, y:0, kind:'image', image:'javascript:alert(1)', imgW:10, imgH:10 }],
+      nodes:[
+        { id:'n1', text:'', x:0, y:0, kind:'image', src:'javascript:alert(1)', imgW:10, imgH:10 },
+        { id:'n2', text:'', x:0, y:0, kind:'image', src:'data:text/html,<b>x</b>', imgW:10, imgH:10 }
+      ],
       edges:[], groups:[] };
     deserialize(bad);
-    ok('Z10b 反序列化也会过滤掉非 data:image', byId('n1').image === null, byId('n1').image);
+    ok('Z10b ★ javascript: 仍然被拦掉', byId('n1').src === null, String(byId('n1').src));
+    ok('Z10b2 ★ data:text/html 也被拦（data: 只放行图 / 视频 / 音频三类 MIME）',
+      mediaSrcAllowed('data:text/html,<b>x</b>') === false
+      && mediaSrcAllowed('data:image/png;base64,AA') === true
+      && mediaSrcAllowed('data:video/mp4;base64,AA') === true
+      && mediaSrcAllowed('data:audio/mpeg;base64,AA') === true,
+      JSON.stringify([mediaSrcAllowed('data:text/html,<b>x</b>'),
+        mediaSrcAllowed('data:image/png;base64,AA')]));
     ok('Z10c kind 是合法值', NODE_KINDS.indexOf(byId('n1').kind) >= 0, byId('n1').kind);
+    /* 白名单本身 */
+    ok('Z10d 放行：相对地址 / http / https / file / data / blob',
+      ['pic.png', 'user/a.mp4', '../assets/x.svg', 'http://a/b.png', 'https://a/b.mp4',
+       'file:///d/a.png', 'data:image/png;base64,AA', 'blob:http://x/y']
+        .every(u => mediaSrcAllowed(u)),
+      '');
+    ok('Z10e 拦掉：javascript / vbscript / 其它没见过的协议',
+      ['javascript:alert(1)', 'vbscript:x', 'about:blank', 'chrome://settings']
+        .every(u => !mediaSrcAllowed(u)),
+      '');
   });
   T('Z11 非法 kind 会被规整回 node', () => {
     deserialize({ v:2, nid:1, nodes:[{ id:'n1', text:'甲', x:0, y:0, kind:'外星人' }], edges:[], groups:[] });
@@ -3023,7 +3054,7 @@
     ok('Z14b 多了一个节点', doc.nodes.length === before + 1, doc.nodes.length);
     const n = doc.nodes[doc.nodes.length - 1];
     ok('Z14c 是图片节点', n.kind === 'image', n.kind);
-    ok('Z14d 图片是内嵌的 data URL', /^data:image\//.test(n.image || ''), String(n.image).slice(0, 24));
+    ok('Z14d 插入的文件是内嵌的 data URL', String(n.src || '').indexOf('data:image/') === 0, String(n.src).slice(0, 24));
     ok('Z14e 原始尺寸记对了', n.imgW === 4 && n.imgH === 2, n.imgW + 'x' + n.imgH);
     ok('Z14f 导入后自动选中', sel.has(n.id));
     skipDlg();
@@ -3041,14 +3072,14 @@
   await TA('Z16 换图会替换内容但保留描述和名称', async () => {
     fresh(); layoutMind();
     const n = mkImg(0, 0, { name:'标题', desc:'说明' });
-    const oldUrl = n.image;
+    const oldUrl = n.src;
     const c = document.createElement('canvas');
     c.width = 60; c.height = 20;
     c.getContext('2d').fillRect(0, 0, 60, 20);
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));
     replaceImage(n, new File([blob], 'b.png', { type:'image/png' }));
-    for (let i = 0; i < 60 && n.image === oldUrl; i++) await sleep(25);
-    ok('Z16 图片换掉了', n.image !== oldUrl && /^data:image\//.test(n.image));
+    for (let i = 0; i < 60 && n.src === oldUrl; i++) await sleep(25);
+    ok('Z16 图片换掉了', n.src !== oldUrl && String(n.src).indexOf('data:image/') === 0);
     ok('Z16b 原始尺寸更新', n.imgW === 60 && n.imgH === 20, n.imgW + 'x' + n.imgH);
     ok('Z16c 名称保留', n.text === '标题', n.text);
     ok('Z16d 描述保留', n.desc === '说明', n.desc);
@@ -10909,6 +10940,81 @@
       String(compNumber(byGroup('stg1'), 'opacity', 'value', 'group', 0)));
     hideCtx();
     draw();
+    fresh();   /* 收尾清干净 */
+  });
+
+  T('MD01 相对地址解析 / 类型判定 / 协议白名单', () => {
+    fresh();
+
+    /* ① 路径：没写协议头的补 user/ 前缀 */
+    ok('MD01 pic.png → user/pic.png', mediaHref('pic.png') === 'user/pic.png', mediaHref('pic.png'));
+    ok('MD01b video/clip.mp4 → user/video/clip.mp4',
+      mediaHref('video/clip.mp4') === 'user/video/clip.mp4', mediaHref('video/clip.mp4'));
+    ok('MD01c ★ ../ 开头的**不补**（那是从站点根往上走）',
+      mediaHref('../assets/x.svg') === '../assets/x.svg', mediaHref('../assets/x.svg'));
+    ok('MD01d ./ 开头的也不补', mediaHref('./x.png') === './x.png', mediaHref('./x.png'));
+    ok('MD01e 已经写了 user/ 的不重复', mediaHref('user/a.png') === 'user/a.png', mediaHref('user/a.png'));
+    ok('MD01f 以 / 开头的绝对路径原样', mediaHref('/abs/a.png') === '/abs/a.png', mediaHref('/abs/a.png'));
+    ok('MD01g 写了协议头的原样', mediaHref('https://a/b.png') === 'https://a/b.png'
+      && mediaHref('data:image/png;base64,AA') === 'data:image/png;base64,AA'
+      && mediaHref('file:///d/a.png') === 'file:///d/a.png', '');
+
+    /* ② 类型判定（按扩展名，去掉 ?query / #hash 再判） */
+    ok('MD01h 图片扩展名都认得',
+      ['a.png', 'a.jpg', 'a.jpeg', 'a.gif', 'a.webp', 'a.svg', 'a.bmp', 'a.avif']
+        .every(f => mediaKind(f) === 'image'), '');
+    ok('MD01i 视频扩展名都认得',
+      ['a.mp4', 'a.webm', 'a.ogv', 'a.mov', 'a.m4v'].every(f => mediaKind(f) === 'video'), '');
+    ok('MD01j 音频扩展名都认得',
+      ['a.mp3', 'a.wav', 'a.ogg', 'a.m4a', 'a.flac', 'a.aac'].every(f => mediaKind(f) === 'audio'), '');
+    ok('MD01k http 地址当网页', mediaKind('https://example.com/a') === 'link', mediaKind('https://example.com/a'));
+    ok('MD01l html 当网页', mediaKind('page.html') === 'link', mediaKind('page.html'));
+    ok('MD01m 认不出的当文件', mediaKind('a.zip') === 'file', mediaKind('a.zip'));
+    ok('MD01n ★ 带 ?query / #hash 也认得出',
+      mediaKind('pic.png?v=2') === 'image' && mediaKind('a.mp4#t=3') === 'video',
+      mediaKind('pic.png?v=2'));
+
+    /* ③ 协议白名单：放行该放的，拦住危险的 */
+    ok('MD01o 放行：相对 / http / https / file / blob',
+      ['pic.png', 'user/a.mp4', '../assets/x.svg', 'http://a/b.png', 'https://a/b.mp4',
+       'file:///d/a.png', 'blob:http://x/y'].every(u => mediaSrcAllowed(u)), '');
+    ok('MD01p ★ 放行 data: 里的图 / 视频 / 音频',
+      mediaSrcAllowed('data:image/png;base64,AA')
+      && mediaSrcAllowed('data:video/mp4;base64,AA')
+      && mediaSrcAllowed('data:audio/mpeg;base64,AA'), '');
+    ok('MD01q ★ 拦掉 javascript: / vbscript:（Ctrl+左键打开会执行脚本）',
+      !mediaSrcAllowed('javascript:alert(1)') && !mediaSrcAllowed('vbscript:x'), '');
+    ok('MD01r ★ 拦掉 data:text/html（那是能执行页面内容的入口）',
+      !mediaSrcAllowed('data:text/html,<b>x</b>'), '');
+    ok('MD01s 拦掉 other 协议', !mediaSrcAllowed('about:blank') && !mediaSrcAllowed('chrome://settings'), '');
+    ok('MD01t 空串不算合法源', !mediaSrcAllowed('') && !mediaSrcAllowed(null), '');
+
+    /* ④ 节点上的统一入口 */
+    const n = addNodeAt('引用图', 0, 0, 'rect');
+    n.kind = 'image';
+    n.src = 'pic.png';
+    reindex(); sizeAll();
+    ok('MD01u ★ mediaSrcOf 给原文', mediaSrcOf(byId(n.id)) === 'pic.png', mediaSrcOf(byId(n.id)));
+    ok('MD01v ★ mediaHrefOf 给补好前缀的地址',
+      mediaHrefOf(byId(n.id)) === 'user/pic.png', mediaHrefOf(byId(n.id)));
+    ok('MD01w mediaKindOf 判类型', mediaKindOf(byId(n.id)) === 'image', mediaKindOf(byId(n.id)));
+
+    /* ⑤ 存档：只存那个短字符串，不存内嵌数据 */
+    const snap = serialize();
+    const raw = snap.nodes.find(x => x.id === n.id);
+    ok('MD01x ★ 存档里存的是相对地址（几十个字节，不是几兆的 data:）',
+      raw.src === 'pic.png', JSON.stringify(raw.src));
+    deserialize(snap);
+    ok('MD01y 往返之后还在', byId(n.id).src === 'pic.png', String(byId(n.id).src));
+
+    /* ⑥ 危险源进不了存档 */
+    const n2 = addNodeAt('坏源', 400, 0, 'rect');
+    n2.kind = 'image'; n2.src = 'javascript:alert(1)';
+    const snap2 = serialize();
+    ok('MD01z ★ 危险源写不进存档',
+      snap2.nodes.find(x => x.id === n2.id).src === null,
+      String(snap2.nodes.find(x => x.id === n2.id).src));
+
     fresh();   /* 收尾清干净 */
   });
   /* ==================== 收尾 ==================== */

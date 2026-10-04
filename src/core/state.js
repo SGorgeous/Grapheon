@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/state.js
    文档模型、id 分配、父子索引、序列化 / 反序列化。
@@ -622,7 +622,7 @@ function serialize(){
       kind:(NODE_KINDS.indexOf(n.kind) >= 0 ? n.kind : 'node'),
       value:(Math.round(+n.value) || 0),
       program:(n.kind === 'program') ? normalizeProgram(n.program) : null,
-      image:(n.kind === 'image' && typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
+      src:(n.kind === 'image' && mediaSrcAllowed(mediaSrcOf(n))) ? mediaSrcOf(n) : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
       /* 变量节点可以挂多个变量 → 写 varDefs；
@@ -682,7 +682,7 @@ function deserialize(d){
       color:n.color || null, border:n.border || null,
       kind:NODE_KINDS.indexOf(n.kind) >= 0 ? n.kind : 'node',
       value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program),
-      image:(typeof n.image === 'string' && /^data:image\//.test(n.image)) ? n.image : null,
+      src:(n.kind === 'image' && mediaSrcAllowed(mediaSrcOf(n))) ? mediaSrcOf(n) : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
       /* 变量节点可以挂多个变量 → 写 varDefs；
