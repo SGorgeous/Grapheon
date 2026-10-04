@@ -19,3 +19,8 @@ msg*.txt
 # 只留下说明文件，保证新克隆出来这个目录是存在的。
 user/*
 !user/放这里.txt
+
+# 临时探针页（我量性能 / 试东西时生成的，不该进仓库）
+perf.html
+perf.js
+.grapheon-test.html
