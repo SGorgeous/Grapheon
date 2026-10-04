@@ -749,6 +749,114 @@ function videoFirstFrame(file, cb){
 }
 
 /* =========================================================================
+   拖进来的图片：自动复制到 user/，文档里只留一个文件名
+   ─────────────────────────────────────────────────────────────
+   ★ 浏览器**不允许网页私自写磁盘**。要往 user/ 里写，必须授权过一次目录：
+       · 已经授权过（素材库连过，或上次拖文件时授权过）→ 直接写，全自动
+       · 没授权过 → 弹一次目录选择器（就是 user/ 那个，浏览器按 id 记得）
+                    用户取消 → 退回内嵌 data:（老的保底行为，不能白拖一场）
+     ⚠ 选择器必须在**手势里立刻**弹。drop 本身就是手势，但前面不能有 await ——
+       有 await 手势就没了，弹窗会被**静默忽略**（这个坑前面踩过）。
+       所以 drop → dropMediaFile → saveIntoUser 这一路是同步的。
+   ========================================================================= */
+const USERWARN_KEY = 'grapheon.mediawarn.v1';   // 大文件提醒：关掉就不再问
+const USERWARN_MB = 5;
+
+function userWarnOff(){
+  try { return localStorage.getItem(USERWARN_KEY) === 'off'; } catch (e) { return false; }
+}
+function setUserWarnOff(v){
+  try { localStorage.setItem(USERWARN_KEY, v ? 'off' : 'on'); } catch (e) {}
+}
+/* 把一个**文件名**截短，好在提示语里放得下。
+   ⚠ 名字不能叫 shortName —— 项目里已经有了（给节点名截断用的），
+     我第一次就是撞了名，把它盖掉，结果满屏 [object Object]。 */
+function shortFileName(n, max){
+  const s = String(n || '');
+  const m = max || 16;
+  return s.length > m ? (s.slice(0, m - 1) + '…') : s;
+}
+
+/* 把文件写进 user/。dir 是目录句柄。成功给文件名，失败给空串。 */
+async function writeFileToUser(dir, file){
+  try {
+    const fh = await dir.getFileHandle(file.name, { create:true });
+    const w = await fh.createWritable();
+    await w.write(file);
+    await w.close();
+    return file.name;
+  } catch (e) { return ''; }
+}
+
+/* 写进去 → 建一个路径节点 */
+function writeIntoUserAndPlace(dir, file, at){
+  say('* 正在放进 user/。');
+  writeFileToUser(dir, file).then((nm) => {
+    if (!nm){
+      say('* 写不进 user/，先内嵌着一张。');
+      insertMediaFile(file, at);
+      return;
+    }
+    placeMediaNode(nm, 0, 0, 'image', nm, at, '文件已放进 user/，文档里只记了文件名。');
+    say('* 已放进 user/：' + shortFileName(nm));
+  });
+}
+
+/* 复制到 user/。**这个函数必须在手势里同步进来**（见文件头）。 */
+function saveIntoUser(file, at){
+  const have = (typeof Store !== 'undefined' && Store && Store.userRoot) ? Store.userRoot() : null;
+  if (have){ writeIntoUserAndPlace(have, file, at); return; }
+  if (typeof window === 'undefined' || typeof window.showDirectoryPicker !== 'function'){
+    say('* 这个浏览器不能写文件夹，先内嵌。');
+    insertMediaFile(file, at);
+    return;
+  }
+  /* ⚠ 前面不能有 await —— 否则这一句会被静默忽略，表现就是「点了没反应」 */
+  window.showDirectoryPicker({ mode:'readwrite', id:'grapheon-user' })
+    .then((dir) => {
+      /* 记下来，这次和以后都直接用，不再弹 */
+      try { if (typeof Store !== 'undefined' && Store) Store.root = dir; } catch (e) {}
+      writeIntoUserAndPlace(dir, file, at);
+    })
+    .catch(() => {
+      /* 用户取消了：退回内嵌，别让这次拖放白费 */
+      say('* 没授权 user/，这次先内嵌。');
+      insertMediaFile(file, at);
+    });
+}
+
+/* 大文件先提醒一下。关掉了就不再问（存 localStorage）。 */
+function askBigFile(file, at){
+  const mb = (file.size / (1024 * 1024)).toFixed(1);
+  openValueBox({
+    title:'这个文件有点大',
+    who: shortFileName(file.name, 20),
+    hint:'它有 ' + mb + ' MB。会**复制**一份到 user/ 里（原文件不动，两份都在），'
+       + '文档本身只记文件名。取消 = 这次不导进来。',
+    hideClear: true,
+    fields:[{ key:'off', label:'以后不再提示', type:'check' }],
+    values:{ off:'' },
+    onOk: (vals) => {
+      if (String(vals.off) === '1') setUserWarnOff(true);
+      /* 这里在**点确定**的手势里，弹选择器没问题 */
+      saveIntoUser(file, at);
+    }
+  });
+}
+
+/* 拖进来的一个文件。图片走「复制到 user/」，别的走原来那套。 */
+function dropMediaFile(file, at){
+  if (!file) return;
+  const mime = String(file.type || '').toLowerCase();
+  const name = String(file.name || '');
+  const byName = (typeof mediaKind === 'function') ? mediaKind(name) : 'file';
+  const isImg = (mime.indexOf('image/') === 0) || (byName === 'image');
+  if (!isImg){ insertMediaFile(file, at); return; }   // 视频 / 音频 / 别的：原样
+  if (!userWarnOff() && file.size > USERWARN_MB * 1024 * 1024){ askBigFile(file, at); return; }
+  saveIntoUser(file, at);
+}
+
+/* =========================================================================
    从文件插一个多媒体节点。at 不给就放视口正中。
    ─────────────────────────────────────────────────────────────
    ★ 只有**图片**把内容内嵌进来（data:，几十 KB，无所谓）。

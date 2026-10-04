@@ -91,6 +91,18 @@ function nbBuildRow(f, value){
     return row;
   }
 
+  if (f.type === 'check'){
+    /* 勾选框。给「提醒」这类东西用 —— 上面那行 label 就是它的说明，
+       所以这里不再加第二个文字（行里就一个方框，读起来是「✅ 以后不再提示」）。 */
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'nbcheck';
+    box.checked = (v0 === '1' || v0 === 'true' || v0 === 'yes');
+    row.appendChild(box);
+    row._read = () => (box.checked ? '1' : '');
+    return row;
+  }
+
   if (f.type === 'text'){
     const text = mkText();
     row.appendChild(text);
@@ -133,6 +145,9 @@ function openValueBox(cfg){
   host.textContent = '';
   const values = c.values || {};
   for (const f of fields) host.appendChild(nbBuildRow(f, values[f.key]));
+  /* 「用默认」对确认框没意义（那是给数值 / 颜色用的），可以藏掉 */
+  const clrBtn = document.getElementById('numboxClear');
+  if (clrBtn) clrBtn.style.display = c.hideClear ? 'none' : '';
   el.style.display = 'block';
   positionNumBox();
   const first = host.querySelector('input.nbtext');

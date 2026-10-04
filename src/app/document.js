@@ -121,8 +121,10 @@ window.addEventListener('drop', (ev) => {
   if (files.length === 1 && isDocFile(files[0])){ readFile(files[0]); return; }
   const base = dropPos(ev);
   files.forEach((f, i) => {
-    /* 一次拖好几个就错开摆，免得叠在一起 */
-    insertMediaFile(f, { x: base.x + i * 40, y: base.y + i * 40 });
+    /* 一次拖好几个就错开摆，免得叠在一起。
+       ★ 走 dropMediaFile：图片会先**复制到 user/**，文档里只留文件名；
+         视频 / 音频 / 别的还是老样子（第一帧 / 路径节点）。 */
+    dropMediaFile(f, { x: base.x + i * 40, y: base.y + i * 40 });
   });
 });
 /* 从剪贴板粘一张图进来 */

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/store.js
    素材库（用户文件夹）的存储适配层。
@@ -223,6 +223,10 @@ const Store = {
     if (!hasFsAccess()) throw new Error('这个浏览器不支持直接读写文件夹');
     const root = await window.showDirectoryPicker({ mode:'readwrite', id:'grapheon-user' });
     this.backend = makeFsStore(root);
+    /* ★ 记下根句柄。拖文件进来要往 user/ 里写，需要一个**现成的**句柄 ——
+       而 showDirectoryPicker 要求用户手势，调用点常常在 await 之后，
+       那时候再弹会被浏览器静默忽略（这个坑踩过）。 */
+    this.root = root;
     await saveDirHandle(root);
     return this.backend;
   },
@@ -232,9 +236,13 @@ const Store = {
     const perm = await this.pendingHandle.requestPermission({ mode:'readwrite' });
     if (perm !== 'granted') return false;
     this.backend = makeFsStore(this.pendingHandle);
+    this.root = this.pendingHandle;        // ★ 同上：重新授权之后也要记
     this.pendingHandle = null;
     return true;
   },
+  /* 已经授权好的 user/ 根目录；没连过就是 null。
+     ★ 这个函数**不弹窗**，只是问一句 —— 弹窗要求用户手势。 */
+  userRoot(){ return this.root || null; },
   setDirName(v){
     this.dirName = String(v || '').trim() || DEFAULT_USER_DIR;
     try { localStorage.setItem(USERDIR_KEY, this.dirName); } catch(e){}

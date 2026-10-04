@@ -11804,6 +11804,113 @@
     ok('MU02o 画一帧不抛', true);
     fresh();   /* 收尾清干净 */
   });
+
+  await TA('UD01 拖图片：复制进 user/ + 大文件提醒', async () => {
+    fresh();
+    const unmute = muteMediaLoaders();
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#0ff"/></svg>';
+    const mkImg = (name, bytes) => new File([bytes == null ? svg : bytes], name, { type:'image/svg+xml' });
+    const written = [];
+    const fakeDir = {
+      getFileHandle: async (name) => ({
+        createWritable: async () => ({
+          write: async (blob) => { written.push({ name, size: blob.size }); },
+          close: async () => {}
+        })
+      })
+    };
+    const realPicker = window.showDirectoryPicker;
+    const realRoot = (typeof Store !== 'undefined' && Store) ? Store.root : undefined;
+    const setRoot = (v) => { try { if (typeof Store !== 'undefined' && Store) Store.root = v; } catch (e) {} };
+
+    /* ① 已经授权过 → 直接写，不弹选择器 */
+    let pickerCalls = 0;
+    window.showDirectoryPicker = () => { pickerCalls++; return Promise.resolve(fakeDir); };
+    setRoot(fakeDir);
+    const b1 = doc.nodes.length;
+    dropMediaFile(mkImg('pic.svg'), { x:0, y:0 });
+    for (let i = 0; i < 60 && doc.nodes.length === b1; i++) await wait(20);
+    ok('UD01 ★ 建了节点', doc.nodes.length === b1 + 1, String(doc.nodes.length));
+    ok('UD01b ★ 没有弹选择器（用现成的句柄）', pickerCalls === 0, String(pickerCalls));
+    ok('UD01c ★ 文件写进了 user/', written.length === 1 && written[0].name === 'pic.svg', JSON.stringify(written));
+    const n1 = doc.nodes[doc.nodes.length - 1];
+    ok('UD01d ★ 文档里只记文件名（不是 data:）', mediaSrcOf(n1) === 'pic.svg', mediaSrcOf(n1));
+    ok('UD01e 会补 user/ 前缀', mediaHrefOf(n1) === 'user/pic.svg', mediaHrefOf(n1));
+    ok('UD01f 类型还是图片', mediaKindOf(n1) === 'image', mediaKindOf(n1));
+    ok('UD01g 描述里说明了文件在哪', String(n1.desc || '').indexOf('user/') >= 0, String(n1.desc || '').slice(0, 20));
+
+    /* ② 没有句柄 → 弹选择器，而且必须是**同步**弹的（前面有 await 就会被静默忽略） */
+    setRoot(null);
+    let calledSync = false;
+    window.showDirectoryPicker = () => { calledSync = true; return Promise.resolve(fakeDir); };
+    const b2 = doc.nodes.length;
+    dropMediaFile(mkImg('pic2.svg'), { x:0, y:0 });
+    const sawSync = calledSync;
+    for (let i = 0; i < 60 && doc.nodes.length === b2; i++) await wait(20);
+    ok('UD01h ★ 没有句柄时会弹选择器', sawSync, String(sawSync));
+    ok('UD01i ★ 而且是**同步**弹的（前面没有 await）', sawSync, String(sawSync));
+    ok('UD01j 选完之后也写进去了', written.length === 2 && written[1].name === 'pic2.svg', JSON.stringify(written));
+    ok('UD01k 并且把句柄记住了', !!(Store && Store.userRoot && Store.userRoot()), '');
+    setRoot(fakeDir);
+
+    /* ③ 用户取消 → 退回内嵌，不白拖一场 */
+    setRoot(null);
+    window.showDirectoryPicker = () => Promise.reject(Object.assign(new Error('x'), { name:'AbortError' }));
+    const b3 = doc.nodes.length, w3 = written.length;
+    dropMediaFile(mkImg('pic3.svg'), { x:0, y:0 });
+    for (let i = 0; i < 60 && doc.nodes.length === b3; i++) await wait(20);
+    ok('UD01l ★ 取消授权也会建节点（退回内嵌）', doc.nodes.length === b3 + 1, String(doc.nodes.length));
+    ok('UD01m 内嵌的话源是 data:', String(mediaSrcOf(doc.nodes[doc.nodes.length - 1])).indexOf('data:') === 0,
+      String(mediaSrcOf(doc.nodes[doc.nodes.length - 1])).slice(0, 18));
+    ok('UD01n 取消时没往 user/ 写', written.length === w3, String(written.length));
+    setRoot(fakeDir);
+
+    /* ④ 大文件提醒 */
+    try { localStorage.removeItem('grapheon.mediawarn.v1'); } catch (e) {}
+    ok('UD01o 默认要提醒', userWarnOff() === false, String(userWarnOff()));
+    const big = new File([new Uint8Array(6 * 1024 * 1024)], 'big.png', { type:'image/png' });
+    const b4 = doc.nodes.length, w4 = written.length;
+    dropMediaFile(big, { x:0, y:0 });
+    ok('UD01p ★ 大文件先弹提醒（还没建节点）', numBoxOpen() && doc.nodes.length === b4,
+      'open=' + numBoxOpen() + ' nodes=' + doc.nodes.length);
+    ok('UD01q 提醒里有勾选框', !!document.querySelector('#numboxFields input.nbcheck'), '');
+    ok('UD01r 提醒里说清了多大', /MB/.test(document.getElementById('numboxHint').textContent),
+      document.getElementById('numboxHint').textContent.slice(0, 40));
+    ok('UD01s 确认框里没有「用默认」那个按钮',
+      document.getElementById('numboxClear').style.display === 'none',
+      document.getElementById('numboxClear').style.display);
+    const box = document.querySelector('#numboxFields input.nbcheck');
+    box.checked = true;
+    document.getElementById('numboxOk').click();
+    for (let i = 0; i < 60 && written.length === w4; i++) await wait(20);
+    ok('UD01t ★ 确定之后写进去了', written.length === w4 + 1, String(written.length));
+    ok('UD01u ★ 勾了就记住「以后不再提示」', userWarnOff() === true, String(userWarnOff()));
+    const big2 = new File([new Uint8Array(6 * 1024 * 1024)], 'big2.png', { type:'image/png' });
+    const w5 = written.length;
+    dropMediaFile(big2, { x:0, y:0 });
+    ok('UD01v ★ 关掉之后不再弹提醒', !numBoxOpen(), String(numBoxOpen()));
+    for (let i = 0; i < 60 && written.length === w5; i++) await wait(20);
+    ok('UD01w 直接就写进去了', written.length === w5 + 1, String(written.length));
+    setUserWarnOff(false);
+    ok('UD01x 也能再打开提醒', userWarnOff() === false, String(userWarnOff()));
+
+    /* ⑤ 非图片不受影响 */
+    const b5 = doc.nodes.length;
+    dropMediaFile(new File([svg], 'a.mp3', { type:'audio/mpeg' }), { x:0, y:0 });
+    for (let i = 0; i < 60 && doc.nodes.length === b5; i++) await wait(20);
+    ok('UD01y 拖音频不走 user/ 那套', doc.nodes.length === b5 + 1
+      && mediaSrcOf(doc.nodes[doc.nodes.length - 1]) === 'a.mp3',
+      String(mediaSrcOf(doc.nodes[doc.nodes.length - 1])));
+
+    try { localStorage.removeItem('grapheon.mediawarn.v1'); } catch (e) {}
+    window.showDirectoryPicker = realPicker;
+    setRoot(realRoot);
+    fresh();
+    unmute();
+    draw();
+    ok('UD01z 画一帧不抛', true);
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
