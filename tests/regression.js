@@ -11382,6 +11382,81 @@
     ok('X03 已回到示例文档', doc.nodes.length === 12);
   });
 
+  T('MV02 放不了要说实话（不能假装在播）', () => {
+    fresh();
+    /* ★ 两个坑都记在这：
+       ① 不去加载真的媒体文件。第一版拿 data:video/webm;base64,AAAA 测，
+          浏览器真的去解码、报一个资源错误，被测试框架算成失败 ——
+          和之前 ERR_FILE_NOT_FOUND 是同一个坑。
+       ② 这里是**同步**测的。第一版 return 了一个 Promise，
+          而这个框架里异步测试要写成 await TA(...)，T 返回的 Promise 没人等 ——
+          断言一次都没跑（断言总数没变就是证据）。
+          所以假元素的 play() 返回一个**立即回调的 thenable**，
+          整条逻辑同步走完。 */
+    const n = addNodeAt('假视频', 0, 0, 'rect');
+    n.kind = 'image'; n.src = 'x.mp4';
+    reindex(); sizeNode(byId(n.id)); reindex(); sizeAll();
+    const nn = byId(n.id);
+    ok('MV02 类型判成 video', mediaKindOf(nn) === 'video', mediaKindOf(nn));
+
+    const realEl = mediaElOf;
+    const realVideoRec = videoRec;
+    /* ⚠ 读提示语之前**必须 skipDlg()** —— say() 是打字机效果：
+       它先把 dlgText 清空，再一个字一个字打出来。同步读永远是空的。
+       老测试里都是写成 (skipDlg(), /xx/.test(dlgText.textContent)) 的。 */
+    /* 假的播放器：then 立即回调，等于 play() 已经落定 */
+    const fake = (okPlay) => ({
+      paused: true, ended: false, error: okPlay ? null : { code: 4 },
+      play(){ if (okPlay) this.paused = false; return { then:(f)=>{ f(); } }; },
+      pause(){ this.paused = true; }
+    });
+
+    /* ① 播不起来：play() 回来时元素还是 paused → 必须说「放不了」 */
+    const bad = fake(false);
+    mediaElOf = () => bad;
+    videoRec = () => null;            // draw() 别去抓 x.mp4
+    toggleMediaPlay(nn);
+    skipDlg();
+    const said = dlgText.textContent;
+    ok('MV02b ★ 没播起来时说「放不了」而不是「开始播放」',
+      /放不了/.test(said) && !/开始播放/.test(said), said);
+    ok('MV02c 说清楚了是视频', /视频/.test(said), said);
+
+    /* ② 播得起来 → 才说「开始播放」 */
+    const good = fake(true);
+    mediaElOf = () => good;
+    toggleMediaPlay(nn);
+    skipDlg();
+    const said2 = dlgText.textContent;
+    ok('MV02d ★ 真播起来了才说「开始播放」', /开始播放/.test(said2), said2);
+    ok('MV02e 元素确实变成在播', good.paused === false, String(good.paused));
+
+    /* ③ 正在播时点一下 = 暂停 */
+    toggleMediaPlay(nn);
+    skipDlg();
+    const said3 = dlgText.textContent;
+    ok('MV02f ★ 正在播时点一下是暂停', /暂停/.test(said3), said3);
+    ok('MV02g 暂停之后元素确实 paused', good.paused === true, String(good.paused));
+
+    /* ④ 没有播放器（图片 / 网页 / 文件）→ 返回 false，不说话 */
+    mediaElOf = () => null;
+    skipDlg();
+    const before = dlgText.textContent;
+    ok('MV02h 没有播放器时返回 false', toggleMediaPlay(nn) === false);
+    ok('MV02i 而且不乱说话', dlgText.textContent === before, dlgText.textContent);
+
+    /* ⚠ 桩要留到 fresh() **之后**再撤 ——
+       我第一版先撤桩再调 markPlayingMedia，它就去抓 user/x.mp4 了，
+       报一个 ERR_FILE_NOT_FOUND 被框架算成失败（这个坑我踩了两次）。 */
+    dirty = false;
+    markPlayingMedia();
+    ok('MV02j 没东西在播时不重画', dirty === false, String(dirty));
+    draw();
+    ok('MV02k 画一帧不抛', true);
+    fresh();   /* 先清干净 */
+    mediaElOf = realEl; videoRec = realVideoRec;   /* 再撤桩 */
+  });
+
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
@@ -11390,3 +11465,4 @@
   pre.style.display = 'none';
   document.body.appendChild(pre);
 })();
+

@@ -377,20 +377,42 @@ function isMediaPlaying(n){
   const el = mediaElOf(n);
   return !!el && !el.paused && !el.ended;
 }
-/* 点一下播放 / 再点一下暂停（视频和音频都是这个行为） */
+/* 点一下播放 / 再点一下暂停（视频和音频都是这个行为）
+   ★ 这里最容易糊弄用户：play() 返回 Promise，解码失败时它只是 **reject**，
+     元素状态一点没变。第一版就是无条件说「开始播放」，于是提示语说在播、
+     画面一动不动 —— 用户看到的就是「视频无法播放」。
+     现在改成以**元素的实际状态**为准，播不起来就把原因说出来。 */
 function toggleMediaPlay(n){
   const el = mediaElOf(n);
   if (!el) return false;
   const k = (n.mediaKind || mediaKindOf(n));
+  const what = (k === 'video' ? '视频' : '音频');
   if (el.paused || el.ended){
     const pr = el.play();
-    if (pr && typeof pr.catch === 'function') pr.catch(() => {});
-    say('* 开始播放' + (k === 'video' ? '视频' : '音频') + '。');
+    const after = () => {
+      if (el.paused || el.ended){
+        /* 没播起来。把浏览器的错误码翻成人话。 */
+        const c = el.error ? el.error.code : 0;
+        const why = !el.error ? '没播起来'
+                  : c === 1 ? '被中断了'
+                  : c === 2 ? '读取失败'
+                  : c === 3 ? '解码失败'
+                  : c === 4 ? '这个文件播不了'
+                  : ('错误 ' + c);
+        say('* 放不了这个' + what + '（' + why + '）。');
+      } else {
+        say('* 开始播放' + what + '。');
+        mark();
+      }
+    };
+    if (pr && typeof pr.then === 'function') pr.then(after, after);
+    else after();
+    mark();
   } else {
     el.pause();
-    say('* 暂停了' + (k === 'video' ? '视频' : '音频') + '。');
+    say('* 暂停了' + what + '。');
+    mark();
   }
-  mark();
   return true;
 }
 /* 有东西在播就每帧 mark 一下 ——

@@ -410,6 +410,11 @@
     <tr><td><b>Ctrl + 左键</b></td><td>打开源（和 Word 里的超链接一个习惯）。
       普通左键仍旧是选中 / 拖动，不会被链接抢走</td></tr>
     <tr><td>点一下视频 / 音频</td><td>播放 / 暂停。视频是抽一帧画在画布上的，播的时候一边播一边重画</td></tr>
+    <tr><td><b>认哪些格式</b></td><td>浏览器能解码的才算：视频 <code>mp4</code>（H.264）/ <code>webm</code>
+      最稳，<code>mov</code> 要看里面的编码（ProRes、H.265 之类放不了）；
+      音频 <code>mp3</code> / <code>m4a</code> / <code>wav</code> / <code>ogg</code> 都行</td></tr>
+    <tr><td>放不了会怎样</td><td>底栏直接说原因（「放不了这个视频（这个文件播不了）」），
+      节点上也会写「视频读不出来」—— 不会假装在播</td></tr>
     <tr><td>安全的源才给打开</td><td><code>javascript:</code> 之类一律拦掉 ——
       这个源会被拿去 <code>window.open</code>，不拦就是个执行脚本的入口</td></tr>
     <tr><td>把图片拖进窗口</td><td>落在鼠标松开的位置（会内嵌成 <code>data:</code>）</td></tr>
