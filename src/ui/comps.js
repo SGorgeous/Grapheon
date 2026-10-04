@@ -78,17 +78,13 @@ function renderComps(){
   /* ---- 自定义组件的编辑器（优先显示） ---- */
   if (compEditor){ renderCompEditor(); return; }
 
-  if (!t){
-    compsSubEl.textContent = '没有选中东西';
-  } else {
-    compsSubEl.textContent = t.what;
-  }
-  compsHintEl.textContent = '所有属性都能写 {变量} —— 作用域规则和在节点正文里写一样。';
+  compsSubEl.textContent = '自定义组件：把几个效果拼成一个，起个名字，定好作用域';
+  compsHintEl.textContent = '单个效果（染色 / 透明度 / 描边 / 角标 / 条件隐藏 / 线宽）请走右键菜单 —— '
+    + '节点是「外观 ▶」「结构 ▶」，连线是菜单里的「线宽…」，分组是「效果 ▶」。这里只管自定义组件。';
 
-  if (t){
-    if (t.scope === 'node') compsListEl.appendChild(rowPriority(t.entity));
-    for (const def of componentsFor(t.scope)) compsListEl.appendChild(rowComponent(t, def));
-  }
+  /* ★ 每个实体的效果行**撤掉了** —— 那些已经搬到右键菜单里按分类放好，
+     面板留着它们就成了两套入口，改一处忘一处。（搬完才发现这个道理。）
+     自定义组件的编辑器仍然在这里，且「新建组件…」会带上当前选中实体的作用域。 */
 
   /* ---- 自定义组件管理 ---- */
   compsListEl.appendChild(section('自定义组件'));

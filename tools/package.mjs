@@ -43,6 +43,7 @@ const DOCS = [
   ['docs-blank.png', 'docs-blank.png'],
   ['docs-clip.png', 'docs-clip.png'],
   ['docs-numbox.png', 'docs-numbox.png'],
+  ['docs-comps.png', 'docs-comps.png'],
 ];
 
 function walk(dir, out = []){

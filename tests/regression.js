@@ -4627,61 +4627,68 @@
     })());
     ok('CP09f 不是数组也不炸', normalizeComponents('abc').length === 0 && normalizeComponents(undefined).length === 0);
   });
-  T('CP10 组件面板：开合 / 内容 / 操作', () => {
+  T('CP10 自定义组件面板：开合 / 只留自定义组件', () => {
     fresh(); layoutMind();
     ok('CP10 一开始是关的', !compsOpen());
     keyRaw('c');
     ok('CP10b C 键打开', compsOpen());
-    ok('CP10c 没选中时给提示', /没有选中东西/.test(compsSubEl.textContent), compsSubEl.textContent);
-    selectOnly(nodeByText('节点').id);
-    renderComps();
-    ok('CP10d 选中节点后标题跟着变', /节点/.test(compsSubEl.textContent), compsSubEl.textContent);
-    const cards = compsListEl.querySelectorAll('.compcard');
-    ok('CP10e 列出了优先级 + 三个节点组件',
-      cards.length === 1 + componentsFor('node').length, cards.length);
-    ok('CP10f 内置能力也列出来了', compsListEl.querySelectorAll('.compbuiltin').length > 3,
-      compsListEl.querySelectorAll('.compbuiltin').length);
-    // 勾上「角标」
-    const first = [...cards].find(c => /角标/.test(c.textContent));
-    const cb = first.querySelector('input[type=checkbox]');
-    cb.checked = true; cb.onchange();
-    const n = nodeByText('节点');
-    ok('CP10g 勾上就真的加上了组件', compOn(n, 'badge'));
-    ok('CP10h 属性输入框出来了', compsListEl.querySelectorAll('.compinput').length >= 2,
-      compsListEl.querySelectorAll('.compinput').length);
-    // 填文字
-    const inp = [...compsListEl.querySelectorAll('.compinput')].find(i => i.placeholder && /变量/.test(i.placeholder));
-    inp.value = '共 {x} 个'; inp.onchange();
-    ok('CP10i 填进去生效', compRaw(nodeByText('节点'), 'badge', 'text') === '共 {x} 个',
-      compRaw(nodeByText('节点'), 'badge', 'text'));
-    // 取消勾选
-    const first2 = [...compsListEl.querySelectorAll('.compcard')].find(c => /角标/.test(c.textContent));
-    const cb2 = first2.querySelector('input[type=checkbox]');
-    cb2.checked = false; cb2.onchange();
-    ok('CP10j 取消勾选就删掉', !compOn(nodeByText('节点'), 'badge'));
+    /* ★ 这个面板改过了：单个效果（染色 / 透明度 / 描边 / 角标 / 条件隐藏 / 线宽）
+       全部搬到右键菜单里按分类放好，面板只剩「自定义组件」。
+       以前它和菜单两套入口并存，改一处忘一处。 */
+    ok('CP10c 标题是「自定义组件」',
+      document.querySelector('#comps h2').textContent === '自定义组件',
+      document.querySelector('#comps h2').textContent);
+    ok('CP10d 副标题讲的是自定义组件', /自定义组件/.test(compsSubEl.textContent), compsSubEl.textContent);
+    ok('CP10e ★ 每个实体的效果行没了（没有 compcard）',
+      compsListEl.querySelectorAll('.compcard').length === 0,
+      String(compsListEl.querySelectorAll('.compcard').length));
+    ok('CP10f 提示里指路到右键菜单', /右键菜单/.test(compsHintEl.textContent), compsHintEl.textContent);
+    ok('CP10g ★ 「自定义组件」那一节还在', /自定义组件/.test(compsListEl.textContent));
+    ok('CP10h ★ 「新建组件…」按钮还在', /新建组件/.test(compsListEl.textContent));
     keyRaw('Escape');
-    ok('CP10k Esc 关掉', !compsOpen());
+    ok('CP10i Esc 关掉', !compsOpen());
   });
-  T('CP11 组件面板对连线 / 分组也能用', () => {
+  T('CP11 效果的可用范围跟着作用域走（入口在菜单里了）', () => {
     fresh(); layoutMind();
     const a = nodeByText('节点'), b = nodeByText('连线');
     sel.clear(); sel.add(a.id); sel.add(b.id);
     const grp = createGroup();
     selectGroup(grp.id);
-    openComps();
-    ok('CP11 分组也能开', /分组/.test(compsSubEl.textContent), compsSubEl.textContent);
-    const hasWidth = [...compsListEl.querySelectorAll('.compcard')].some(c => /线宽/.test(c.textContent));
-    ok('CP11b 分组下不会出现「线宽」（那是连线专属）', !hasWidth);
-    closeComps();
-    selectEdge(doc.edges[0].id);
-    openComps();
-    ok('CP11c 连线也能开', /连线/.test(compsSubEl.textContent), compsSubEl.textContent);
-    const hasOutline = [...compsListEl.querySelectorAll('.compcard')].some(c => /自定义描边/.test(c.textContent));
-    ok('CP11d 连线下不会出现「自定义描边」', !hasOutline);
-    const w = [...compsListEl.querySelectorAll('.compcard')].find(c => /线宽/.test(c.textContent));
-    ok('CP11e 连线有「线宽」', !!w);
-    ok('CP11f 连线没有「优先级」那一行（那是节点专属）',
-      !/优先级/.test(compsListEl.textContent));
+    /* ★ 效果行从面板搬到右键菜单了，所以直接测那个生成器 ——
+       effectMenuItems(entity, scope, ids, who) 就是菜单项的真正来源。 */
+    const labelsOf = (entity, scope, ids) =>
+      effectMenuItems(entity, scope, ids, 'X').map(x => x[0]);
+    const g = byGroup(grp.id);
+    const gLabels = labelsOf(g, 'group', ['tint', 'opacity', 'outline', 'badge', 'hideIf', 'width']);
+    ok('CP11 ★ 分组能拿到染色 / 透明度 / 描边 / 角标 / 条件隐藏',
+      ['染色', '透明度', '自定义描边', '角标', '条件隐藏'].every(k => gLabels.some(x => x.indexOf(k) >= 0)),
+      gLabels.join(' / '));
+    ok('CP11b ★ 分组下不会出现「线宽」（那是连线专属）',
+      !gLabels.some(x => x.indexOf('线宽') >= 0), gLabels.join(' / '));
+
+    const e = doc.edges[0];
+    const eLabels = labelsOf(e, 'edge', ['tint', 'opacity', 'outline', 'badge', 'hideIf', 'width']);
+    ok('CP11c ★ 连线能拿到「线宽」', eLabels.some(x => x.indexOf('线宽') >= 0), eLabels.join(' / '));
+    ok('CP11d ★ 连线下不会出现「自定义描边」',
+      !eLabels.some(x => x.indexOf('自定义描边') >= 0), eLabels.join(' / '));
+    /* ★ 作用域过滤的数一数就行（比写「XX 拿不到 YY」稳：
+       我第一版写「连线拿不到条件隐藏」——错了，
+       hideIf 的 scopes 是 ALL_SCOPES，连线本来就该能挂）。
+       六项里：描边只给 node/group，线宽只给 edge，其余四项 ALL_SCOPES。
+         连线 → 5 项（排掉描边）
+         分组 → 5 项（排掉线宽）
+         节点 → 5 项（排掉线宽 —— 我第一版写 6，探针一数才看清） */
+    ok('CP11e ★ 连线 5 项（六项里排掉「自定义描边」）', eLabels.length === 5,
+      eLabels.length + ': ' + eLabels.join(' / '));
+    const six = ['tint', 'opacity', 'outline', 'badge', 'hideIf', 'width'];
+    ok('CP11e2 ★ 分组 5 项（排掉「线宽」）',
+      labelsOf(g, 'group', six).length === 5, labelsOf(g, 'group', six).join(' / '));
+    ok('CP11e3 ★ 节点 5 项（排掉「线宽」——它只给连线）',
+      labelsOf(a, 'node', six).length === 5, labelsOf(a, 'node', six).join(' / '));
+
+    const nLabels = labelsOf(a, 'node', ['tint', 'opacity', 'outline', 'badge', 'hideIf', 'width']);
+    ok('CP11f ★ 节点能拿到条件隐藏', nLabels.some(x => x.indexOf('条件隐藏') >= 0), nLabels.join(' / '));
+    ok('CP11g ★ 节点拿不到「线宽」', !nLabels.some(x => x.indexOf('线宽') >= 0), nLabels.join(' / '));
     closeComps();
   });
 

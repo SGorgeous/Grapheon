@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · interact/keys.js
    快捷键：一张可自定义的绑定表（BINDINGS）+ 一张动作注册表（ACTIONS）。
@@ -152,7 +152,7 @@ const ACTIONS = {
       fitView(); mark();
       say('* 已缩放到全部。');
   }},
-  'comps.open':       { label:'组件面板', group:'样式', run(){ openComps(); } },
+  'comps.open':       { label:'自定义组件', group:'样式', run(){ openComps(); } },
   'group.create':     { label:'把选中的节点加入分组', group:'分组', run(){ createGroup(); } },
   'group.dissolve':   { label:'解散选中的分组', group:'分组', run(){
       const grps = selectedGroups();

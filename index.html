@@ -67,7 +67,7 @@
 <div id="ctx" class="ud"></div>
 
 <div id="comps" class="ud">
-  <h2>组件</h2>
+  <h2>自定义组件</h2>
   <div class="sub" id="compsSub"></div>
   <div id="compsList"></div>
   <div class="row"><div class="sub" id="compsHint"></div></div>
@@ -347,8 +347,11 @@
     <tr><td>普通节点四条边各有一个空心环</td><td>那是连接端点，只负责连线，不参与求值</td></tr>
     <tr><td>空环 / 实心点 / 方块</td><td>空心环 = 连接；实心点 = 数据进出；方块 = 拖动改边或连到别的节点</td></tr>
     <tr><td>双击端点方块</td><td>改端点的编号和标签（连接端点没有编号）</td></tr>
-    <tr><td>右键节点 →「外观」</td><td>形状 / 样式 / 组件（角标、染色、描边、透明度…）</td></tr>
-    <tr><td>Space / 右键「折叠子树」</td><td>把子孙藏起来；点角标上的数字展开</td></tr>
+    <tr><td>右键 →「外观」</td><td>形状 / 样式 / <b>染色 / 透明度 / 自定义描边 / 角标</b></td></tr>
+    <tr><td>右键 →「结构」</td><td>子节点 / 兄弟 / 分组 / 折叠 / <b>优先级</b>（滑条+填空）/ <b>条件隐藏</b></td></tr>
+    <tr><td>右键连线 →「线宽…」</td><td>连线的粗细（滑条 + 填空）</td></tr>
+    <tr><td>右键分组 →「效果 ▶」</td><td>分组也能挂染色 / 透明度 / 描边 / 角标 / 条件隐藏</td></tr>
+    <tr><td>Tab / 右键「折叠子树」</td><td>把子孙藏起来；点角标上的数字展开</td></tr>
 
     <tr><td class="sec" colspan="2">— 分组 —</td></tr>
     <tr><td>Ctrl + G</td><td>把选中的东西成组</td></tr>
@@ -413,7 +416,7 @@
     <tr><td>X / Del / Backspace</td><td>删除</td></tr>
     <tr><td>F</td><td>连接选中的两个节点</td></tr>
     <tr><td>N 或 E</td><td>样式面板</td></tr>
-    <tr><td>C</td><td>组件面板</td></tr>
+    <tr><td>C</td><td>自定义组件面板（把几个效果拼成一个）</td></tr>
     <tr><td>Home</td><td>缩放到全部</td></tr>
     <tr><td>Ctrl + Space</td><td>隐藏 / 显示界面</td></tr>
     <tr><td>Ctrl + G / Ctrl + Alt + G</td><td>打包成分组 / 解散分组</td></tr>
