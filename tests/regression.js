@@ -11574,10 +11574,10 @@
   }
 
 
-  await TA('ME01 拖任何文件进来都认得', async () => {
+  await TA('ME01 拖任何文件：图片内嵌，别的只记文件名 / 第一帧', async () => {
     fresh();
-    /* 拖进来的都会内嵌成 data:，渲染器随后会去解码 —— 先把加载器关掉 */
     const unmute = muteMediaLoaders();
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#f0f"/></svg>';
     const mkFile = (name, mime, bytes) => new File([bytes == null ? svg : bytes], name, { type: mime });
     const dropFiles = (files, pt) => {
@@ -11587,68 +11587,95 @@
       window.dispatchEvent(new DragEvent('drop', { bubbles:true, cancelable:true,
         clientX:Math.round(s.x), clientY:Math.round(s.y), dataTransfer:dt }));
     };
-    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const waitNew = async (before, n) => {
+      for (let i = 0; i < 80 && doc.nodes.length < before + (n || 1); i++) await wait(20);
+    };
 
-    /* ① 五种文件各拖一个 —— 以前只有图片能过，别的会被当存档打开 */
+    /* ① 图片：还是内嵌（data:），和以前一样 */
+    const b0 = doc.nodes.length;
+    dropFiles([mkFile('a.svg', 'image/svg+xml')], { x:0, y:0 });
+    await waitNew(b0);
+    const ni = doc.nodes[doc.nodes.length - 1];
+    ok('ME01 图片建了节点', doc.nodes.length === b0 + 1, String(doc.nodes.length));
+    ok('ME01b ★ 图片是内嵌的（data: 开头）',
+      String(mediaSrcOf(ni)).indexOf('data:image/') === 0, String(mediaSrcOf(ni)).slice(0, 20));
+    ok('ME01c 类型判成图片', mediaKindOf(ni) === 'image', mediaKindOf(ni));
+
+    /* ② ★ 音频 / 压缩包 / 网页：**内容一个字节都不读**，只记文件名。
+          这就是「导入 flac 卡死」的修法 —— 以前是把整个文件读成 base64
+          塞进节点，然后 serialize / pushHist / 自动保存反复拷那个大字符串。 */
     const cases = [
-      ['a.svg',  'image/svg+xml',   null,       'image'],
-      ['b.mp4',  'video/mp4',       null,       'video'],
-      ['c.mp3',  'audio/mpeg',      null,       'audio'],
-      ['d.zip',  'application/zip', null,       'file'],
-      ['e.html', 'text/html',       '<b>x</b>', 'link']
+      ['c.mp3',  'audio/mpeg',  'audio'],
+      ['d.flac', 'audio/flac',  'audio'],
+      ['e.zip',  'application/zip', 'file'],
+      ['f.html', 'text/html',   'link']
     ];
-    for (const [name, mime, bytes, want] of cases){
-      const before = doc.nodes.length;
-      dropFiles([mkFile(name, mime, bytes)], { x:0, y:0 });
-      for (let i = 0; i < 40 && doc.nodes.length === before; i++) await wait(25);
-      ok('ME01 拖 ' + name + ' 会建节点', doc.nodes.length === before + 1,
-        before + ' → ' + doc.nodes.length);
+    for (const [name, mime, want] of cases){
+      const b = doc.nodes.length;
+      dropFiles([mkFile(name, mime)], { x:0, y:0 });
+      await waitNew(b);
+      ok('ME01d 拖 ' + name + ' 建了节点', doc.nodes.length === b + 1, String(doc.nodes.length));
       const n = doc.nodes[doc.nodes.length - 1];
-      ok('ME01b ★ ' + name + ' 的类型判成 ' + want, mediaKindOf(n) === want, mediaKindOf(n));
-      ok('ME01c ' + name + ' 是内嵌的（data: 开头，没有外部依赖）',
-        String(mediaSrcOf(n)).indexOf('data:') === 0, String(mediaSrcOf(n)).slice(0, 20));
+      ok('ME01e ★ ' + name + ' 的源就是**文件名**（没读内容）',
+        mediaSrcOf(n) === name, String(mediaSrcOf(n)).slice(0, 30));
+      ok('ME01f ★ ' + name + ' 的源不是 data:（不内嵌）',
+        String(mediaSrcOf(n)).indexOf('data:') !== 0, String(mediaSrcOf(n)).slice(0, 20));
+      ok('ME01g ' + name + ' 的类型判成 ' + want, mediaKindOf(n) === want, mediaKindOf(n));
+      ok('ME01h ' + name + ' 会补 user/ 前缀（放进 user/ 就能用）',
+        mediaHrefOf(n) === 'user/' + name, mediaHrefOf(n));
+      ok('ME01i ' + name + ' 的描述里写了怎么办',
+        String(n.desc || '').indexOf('user/') >= 0, String(n.desc || '').slice(0, 24));
     }
 
-    /* ② ★ 内嵌地址没有扩展名 —— 类型必须显式记在节点上，
-          不然 round-trip 之后会退化成「文件」。 */
-    const vids = doc.nodes.filter(n => mediaKindOf(n) === 'video');
-    ok('ME01d ★ 有视频节点', vids.length >= 1, String(vids.length));
-    ok('ME01e ★ 视频节点上显式记了 mediaType（data: 没扩展名，判不出来）',
-      vids[0].mediaType === 'video', String(vids[0].mediaType));
-    const snap = serialize();
-    deserialize(snap);
-    const back = doc.nodes.filter(n => n.mediaType === 'video');
-    ok('ME01f ★ 存读一轮之后类型还是视频', back.length >= 1 && mediaKindOf(back[0]) === 'video',
-      back.length ? mediaKindOf(back[0]) : '没有了');
-    const auds = doc.nodes.filter(n => mediaKindOf(n) === 'audio');
-    ok('ME01g 音频也是', auds.length >= 1 && auds[0].mediaType === 'audio',
-      auds.length ? String(auds[0].mediaType) : '没有了');
+    /* ③ ★ 视频：只留第一帧。测试里那个假 mp4 解不出帧，所以会退化成
+          路径节点 —— 两条路都要能用，都不能把整个视频读进来。 */
+    const bv = doc.nodes.length;
+    dropFiles([mkFile('g.mp4', 'video/mp4')], { x:0, y:0 });
+    await waitNew(bv);
+    const nv = doc.nodes[doc.nodes.length - 1];
+    ok('ME01j 拖 mp4 建了节点', doc.nodes.length === bv + 1, String(doc.nodes.length));
+    ok('ME01k ★ 视频**没有**被整个内嵌进来（源不是 data:video）',
+      String(mediaSrcOf(nv)).indexOf('data:video') !== 0, String(mediaSrcOf(nv)).slice(0, 24));
+    ok('ME01l ★ 要么是第一帧的小图，要么是文件名 —— 两种都不大',
+      String(mediaSrcOf(nv)) === 'g.mp4' || String(mediaSrcOf(nv)).indexOf('data:image/') === 0,
+      String(mediaSrcOf(nv)).slice(0, 24));
+    ok('ME01m 视频的类型还认得出来',
+      mediaKindOf(nv) === 'video' || mediaKindOf(nv) === 'image', mediaKindOf(nv));
 
-    /* ③ 一次拖好几个：都进来，而且错开摆（不叠在一起） */
-    const before2 = doc.nodes.length;
+    /* ④ ★ 关键指标：**文档大小**。这就是「卡顿 / 卡死」的根源 ——
+          以前一个 5MB 的 flac 会让 JSON 涨到 7MB，现在只多几十个字节。 */
+    const j = JSON.stringify(serialize());
+    ok('ME01n ★ 这一堆节点的文档仍然很小（< 40KB，以前一个 flac 就 7MB）',
+      j.length < 40 * 1024, j.length + ' 字节');
+    const flacNode = doc.nodes.find(n => mediaSrcOf(n) === 'd.flac');
+    /* 一个节点本身就有 id / 坐标 / 描述那些字段，几百字节是正常的。
+       要害在于：**它不随文件大小增长** —— 以前 5MB 的 flac 会让它涨到 7MB。 */
+    ok('ME01o ★ flac 节点不到 1KB（以前会跟着文件涨到 7MB）',
+      !!flacNode && JSON.stringify(flacNode).length < 1024,
+      flacNode ? String(JSON.stringify(flacNode).length) + ' 字节' : '没找到');
+
+    /* ⑤ 一次拖好几个照样错开摆 */
+    const b2 = doc.nodes.length;
     dropFiles([mkFile('x1.mp3','audio/mpeg'), mkFile('x2.mp4','video/mp4')], { x:0, y:0 });
-    for (let i = 0; i < 40 && doc.nodes.length < before2 + 2; i++) await wait(25);
-    ok('ME01h ★ 一次拖两个都进来了', doc.nodes.length === before2 + 2,
-      before2 + ' → ' + doc.nodes.length);
+    await waitNew(b2, 2);
+    ok('ME01p 一次拖两个都进来了', doc.nodes.length === b2 + 2,
+      b2 + ' → ' + doc.nodes.length);
     const last2 = doc.nodes.slice(-2);
-    ok('ME01i 而且错开摆了', !(last2[0].x === last2[1].x && last2[0].y === last2[1].y),
+    ok('ME01q 而且错开摆了', !(last2[0].x === last2[1].x && last2[0].y === last2[1].y),
       last2[0].x + ',' + last2[0].y + ' / ' + last2[1].x + ',' + last2[1].y);
 
-    /* ④ ★ 只有我们自己导出的存档还能走「打开文档」 */
-    ok('ME01j ★ .gpk / .json 仍当存档', isDocFile({ name:'a.gpk' }) && isDocFile({ name:'a.JSON' }),
-      '');
-    ok('ME01k 别的扩展名都不当存档（拖 mp4 不会再被当文档读）',
-      !isDocFile({ name:'a.mp4' }) && !isDocFile({ name:'a.zip' }) && !isDocFile({ name:'a.png' })
-      && !isDocFile({ name:'' }), '');
-    /* ⑤ 提示语 */
-    skipDlg();
-    ok('ME01l 提示语说加入了什么', /加入了/.test(dlgText.textContent), dlgText.textContent);
+    /* ⑥ .gpk / .json 仍旧当存档 */
+    ok('ME01r ★ .gpk / .json 仍当存档',
+      isDocFile({ name:'a.gpk' }) && isDocFile({ name:'a.JSON' }), '');
+    ok('ME01s 别的扩展名都不当存档',
+      !isDocFile({ name:'a.mp4' }) && !isDocFile({ name:'a.zip' }) && !isDocFile({ name:'a.flac' }), '');
 
-    fresh();          /* 先清干净 */
-    unmute();         /* 再开回来 */
+    fresh();
+    unmute();
     draw();
-    ok('ME01m 画一帧不抛', true);
+    ok('ME01t 画一帧不抛', true);
   });
+
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
