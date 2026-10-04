@@ -828,54 +828,44 @@ window.addEventListener('click', (ev) => {
    插入菜单（顶栏「插入」）
    把散在各处的「加一个 X」收拢到一处。
    ========================================================================= */
-function showInsertMenu(anchor){
-  const items = [
-    ['节点', '空白节点，放在视口正中', () => {
-      const c = viewCenter();
-      const n = addNodeAt('新节点', Math.round(c.x - 60), Math.round(c.y - 24), 'rect');
-      selectOnly(n.id); pushHist(); mark();
-      say('* 加了节点' + tagOf(n) + '。');
-    }],
-    /* ★ 多媒体节点的两种源。原来这里还有一条「图片…」（内嵌 data:）——
-       删了：现在**任何文件都能直接拖进窗口**，不用再从菜单挑。
-       这两条是「手写地址」的路子，和拖放互补。
-       ★ 只有网络节点会补 https:// ——
-         路径节点写的是 pic.png，补上就成了个网址，全坏了。 */
-    ['路径节点…', '引用 user/ 里的图片 / 视频 / 音频 / 文件', () => newMediaNode('path', null)],
-    ['网络节点…', '填网址，Ctrl+左键打开', () => newMediaNode('link', null)],
-    ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
-    'hr',
-    ['变量定义节点', '单一变量 / 滑块 / 列表 / 地图，右键可切', () => {
-      const c = viewCenter();
-      const n = addVarNode('x', Math.round(c.x - 137), Math.round(c.y - 50));
-      selectOnly(n.id); pushHist(); mark();
-    }],
-    ['运算符节点', '+ - * / 可以叠加', () => {
-      const c = viewCenter();
-      const n = addOpNode('运算', Math.round(c.x - 110), Math.round(c.y - 40));
-      selectOnly(n.id); pushHist(); mark();
-    }],
-    ['输出节点', '声明本作用域的输出值', () => {
-      const c = viewCenter();
-      const n = addOutNode('output', Math.round(c.x - 110), Math.round(c.y - 40));
-      selectOnly(n.id); pushHist(); mark();
-    }],
-    'hr',
-    ['勾选节点', '选项随便加，输出一串列表', () => {
-      const c = viewCenter();
-      const n = addControlNode('check', Math.round(c.x - 140), Math.round(c.y - 70));
-      selectOnly(n.id); pushHist(); mark();
-    }],
-    ['条件节点', '输入为 1 时把所填的值放出去', () => {
-      const c = viewCenter();
-      const n = addControlNode('cond', Math.round(c.x - 140), Math.round(c.y - 60));
-      selectOnly(n.id); pushHist(); mark();
-    }]
-  ];
-  showMenu(anchor.getBoundingClientRect().left, anchor.getBoundingClientRect().bottom + 6, items);
+/* =========================================================================
+   打开 user/ 文件夹
+   ─────────────────────────────────────────────────────────────
+   浏览器没法调起资源管理器，所以做两件事凑成「打开文件夹」：
+     ① 新标签页打开 user/ —— file:// 下浏览器会**列出目录内容**
+     ② 把 user/ 的完整地址复制到剪贴板 —— 粘进资源管理器地址栏就能用
+   ★ 复制的是 file:///… 形式的 URL，不做 Windows 路径转换。
+     Explorer 的地址栏直接认这种 URL，而转换要写反斜杠 ——
+     这个项目吃过反斜杠被吃掉的亏（见提交记录），能绕就绕。
+   ========================================================================= */
+function userDirUrl(){
+  const href = String(location.href || '').split('?')[0].split('#')[0];
+  const cut = href.lastIndexOf('/');
+  const dir = (cut >= 0) ? href.slice(0, cut + 1) : href;
+  return dir + 'user/';
+}
+function openUserFolder(){
+  const full = userDirUrl();
+  /* ① 先复制（剪贴板要求用户手势，这里正是点按钮的那一刻） */
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      /* ⚠ writeText 返回 **Promise** —— 被拒的时候 try/catch 接不住，
+         会变成「未处理的 Promise 拒绝」，测试框架会把它算成失败。
+         所以要挂 catch。（没给剪贴板权限的浏览器就会拒。） */
+      const pr = navigator.clipboard.writeText(full);
+      if (pr && typeof pr.catch === 'function') pr.catch(() => {});
+      copied = true;
+    }
+  } catch (e) { /* 没权限就算了，开标签页那条路还在 */ }
+  /* ② 再开一个标签页列出目录内容 */
+  let opened = false;
+  try { opened = !!window.open(full, '_blank', 'noopener'); } catch (e) {}
+  if (opened) say(copied ? '* 已打开 user/（地址也复制了）。' : '* 已打开 user/ 文件夹。');
+  else say(copied ? '* user/ 的地址已复制。' : '* 打不开 user/ 文件夹。');
+  return { url: full, copied, opened };
 }
 
-/* 视图菜单（顶栏「视图」）：居中 + 对齐与分布 */
 function showViewMenu(anchor){
   const r = anchor.getBoundingClientRect();
   showMenu(r.left, r.bottom + 6, [

@@ -114,7 +114,8 @@
       (window.__loadErrors || []).join(' | ') || '无');
   });
   T('A02 顶栏每个按钮都绑上了处理函数', () => {
-    const ids = ['b-undo','b-redo','b-new','b-open','b-save','b-png','b-insert','b-view','b-set','b-help','b-reload'];
+    /* b-insert（插入菜单）删了，换成 b-user（打开 user/ 文件夹） */
+    const ids = ['b-undo','b-redo','b-new','b-open','b-save','b-png','b-user','b-view','b-set','b-help','b-reload'];
     const missing = ids.filter(id => {
       const b = document.getElementById(id);
       return !b || typeof b.onclick !== 'function';
@@ -133,7 +134,7 @@
       ['b-open',  () => true],
       ['b-save',  () => dl && /^grapheon-\d{4}-\d{2}-\d{2}\.json$/.test(dl.filename) && dl.size > 100],
       ['b-png',   () => expEl.style.display === 'block'],
-      ['b-insert',() => ctxEl.style.display === 'block'],
+      ['b-user',  () => true],   // 它开的是新标签页，这里只确认不炸
       ['b-view',  () => ctxEl.style.display === 'block'],
       ['b-set',   () => setEl.style.display === 'block'],
       ['b-help',  () => helpEl.style.display === 'block'],
@@ -10156,11 +10157,23 @@
       String(GP.keys.bindings['ctrl+a']));
     GP.keys.actions['ui.addMenu'].run();
     const its = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
-    ok('K05-1b ★ 打开的是「插入」菜单（第一项是「节点」）',
-      its.length > 0 && its[0] === '节点', its.join(' / '));
-    ok('K05-1c 里面有变量 / 运算符 / 输出这些节点类型',
-      its.some(x => /变量/.test(x)) && its.some(x => /运算符/.test(x)),
-      its.join(' / '));
+    /* ★ 顶栏那个「插入」菜单已经删了 —— 画布右键的「新建」是它的真超集。
+       现在 Ctrl+A 弹的是同一个右键菜单（在视口正中），键盘这条路没丢。 */
+    ok('K05-1b ★ 打开的是加节点菜单（第一项是「新建」）',
+      its.length > 0 && its[0] === '新建', its.join(' / '));
+    ok('K05-1c 菜单里有加节点那一栏', its.some(x => x === '新建'), its.join(' / '));
+    /* 进「新建 → 程序节点」里确认节点类型都在 */
+    const newIt = [...document.querySelectorAll('.menu .item')].find(d => d.querySelector('.lb').textContent === '新建');
+    newIt.click();
+    const prog = [...document.querySelectorAll('.menu .item')].find(d => d.querySelector('.lb').textContent === '程序节点');
+    ok('K05-1c2 新建里有「程序节点」', !!prog,
+      [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent).join(' / '));
+    if (prog) prog.click();
+    const kinds = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('K05-1c3 程序节点里有变量 / 运算符 / 输出',
+      kinds.some(x => /变量/.test(x)) && kinds.some(x => /运算符/.test(x)) && kinds.some(x => /输出/.test(x)),
+      kinds.join(' / '));
+    hideCtx();
     ok('K05-1d ★ 不是「新建」菜单（那里面是空白文件 / 示例文档）',
       !its.some(x => /空白文件|示例/.test(x)), its.join(' / '));
     hideCtx();
@@ -11401,12 +11414,14 @@
     const labelOf = (d) => d.querySelector('.lb').textContent;
 
     /* ① 两个入口都在 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     const labels = allItems().map(labelOf);
     ok('MW01 ★ 插入菜单里有「网络节点…」', labels.some(x => x.indexOf('网络节点') >= 0), labels.join(' / '));
     ok('MW01b ★ 有「路径节点…」', labels.some(x => x.indexOf('路径节点') >= 0), labels.join(' / '));
-    ok('MW01c 原来那几项没丢',
-      ['节点', '路径节点…', '网络节点…', '嵌入 Grapheon…', '变量定义节点']
+    /* openNewMenu() 走的是「右键 → 新建 → 节点」，
+       所以这时候列出来的就是节点子菜单本身的内容。 */
+    ok('MW01c 节点子菜单里该有的都在',
+      ['文本节点', '路径节点…', '网络节点…', '表格节点']
         .every(k => labels.some(x => x.indexOf(k) === 0)),
       labels.join(' / '));
 
@@ -11429,7 +11444,7 @@
     ok('MW01k 建完就选中了，可以接着 Ctrl+左键打开', sel.has(n.id));
 
     /* ③ 相对地址：填文件名 → 类型按扩展名判 → 会补前缀 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('路径节点') >= 0).click();
     const b2 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'video/clip.mp4';
@@ -11444,7 +11459,7 @@
       String(serialize().nodes.find(x => x.id === n2.id).src));
 
     /* ④ 危险地址不建节点 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b3 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
@@ -11454,7 +11469,7 @@
     ok('MW01q 而且说了原因', /不让用/.test(dlgText.textContent), dlgText.textContent);
 
     /* ⑤ 空地址也不建 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b4 = doc.nodes.length;
     document.getElementById('numboxOk').click();
@@ -11509,7 +11524,7 @@
     const allItems = () => [...document.querySelectorAll('.menu .item')];
     const labelOf = (d) => d.querySelector('.lb').textContent;
     const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b1 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'example.com/docs';
@@ -11523,7 +11538,7 @@
     ok('MW02s 提示语说了补过', /补成/.test(dlgText.textContent), dlgText.textContent);
 
     /* ④ 已经写了协议头 → 原样，提示语不提补 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     rows()[0].querySelector('.nbtext').value = 'http://plain.com';
     document.getElementById('numboxOk').click();
@@ -11534,7 +11549,7 @@
 
     /* ⑤ ★ 「相对地址…」**不能**补 —— 那儿的 pic.png 是 user/ 里的文件，
           补上 https:// 就全坏了。这是这个功能最容易搞错的地方。 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('路径节点') >= 0).click();
     rows()[0].querySelector('.nbtext').value = 'pic.png';
     document.getElementById('numboxOk').click();
@@ -11544,7 +11559,7 @@
       mediaSrcOf(n3) + ' → ' + mediaHrefOf(n3));
 
     /* ⑥ 危险地址：补全之后仍然拦住 */
-    document.getElementById('b-insert').click();
+    openNewMenu();
     allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b4 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
@@ -11566,6 +11581,20 @@
   /* ⚠ 写成**函数声明**而不是 const 箭头函数 ——
      它会提升。写成 const 的话，定义在文件末尾、
      而 MW02 在它前面调用，就落在暂时性死区（TDZ）里报错了。 */
+  /* 打开画布右键的「新建 → 节点」子菜单。
+     顶栏那个「插入」菜单已经删了（右键的「新建」是它的真超集），
+     所以测试要走**用户现在真正会走的那条路**。 */
+  function openNewMenu(){
+    hideCtx();
+    showCtx(400, 320, null, null, { p:w2s ? { x:0, y:0 } : { x:0, y:0 } });
+    const all = () => [...document.querySelectorAll('.menu .item')];
+    const lb = (d) => d.querySelector('.lb').textContent;
+    const a = all().find(d => lb(d).indexOf('新建') === 0);
+    if (a) a.click();
+    const b = all().find(d => lb(d).indexOf('节点') === 0);
+    if (b) b.click();
+  }
+
   function muteMediaLoaders(){
     const save = { imageRec, videoRec };
     imageRec = () => null;
@@ -11676,6 +11705,105 @@
     ok('ME01t 画一帧不抛', true);
   });
 
+
+  T('MU02 删掉「插入」菜单，顶栏改成打开 user/', () => {
+    fresh();
+
+    /* ① 「插入」确实是右键「新建」的真子集，所以整个删了 */
+    ok('MU02 ★ showInsertMenu 已经不存在了', typeof showInsertMenu === 'undefined');
+    ok('MU02b ★ 顶栏那个按钮也没了', !document.getElementById('b-insert'));
+    ok('MU02c 换成了 user/ 按钮', !!document.getElementById('b-user'));
+    ok('MU02d 新按钮绑上了处理函数',
+      typeof document.getElementById('b-user').onclick === 'function');
+
+    /* ② 右键「新建」里该有的一样不少（这就是"真超集"）
+          顶栏原来有：节点 / 路径 / 网络 / 嵌入 / 变量 / 运算符 / 输出 / 勾选 / 条件
+          右键新建里有：文本 / 路径 / 网络 / 表格 / 空组 / 变量 / 勾选 / 条件 /
+                        广播 / 输出 / 运算符 / 外观 / 程序组 / 嵌入 */
+    hideCtx();
+    showCtx(400, 320, null, null, { p:{ x:0, y:0 } });
+    const all = () => [...document.querySelectorAll('.menu .item')];
+    const lb = (d) => d.querySelector('.lb').textContent;
+    const walk = (path) => {
+      for (const want of path){
+        const it = all().find(d => lb(d).indexOf(want) === 0);
+        if (!it) return null;
+        it.click();
+      }
+      return all().map(lb);
+    };
+    const nodeSub = walk(['新建', '节点']);
+    ok('MU02e ★ 新建 → 节点 里有文本 / 路径 / 网络 / 表格',
+      !!nodeSub && ['文本节点','路径节点','网络节点','表格节点'].every(k => nodeSub.some(x => x.indexOf(k) === 0)),
+      nodeSub ? nodeSub.join(' / ') : '没进去');
+    hideCtx();
+    showCtx(400, 320, null, null, { p:{ x:0, y:0 } });
+    const progSub = walk(['新建', '程序节点']);
+    ok('MU02f ★ 程序节点里有变量 / 勾选 / 条件 / 输出 / 运算符 / 外观',
+      !!progSub && ['变量','勾选','条件','输出','运算符','外观'].every(k => progSub.some(x => x.indexOf(k) >= 0)),
+      progSub ? progSub.join(' / ') : '没进去');
+    hideCtx();
+    showCtx(400, 320, null, null, { p:{ x:0, y:0 } });
+    const topSub = walk(['新建']);
+    ok('MU02g ★ 新建里还有空组 / 程序组 / 嵌入（顶栏原来没有的这些）',
+      !!topSub && ['空组','程序组','嵌入'].every(k => topSub.some(x => x.indexOf(k) >= 0)),
+      topSub ? topSub.join(' / ') : '没进去');
+    hideCtx();
+
+    /* ③ Ctrl+A 弹的是同一个菜单（键盘这条路没丢） */
+    GP.keys.actions['ui.addMenu'].run();
+    const its = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('MU02h ★ Ctrl+A 弹的是加节点菜单（第一项「新建」）',
+      its.length > 0 && its[0] === '新建', its.join(' / '));
+    ok('MU02i 而且不是「新建文档」那个菜单（那里面是空白文件 / 示例）',
+      !its.some(x => /空白文件|示例/.test(x)), its.join(' / '));
+    hideCtx();
+
+    /* ④ user/ 地址算得对 */
+    const u = userDirUrl();
+    ok('MU02j ★ user/ 的地址以 user/ 结尾', /\/user\/$/.test(u), u);
+    ok('MU02k 是当前页面所在目录下的 user/',
+      u.indexOf(location.href.slice(0, location.href.lastIndexOf('/'))) === 0, u);
+
+    /* ⑤ 点按钮：会把地址交给 window.open，剪贴板被拒也不炸 */
+    const realOpen = window.open;
+    let got = null;
+    window.open = (url) => { got = url; return {}; };
+    try {
+      document.getElementById('b-user').click();
+      ok('MU02l ★ 点 user/ 按钮会打开那个地址', got === u, String(got));
+      skipDlg();
+      ok('MU02m 提示语说得清楚', /user/.test(dlgText.textContent), dlgText.textContent);
+    } finally { window.open = realOpen; }
+
+    /* ⑥ 剪贴板被拒（没权限的浏览器就是这样）不能让整轮测试红 ——
+          writeText 返回 Promise，try/catch 接不住它的拒绝。 */
+    const realClip = navigator.clipboard;
+    let rejected = false;
+    try {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: () => { rejected = true; return Promise.reject(new Error('denied')); } }
+      });
+    } catch (e) { /* 改不动就算了 */ }
+    try {
+      window.open = () => ({});
+      openUserFolder();
+      ok('MU02n ★ 剪贴板被拒时也不抛（挂的是 catch 不是 try）', rejected, String(rejected));
+    } catch (e) {
+      ok('MU02n ★ 剪贴板被拒时也不抛', false, String(e && e.message));
+    } finally {
+      window.open = realOpen;
+      try {
+        Object.defineProperty(navigator, 'clipboard', { configurable:true, value: realClip });
+      } catch (e) {}
+    }
+
+    hideCtx();
+    draw();
+    ok('MU02o 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';

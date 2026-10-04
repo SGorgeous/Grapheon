@@ -29,7 +29,7 @@
     <button class="ud-btn" id="b-save">保存</button>
     <button class="ud-btn" id="b-png">导出</button>
     <span class="tbsep"></span>
-    <button class="ud-btn" id="b-insert">插入</button>
+    <button class="ud-btn" id="b-user" title="打开 user/ 文件夹（素材放这儿）">user/</button>
     <button class="ud-btn" id="b-view">视图</button>
     <span class="tbsep"></span>
     <button class="ud-btn" id="b-log">记录</button>
@@ -406,6 +406,10 @@
     <tr><td>为什么用相对地址</td><td>内嵌会把整个文件塞进 JSON，一份文档几兆很常见 ——
       存档、导出、撤销快照全被拖累。相对地址只占几十个字节</td></tr>
     <tr><td>右键 →「外观 ▶ → 媒体」</td><td>换源… / 类型 / 打开源 / 播放</td></tr>
+    <tr><td>顶栏 <b>user/</b></td><td>打开放素材的那个文件夹（浏览器里列出内容，
+      同时把完整地址复制到剪贴板 —— 粘进资源管理器地址栏就能用）</td></tr>
+    <tr><td>加节点去哪了</td><td>顶栏那个「插入」删了 —— 画布空白处<b>右键 →「新建」</b>
+      是它的真超集（还多表格 / 空组 / 广播 / 外观 / 程序组）。Ctrl + A 弹同一个菜单</td></tr>
     <tr><td>类型是自动判的</td><td>按扩展名。判错了在「媒体 → 类型」里手动指定，或者交回自动判定</td></tr>
     <tr><td><b>Ctrl + 左键</b></td><td>打开源（和 Word 里的超链接一个习惯）。
       普通左键仍旧是选中 / 拖动，不会被链接抢走</td></tr>
@@ -425,7 +429,8 @@
     <tr><td>里面按 Esc</td><td>回到外层</td></tr>
 
     <tr><td class="sec" colspan="2">— 快捷键一览（对齐 Blender 节点编辑器）—</td></tr>
-    <tr><td>Ctrl + A</td><td>添加节点（打开「插入」菜单；Blender 是 Shift+A，见下方说明）</td></tr>
+    <tr><td>Ctrl + A</td><td>添加节点（在视口正中弹出右键那个「新建」菜单；
+      Blender 是 Shift+A，见下方说明）</td></tr>
     <tr><td>A / Alt + A / Ctrl + I</td><td>全选 / 取消全选 / 反选</td></tr>
     <tr><td>Ctrl + 方向键</td><td>往该方向生成节点</td></tr>
     <tr><td>方向键</td><td>跳转选择</td></tr>

@@ -115,10 +115,19 @@ const ACTIONS = {
   /* ★ 对齐 Blender 的 Shift+A（添加节点）。
      ⚠ 一开始接错成了顶栏「新建」——那是**换文档**的菜单
        （空白文件 / 示例文档 / 从 CSV 导入），不是往当前文档里加节点。
-       正确入口是「插入」菜单，它的第一项就是「节点：空白节点，放在视口正中」。 */
+     ⚠ 后来接的是顶栏那个「插入」菜单，它**已经删掉**了 ——
+       画布右键的「新建」是它的真超集（还多表格 / 空组 / 广播 / 外观 / 程序组）。
+     现在 Ctrl+A 弹的就是同一个右键菜单，键盘这条路没丢。 */
   'ui.addMenu':       { label:'添加节点', group:'结构', run(){
-      const b = document.getElementById('b-insert');
-      if (b){ showInsertMenu(b); return true; }
+      /* ★ 原来开的是顶栏那个「插入」菜单。那个已经删了 ——
+         画布右键的「新建」是它的**真超集**（还多出表格 / 空组 /
+         广播 / 外观 / 程序组）。键盘这条路不能丢，
+         所以在视口正中弹出同一个右键菜单。 */
+      if (typeof showCtx === 'function'){
+        showCtx(Math.round(VW / 2), Math.round(VH / 2), null, null,
+          { p:s2w(VW / 2, VH / 2) });
+        return true;
+      }
       return false;
   }},
   /* ★ 对齐 Blender：Alt+A 取消全选 */

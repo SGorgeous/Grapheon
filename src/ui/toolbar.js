@@ -16,7 +16,9 @@ const TOPBAR = [
   ['b-open',  () => fileEl.click()],
   ['b-save',  () => saveFile()],
   ['b-png',   () => openExport()],
-  ['b-insert',(ev) => { hideCtx(); showInsertMenu(ev.currentTarget); }],
+  /* 「插入」按钮删了 —— 画布右键的「新建」是它的真超集。
+     这个位置改成打开 user/ 文件夹（素材放那儿）。 */
+  ['b-user',  () => { hideCtx(); openUserFolder(); }],
   ['b-view',  (ev) => { hideCtx(); showViewMenu(ev.currentTarget); }],
   ['b-log',   () => openLogbox()],
   ['b-set',   () => toggleSettings()],
