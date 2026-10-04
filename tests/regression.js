@@ -10562,17 +10562,17 @@
         Math.round(r.left) + ',' + Math.round(r.top) + ' → ' + Math.round(r.right) + ',' + Math.round(r.bottom));
     }
     ok('NM01d 标题带上是谁', el('numboxWho').textContent.indexOf('优先级') === 0, el('numboxWho').textContent);
-    ok('NM01e 滑条范围对', el('numboxRange').min === '0' && el('numboxRange').max === '2000',
-      el('numboxRange').min + '..' + el('numboxRange').max);
+    ok('NM01e 滑条范围对', document.querySelector('#numboxFields .nbrange').min === '0' && document.querySelector('#numboxFields .nbrange').max === '2000',
+      document.querySelector('#numboxFields .nbrange').min + '..' + document.querySelector('#numboxFields .nbrange').max);
     /* 拖滑条 → 文本跟着走 */
-    el('numboxRange').value = '500';
-    el('numboxRange').dispatchEvent(new Event('input', { bubbles:true }));
-    ok('NM01f ★ 拖滑条 → 文本框跟着变', el('numboxText').value === '500', el('numboxText').value);
+    document.querySelector('#numboxFields .nbrange').value = '500';
+    document.querySelector('#numboxFields .nbrange').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('NM01f ★ 拖滑条 → 文本框跟着变', document.querySelector('#numboxFields .nbtext').value === '500', document.querySelector('#numboxFields .nbtext').value);
     /* 填数字 → 滑条跟着走（step=1，不会吸附） */
-    el('numboxText').value = '1234';
-    el('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
+    document.querySelector('#numboxFields .nbtext').value = '1234';
+    document.querySelector('#numboxFields .nbtext').dispatchEvent(new Event('input', { bubbles:true }));
     ok('NM01g ★ 填 1234 → 滑条也到 1234（step=1 不吸附）',
-      el('numboxRange').value === '1234', el('numboxRange').value);
+      document.querySelector('#numboxFields .nbrange').value === '1234', document.querySelector('#numboxFields .nbrange').value);
     /* 确定 → 存成数字 */
     el('numboxOk').click();
     ok('NM01h 确定之后浮层关了', !numBoxOpen());
@@ -10586,9 +10586,9 @@
     openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'',
       onOk: (v) => { const num = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : null;
         byId(n.id).priority = (v === '') ? null : (num == null ? v : num); reindex(); } });
-    el('numboxText').value = '{倍率}';
-    el('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
-    ok('NM01k 非数字时滑条不动', el('numboxRange').value === '0', el('numboxRange').value);
+    document.querySelector('#numboxFields .nbtext').value = '{倍率}';
+    document.querySelector('#numboxFields .nbtext').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('NM01k 非数字时滑条不动', document.querySelector('#numboxFields .nbrange').value === '0', document.querySelector('#numboxFields .nbrange').value);
     el('numboxOk').click();
     ok('NM01l ★ {变量} 存成字符串', byId(n.id).priority === '{倍率}',
       typeof byId(n.id).priority + ' ' + byId(n.id).priority);
@@ -10596,8 +10596,8 @@
     openNumBox({ title:'优先级', min:0, max:2000, step:1, value:'1234',
       onOk: (v) => { const num = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : null;
         byId(n.id).priority = (v === '') ? null : (num == null ? v : num); reindex(); } });
-    ok('NM01m 打开时把现值填进文本框', el('numboxText').value === '1234', el('numboxText').value);
-    ok('NM01n 滑条也同步到现值', el('numboxRange').value === '1234', el('numboxRange').value);
+    ok('NM01m 打开时把现值填进文本框', document.querySelector('#numboxFields .nbtext').value === '1234', document.querySelector('#numboxFields .nbtext').value);
+    ok('NM01n 滑条也同步到现值', document.querySelector('#numboxFields .nbrange').value === '1234', document.querySelector('#numboxFields .nbrange').value);
     el('numboxClear').click();
     ok('NM01o ★ 「用默认」→ null', byId(n.id).priority === null, JSON.stringify(byId(n.id).priority));
     ok('NM01p 普通节点默认生效值 0', priorityOf(byId(n.id)) === 0, String(priorityOf(byId(n.id))));
@@ -10675,18 +10675,18 @@
       getComputedStyle(box).position);
     ok('OP01j 计算显示是 block', getComputedStyle(box).display === 'block', getComputedStyle(box).display);
     ok('OP01k 滑条范围 0..100',
-      document.getElementById('numboxRange').min === '0' && document.getElementById('numboxRange').max === '100',
-      document.getElementById('numboxRange').min + '..' + document.getElementById('numboxRange').max);
+      document.querySelector('#numboxFields .nbrange').min === '0' && document.querySelector('#numboxFields .nbrange').max === '100',
+      document.querySelector('#numboxFields .nbrange').min + '..' + document.querySelector('#numboxFields .nbrange').max);
     /* 拖滑条 → 文本 */
-    document.getElementById('numboxRange').value = '40';
-    document.getElementById('numboxRange').dispatchEvent(new Event('input', { bubbles:true }));
-    ok('OP01l ★ 拖滑条 → 文本框跟着变', document.getElementById('numboxText').value === '40',
-      document.getElementById('numboxText').value);
+    document.querySelector('#numboxFields .nbrange').value = '40';
+    document.querySelector('#numboxFields .nbrange').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('OP01l ★ 拖滑条 → 文本框跟着变', document.querySelector('#numboxFields .nbtext').value === '40',
+      document.querySelector('#numboxFields .nbtext').value);
     /* 填数字 → 滑条 */
-    document.getElementById('numboxText').value = '77';
-    document.getElementById('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
-    ok('OP01m ★ 填 77 → 滑条跟着到 77', document.getElementById('numboxRange').value === '77',
-      document.getElementById('numboxRange').value);
+    document.querySelector('#numboxFields .nbtext').value = '77';
+    document.querySelector('#numboxFields .nbtext').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('OP01m ★ 填 77 → 滑条跟着到 77', document.querySelector('#numboxFields .nbrange').value === '77',
+      document.querySelector('#numboxFields .nbrange').value);
     /* 确定 → 真的挂上，而且是数字 */
     document.getElementById('numboxOk').click();
     ok('OP01n ★ 确定之后挂上了', compOn(byId(n.id), 'opacity'));
@@ -10701,7 +10701,7 @@
         else { const num = Number(g); setComponent(byId(n.id), 'opacity', { value: isFinite(num) && g !== '' ? num : g }); }
         reindex(); sizeAll();
       } });
-    document.getElementById('numboxText').value = '{淡}';
+    document.querySelector('#numboxFields .nbtext').value = '{淡}';
     document.getElementById('numboxOk').click();
     ok('OP01p ★ {淡} 存成字符串', compRaw(byId(n.id), 'opacity', 'value') === '{淡}',
       String(compRaw(byId(n.id), 'opacity', 'value')));
@@ -10719,6 +10719,95 @@
 
     draw();
     ok('OP01s 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
+
+  T('FX01 染色 / 描边 / 角标 进「外观」，浮层按类型出字段', () => {
+    fresh();
+    const n = addNodeAt('甲', 0, 0, 'round');
+    reindex(); sizeAll();
+    /* ★ 子菜单是**单击**展开的（menu.js 里写的：不再用 hover）——
+       我一开始用 contextmenu，那是弹「用法提示」的，展不开子菜单。 */
+    const allItems = () => [...document.querySelectorAll('.menu .item')];
+    const labelOf = (d) => d.querySelector('.lb').textContent;
+    const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
+    const openMenu = () => {
+      hideCtx();
+      const b = nodeBox(byId(n.id));
+      cv.dispatchEvent(new MouseEvent('contextmenu', {
+        clientX:Math.round(b.x + 20 + view.x), clientY:Math.round(b.y + 20 + view.y),
+        bubbles:true, cancelable:true, button:2 }));
+    };
+    const openLook = () => {
+      openMenu();
+      [...ctxEl.querySelectorAll('.item')].find(d => labelOf(d) === '外观').click();
+    };
+    const pick = (kw) => allItems().find(d => labelOf(d).indexOf(kw) >= 0);
+
+    /* ① 位置：都在「外观」里，顶层没多东西，也没有「组件」了 */
+    openMenu();
+    const tops = [...ctxEl.querySelectorAll('.item')].map(labelOf);
+    ok('FX01 ★ 顶层仍然 <= 8', tops.length <= 8, tops.length + ' 项: ' + tops.join(' / '));
+    openLook();
+    const sub = allItems().map(labelOf);
+    ok('FX01b ★ 染色 / 自定义描边 / 角标 / 透明度 都在「外观」里',
+      ['染色', '自定义描边', '角标', '透明度'].every(k => sub.some(x => x.indexOf(k) >= 0)),
+      sub.join(' / '));
+    ok('FX01c ★ 没有「组件」入口了', !sub.some(x => x.indexOf('组件') >= 0), sub.join(' / '));
+    hideCtx();
+
+    /* ② 染色：颜色字段（色块 + 填空），没有滑条 */
+    openLook(); pick('染色').click();
+    ok('FX01d 点染色 → 浮层开了', numBoxOpen());
+    ok('FX01e ★ 一个字段', rows().length === 1, String(rows().length));
+    ok('FX01f ★ 颜色字段 = 色块 + 填空',
+      !!rows()[0].querySelector('.nbcolor') && !!rows()[0].querySelector('.nbtext'));
+    ok('FX01g 颜色字段没有滑条', !rows()[0].querySelector('.nbrange'));
+    rows()[0].querySelector('.nbcolor').value = '#ff00ff';
+    rows()[0].querySelector('.nbcolor').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('FX01h 色块 → 文本框同步', rows()[0].querySelector('.nbtext').value === '#ff00ff',
+      rows()[0].querySelector('.nbtext').value);
+    document.getElementById('numboxOk').click();
+    ok('FX01i ★ 染色挂上了', compOn(byId(n.id), 'tint'));
+    ok('FX01j ★ 颜色存对了', compRaw(byId(n.id), 'tint', 'color') === '#ff00ff',
+      String(compRaw(byId(n.id), 'tint', 'color')));
+    /* 再开一次：带 ●，且带现值 */
+    openLook();
+    ok('FX01k ★ 挂上之后那一项带 ●', labelOf(pick('染色')).indexOf('●') === 0, labelOf(pick('染色')));
+    pick('染色').click();
+    ok('FX01l ★ 打开时带现值', rows()[0].querySelector('.nbtext').value === '#ff00ff',
+      rows()[0].querySelector('.nbtext').value);
+    document.getElementById('numboxCancel').click();
+
+    /* ③ 描边：数字 + 颜色两个字段 */
+    openLook(); pick('自定义描边').click();
+    ok('FX01m ★ 两个字段', rows().length === 2, String(rows().length));
+    ok('FX01n 第一段是滑条（数字）', !!rows()[0].querySelector('.nbrange'));
+    ok('FX01o 滑条上限 20', rows()[0].querySelector('.nbrange').max === '20',
+      rows()[0].querySelector('.nbrange').max);
+    ok('FX01p 第二段是色块（颜色）', !!rows()[1].querySelector('.nbcolor'));
+    rows()[0].querySelector('.nbtext').value = '5';
+    rows()[0].querySelector('.nbtext').dispatchEvent(new Event('input', { bubbles:true }));
+    rows()[1].querySelector('.nbcolor').value = '#00ff00';
+    rows()[1].querySelector('.nbcolor').dispatchEvent(new Event('input', { bubbles:true }));
+    document.getElementById('numboxOk').click();
+    ok('FX01q ★ 描边两个值都存对了（数字是数字、颜色是颜色）',
+      compNumber(byId(n.id), 'outline', 'width', 'node', 0) === 5
+      && compRaw(byId(n.id), 'outline', 'color') === '#00ff00',
+      compNumber(byId(n.id), 'outline', 'width', 'node', 0) + ' / ' + compRaw(byId(n.id), 'outline', 'color'));
+
+    /* ④ 角标：文本 + 颜色 */
+    openLook(); pick('角标').click();
+    ok('FX01r 角标两个字段', rows().length === 2, String(rows().length));
+    ok('FX01s 第一段是纯文本（没有滑条）',
+      !rows()[0].querySelector('.nbrange') && !!rows()[0].querySelector('.nbtext'));
+    rows()[0].querySelector('.nbtext').value = '重要';
+    document.getElementById('numboxOk').click();
+    ok('FX01t ★ 角标文字存对了', compRaw(byId(n.id), 'badge', 'text') === '重要',
+      String(compRaw(byId(n.id), 'badge', 'text')));
+    draw();
+    ok('FX01u 画一帧不抛', true);
+    hideCtx();
     fresh();   /* 收尾清干净 */
   });
   /* ==================== 收尾 ==================== */

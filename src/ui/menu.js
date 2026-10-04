@@ -197,6 +197,76 @@ function showCtx(x, y, n, e, info){
 
     /* ---------------- 外观 ▶ ---------------- */
     const look = [];
+    /* ★ 组件效果 → 菜单项。
+       没挂上：点一下挂上（用默认值）；挂上了：● 开头，点开小浮层改参数。
+       字段类型直接映射到浮层（number → 滑条+填空，color → 色块+填空，text → 填空）。
+       ⚠ 这里**不用正则** —— 我的 PowerShell 写文件管线吃过反斜杠，
+         \d 变成 d 让正则静默失配过一次。数字判断走 nbAsNumber。 */
+    const fxItems = (ids) => {
+      const out = [];
+      for (const id of ids){
+        const def = effectDef(id);
+        if (!def || def.scopes.indexOf('node') < 0) continue;
+        const on = compOn(n, id);
+        const props = def.props || [];
+        const fields = props.map(p => {
+          const isNum = p.type === 'number';
+          const lab = p.label || p.key;
+          return {
+            key: p.key, label: lab,
+            type: p.type === 'color' ? 'color' : (isNum ? 'number' : 'text'),
+            min: isNum ? 0 : undefined,
+            /* 透明度的量程是 0~100，别的数字（粗细 / 线宽）按 0~20 给 */
+            max: isNum ? (lab.indexOf('透明') >= 0 ? 100 : 20) : undefined,
+            step: 1,
+            placeholder: p.refable ? '留空 = 默认；也可以写 {变量}' : '留空 = 默认'
+          };
+        });
+        const values = {};
+        for (const p of props) values[p.key] = (p.def == null ? '' : String(p.def));
+        if (on){
+          for (const p of props){
+            const raw = compRaw(n, id, p.key);
+            if (raw != null && raw !== '') values[p.key] = String(raw);
+          }
+        }
+        out.push([(on ? '● ' : '   ') + def.label + (props.length ? '…' : ''),
+          on ? '点开改参数' : (def.hint || ''),
+          () => {
+            if (!props.length){
+              if (on){ removeComponent(n, id); say('* ' + tagOf(n) + '的' + def.label + '已关掉。'); }
+              else { setComponent(n, id, {}); say('* ' + tagOf(n) + '挂上了' + def.label + '。'); }
+              reindex(); sizeAll(); pushHist(); mark();
+              return;
+            }
+            openValueBox({
+              title: def.label, who: tagOf(n), hint: def.hint || '',
+              fields, values,
+              onOk: (vals) => {
+                const next = {};
+                let any = false;
+                for (const p of props){
+                  const v = String(vals[p.key] == null ? '' : vals[p.key]);
+                  if (v === '') continue;
+                  const num = nbAsNumber(v);
+                  next[p.key] = (p.type === 'number' && num != null) ? num : v;
+                  any = true;
+                }
+                if (!any){
+                  removeComponent(n, id);
+                  say('* ' + tagOf(n) + '的' + def.label + '已关掉。');
+                } else {
+                  setComponent(n, id, next);
+                  say('* ' + tagOf(n) + '的' + def.label + '已设置。');
+                }
+                reindex(); sizeAll(); pushHist(); mark();
+              }
+            });
+          }]);
+      }
+      return out;
+    };
+    look.push(...fxItems(['tint', 'outline', 'badge']));
     look.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
       [(n.shape === 'round'   ? '● ' : '   ') + '圆角矩形',   '', () => setShape('round')],
@@ -251,7 +321,7 @@ function showCtx(x, y, n, e, info){
       look.push(['进入编辑', '双击', () => enterEmbed(n)]);
       look.push(['换个文档…', '', () => pickEmbedFile()]);
     }
-    items.push(['外观', '形状 / 样式 / 组件', null, look]);
+    items.push(['外观', '形状 / 样式 / 染色 / 透明度 / 描边 / 角标', null, look]);
 
     /* ---------------- 数据 ▶（一切和「值」有关的）---------------- */
     const data = [];
