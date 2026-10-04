@@ -10629,6 +10629,98 @@
     hideCtx();
     fresh();   /* 收尾清干净 */
   });
+
+  T('OP01 透明度搬进「外观」菜单（滑条 + 填空）', () => {
+    fresh();
+    const n = addNodeAt('甲', 0, 0, 'round');
+    reindex(); sizeAll();
+
+    /* ① 菜单：透明度在「外观」里，顶层没多东西 */
+    hideCtx();
+    const b = nodeBox(byId(n.id));
+    cv.dispatchEvent(new MouseEvent('contextmenu', {
+      clientX:Math.round(b.x + 20 + view.x), clientY:Math.round(b.y + 20 + view.y),
+      bubbles:true, cancelable:true, button:2 }));
+    const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('OP01 ★ 顶层没有「组件」了', tops.indexOf('组件') < 0, tops.join(' / '));
+    ok('OP01b ★ 顶层没多出新项（上限 8）', tops.length <= 8, tops.length + ' 项: ' + tops.join(' / '));
+    ok('OP01c 「外观」还在', tops.indexOf('外观') >= 0, tops.join(' / '));
+    hideCtx();
+
+    /* ② 效果本身：用真实底层接口验（透明度是 opacity 效果） */
+    ok('OP01d 一开始没挂透明度', !compOn(byId(n.id), 'opacity'));
+    setComponent(byId(n.id), 'opacity', { value: 40 });
+    reindex(); sizeAll();
+    ok('OP01e ★ 挂上了', compOn(byId(n.id), 'opacity'));
+    ok('OP01f ★ 取值用 compNumber 拿到数字 40（compRaw 给的是原文）',
+      compNumber(byId(n.id), 'opacity', 'value', 'node', 100) === 40,
+      String(compNumber(byId(n.id), 'opacity', 'value', 'node', 100)));
+    removeComponent(byId(n.id), 'opacity');
+    reindex(); sizeAll();
+    ok('OP01g ★ 关掉之后没挂', !compOn(byId(n.id), 'opacity'));
+
+    /* ③ 浮层本体：滑条 + 填空双向联动（透明度用 0..100） */
+    let got = null;
+    openNumBox({ title:'透明度', who:tagOf(byId(n.id)), min:0, max:100, step:1, value:'',
+      placeholder:'留空 = 关掉；也可以写 {变量}',
+      onOk: (v) => {
+        got = String(v == null ? '' : v).trim();
+        if (got === '') removeComponent(byId(n.id), 'opacity');
+        else { const num = Number(got); setComponent(byId(n.id), 'opacity', { value: isFinite(num) && got !== '' ? num : got }); }
+        reindex(); sizeAll();
+      } });
+    const box = document.getElementById('numbox');
+    ok('OP01h 浮层开出来了', numBoxOpen());
+    ok('OP01i 是 fixed 定位（不然 left/top 不生效）', getComputedStyle(box).position === 'fixed',
+      getComputedStyle(box).position);
+    ok('OP01j 计算显示是 block', getComputedStyle(box).display === 'block', getComputedStyle(box).display);
+    ok('OP01k 滑条范围 0..100',
+      document.getElementById('numboxRange').min === '0' && document.getElementById('numboxRange').max === '100',
+      document.getElementById('numboxRange').min + '..' + document.getElementById('numboxRange').max);
+    /* 拖滑条 → 文本 */
+    document.getElementById('numboxRange').value = '40';
+    document.getElementById('numboxRange').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('OP01l ★ 拖滑条 → 文本框跟着变', document.getElementById('numboxText').value === '40',
+      document.getElementById('numboxText').value);
+    /* 填数字 → 滑条 */
+    document.getElementById('numboxText').value = '77';
+    document.getElementById('numboxText').dispatchEvent(new Event('input', { bubbles:true }));
+    ok('OP01m ★ 填 77 → 滑条跟着到 77', document.getElementById('numboxRange').value === '77',
+      document.getElementById('numboxRange').value);
+    /* 确定 → 真的挂上，而且是数字 */
+    document.getElementById('numboxOk').click();
+    ok('OP01n ★ 确定之后挂上了', compOn(byId(n.id), 'opacity'));
+    ok('OP01o ★ 存的是数字 77',
+      compNumber(byId(n.id), 'opacity', 'value', 'node', 100) === 77,
+      String(compNumber(byId(n.id), 'opacity', 'value', 'node', 100)));
+    /* 填 {变量} → 存字符串，组件仍在 */
+    openNumBox({ title:'透明度', min:0, max:100, step:1, value:'',
+      onOk: (v) => {
+        const g = String(v == null ? '' : v).trim();
+        if (g === '') removeComponent(byId(n.id), 'opacity');
+        else { const num = Number(g); setComponent(byId(n.id), 'opacity', { value: isFinite(num) && g !== '' ? num : g }); }
+        reindex(); sizeAll();
+      } });
+    document.getElementById('numboxText').value = '{淡}';
+    document.getElementById('numboxOk').click();
+    ok('OP01p ★ {淡} 存成字符串', compRaw(byId(n.id), 'opacity', 'value') === '{淡}',
+      String(compRaw(byId(n.id), 'opacity', 'value')));
+    ok('OP01q 组件还在（只是值成了表达式）', compOn(byId(n.id), 'opacity'));
+    /* 用默认 → 关掉 */
+    openNumBox({ title:'透明度', min:0, max:100, step:1, value:'77',
+      onOk: (v) => {
+        const g = String(v == null ? '' : v).trim();
+        if (g === '') removeComponent(byId(n.id), 'opacity');
+        else setComponent(byId(n.id), 'opacity', { value: Number(g) });
+        reindex(); sizeAll();
+      } });
+    document.getElementById('numboxClear').click();
+    ok('OP01r ★ 「用默认」→ 透明度关掉', !compOn(byId(n.id), 'opacity'));
+
+    draw();
+    ok('OP01s 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

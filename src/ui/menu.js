@@ -207,7 +207,39 @@ function showCtx(x, y, n, e, info){
         n.fixedW || n.fixedH ? () => autoSizeNode(n) : null]
     ]]);
     look.push([isProgram(n) ? '程序算符…' : '节点样式…', 'E', () => openNodeBox(n)]);
-    look.push(['组件…', 'C', () => openComps()]);
+    /* ★ 透明度：组件层的效果，直接放进「外观」里，不另开顶层菜单
+       （顶层有上限 PM01 卡 8 项，而且「外观」本来就是它该待的地方）。
+       点开是那个「滑条 + 填空」的小浮层。 */
+    {
+      const on  = (typeof compOn === 'function') && compOn(n, 'opacity');
+      const cur = (typeof compRaw === 'function') ? compRaw(n, 'opacity', 'value') : null;
+      look.push([(on ? '● ' : '   ') + '透明度…',
+        on ? ('现在 ' + cur) : '0 ~ 100，只盖一层不改结构',
+        /* 透明度是**单个数字**，用 openNumBox 就够（滑条 + 填空）。
+           等以后加需要颜色 / 文本的效果时，再把它泛化成多字段浮层。 */
+        () => openNumBox({
+          title:'透明度', who:tagOf(n),
+          hint:'0 ~ 100。拖滑条快速试，也可以直接填精确值；还能填 {变量}。留空 = 关掉这一项。',
+          min:0, max:100, step:1,
+          value: (cur == null ? '' : String(cur)),
+          placeholder:'留空 = 关掉；也可以写 {变量}',
+          onOk: (v0) => {
+            const v = String(v0 == null ? '' : v0).trim();
+            if (v === ''){
+              removeComponent(n, 'opacity');
+              say('* ' + tagOf(n) + '的透明度已关掉。');
+            } else {
+              /* ★ 这里**故意不用正则** —— 我的 PowerShell 管线吃过反斜杠，
+                 把 \d 变成了 d，正则静默失配。Number() 没有这个问题。 */
+              const num = Number(v);
+              const isNum = (v !== '' && isFinite(num));
+              setComponent(n, 'opacity', { value: isNum ? num : v });
+              say('* ' + tagOf(n) + '的透明度设为 ' + v + '。');
+            }
+            reindex(); sizeAll(); pushHist(); mark();
+          }
+        })]);
+    }
     if (n.kind === 'image'){
       look.push('hr');
       look.push(['换一张图片…', '', () => pickImageFile(null, n)]);
