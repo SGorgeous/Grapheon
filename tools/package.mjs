@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
-const VER = 'DEV006';
+const VER = 'DEV007';
 const OUT = join('dist', 'Grapheon-' + VER);
 
 /* 运行时真正要的东西 */
