@@ -397,9 +397,23 @@
     <tr><td>跨层取值</td><td>写 {嵌入节点名.输出名}</td></tr>
     <tr><td>删掉外观节点</td><td>目标立刻复原（算符从来没写回节点本身）</td></tr>
 
-    <tr><td class="sec" colspan="2">— 图片 / 表格 / 嵌入 —</td></tr>
-    <tr><td>把图片拖进窗口</td><td>落在鼠标松开的位置；顶栏「图片」或 Ctrl+V 落在视口正中</td></tr>
-    <tr><td>拖图片节点右下角</td><td>改宽度，按原始比例等比缩放</td></tr>
+    <tr><td class="sec" colspan="2">— 多媒体节点（图片 / 视频 / 音频 / 网页 / 文件）—</td></tr>
+    <tr><td>源可以写三种</td><td><b>相对地址</b>（<code>pic.png</code> → 自动补 <code>user/</code>）/
+      <b>网页链接</b>（<code>https://…</code>）/ <b>内嵌数据</b>（拖进来的文件变成 <code>data:</code>）</td></tr>
+    <tr><td><b>user/</b> 在哪</td><td>和 <code>index.html</code> 同级的文件夹。写 <code>pic.png</code>
+      就等于 <code>user/pic.png</code>；写 <code>../assets/x.svg</code> 是往上走一层
+      （<code>./</code> <code>../</code> 开头的**不**补前缀）</td></tr>
+    <tr><td>为什么用相对地址</td><td>内嵌会把整个文件塞进 JSON，一份文档几兆很常见 ——
+      存档、导出、撤销快照全被拖累。相对地址只占几十个字节</td></tr>
+    <tr><td>右键 →「外观 ▶ → 媒体」</td><td>换源… / 类型 / 打开源 / 播放</td></tr>
+    <tr><td>类型是自动判的</td><td>按扩展名。判错了在「媒体 → 类型」里手动指定，或者交回自动判定</td></tr>
+    <tr><td><b>Ctrl + 左键</b></td><td>打开源（和 Word 里的超链接一个习惯）。
+      普通左键仍旧是选中 / 拖动，不会被链接抢走</td></tr>
+    <tr><td>点一下视频 / 音频</td><td>播放 / 暂停。视频是抽一帧画在画布上的，播的时候一边播一边重画</td></tr>
+    <tr><td>安全的源才给打开</td><td><code>javascript:</code> 之类一律拦掉 ——
+      这个源会被拿去 <code>window.open</code>，不拦就是个执行脚本的入口</td></tr>
+    <tr><td>把图片拖进窗口</td><td>落在鼠标松开的位置（会内嵌成 <code>data:</code>）</td></tr>
+    <tr><td>拖它的右下角</td><td>改宽度：图片按原始比例、视频按 16:9 起算、音频 / 网页 / 文件是一条固定高的条</td></tr>
     <tr><td>双击表格格子</td><td>改内容；格子里的字也能写 {变量}</td></tr>
     <tr><td>表格的加减号</td><td>选中它，行的右侧 / 列的下方各有一对；删有数据的要先确认</td></tr>
     <tr><td>双击嵌入节点</td><td>进去编辑（改的是副本，原文件不受影响）</td></tr>

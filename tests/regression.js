@@ -11172,6 +11172,72 @@
     ok('MP01n 画一帧不抛', true);
     fresh();   /* 收尾清干净 */
   });
+
+  T('MT02 手动指定媒体类型 + 换源', () => {
+    fresh();
+    /* 一个扩展名猜不出来的地址 */
+    const n = addNodeAt('怪地址', 0, 0, 'rect');
+    n.kind = 'image'; n.src = 'api/get?id=3';
+    reindex(); sizeNode(byId(n.id)); reindex(); sizeAll();
+    const nn = byId(n.id);
+    ok('MT02 没扩展名的地址自动判成 file', mediaKindOf(nn) === 'file', mediaKindOf(nn));
+
+    /* ★ 手动指定优先 */
+    setMediaType(nn, 'image');
+    ok('MT02b ★ 手动指定之后就是 image', mediaKindOf(nn) === 'image', mediaKindOf(nn));
+    ok('MT02c 尺寸跟着重排了（按图片的比例）',
+      Math.abs(nn.imgDrawH - Math.round(nn.w * 3 / 4)) <= 2,
+      nn.imgDrawH + ' vs ' + Math.round(nn.w * 3 / 4));
+    /* 存档往返 */
+    const raw = serialize().nodes.find(x => x.id === nn.id);
+    ok('MT02d ★ 存档带上 mediaType', raw.mediaType === 'image', String(raw.mediaType));
+    ok('MT02e 源也带着（相对地址照旧只占几十字节）', raw.src === 'api/get?id=3', String(raw.src));
+    deserialize(serialize());
+    ok('MT02f ★ 读回来手动类型还在', mediaKindOf(byId(nn.id)) === 'image', mediaKindOf(byId(nn.id)));
+    /* 交回自动判定 */
+    setMediaType(byId(nn.id), '');
+    ok('MT02g ★ 交回自动判定之后又是 file', mediaKindOf(byId(nn.id)) === 'file', mediaKindOf(byId(nn.id)));
+    ok('MT02h 存档里也不写 mediaType 了',
+      serialize().nodes.find(x => x.id === nn.id).mediaType === null,
+      String(serialize().nodes.find(x => x.id === nn.id).mediaType));
+    /* 不认识的类型名不该被接受 */
+    setMediaType(byId(nn.id), '外星人');
+    ok('MT02i 不认识的类型名等于交回自动判定', mediaKindOf(byId(nn.id)) === 'file', mediaKindOf(byId(nn.id)));
+
+    /* 类型标签 */
+    ok('MT02j 五种类型都有中文名',
+      MEDIA_KINDS.length === 5 && MEDIA_KINDS.every(k => !!MEDIA_KIND_LABEL[k]),
+      MEDIA_KINDS.map(k => MEDIA_KIND_LABEL[k]).join(' / '));
+    ok('MT02k mediaKindLabelOf 给当前类型的名字',
+      mediaKindLabelOf(mkImg(0, 0, {})) === '图片', mediaKindLabelOf(mkImg(0, 0, {})));
+
+    /* 菜单里有「媒体」子菜单（在「外观」里，不新开顶层） */
+    hideCtx();
+    showCtx(400, 300, byId(nn.id), null, { p:{} });
+    const tops = [...ctxEl.querySelectorAll('.item')].map(d => d.querySelector('.lb').textContent);
+    ok('MT02l 顶层没有多出「媒体」（它在「外观」里）', tops.indexOf('媒体') < 0, tops.join(' / '));
+    ok('MT02m 顶层仍然 <= 8', tops.length <= 8, String(tops.length));
+    const look = [...ctxEl.querySelectorAll('.item')].find(d => d.querySelector('.lb').textContent === '外观');
+    look.click();
+    const sub = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('MT02n ★ 「外观」里有「媒体」', sub.some(x => x.indexOf('媒体') >= 0), sub.join(' / '));
+    [...document.querySelectorAll('.menu .item')].find(d => d.querySelector('.lb').textContent === '媒体').click();
+    const msub = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('MT02o ★ 媒体里有 换源 / 类型 / 打开源 / 播放',
+      msub.some(x => x.indexOf('换源') >= 0) && msub.some(x => x === '类型')
+      && msub.some(x => x.indexOf('打开源') >= 0) && msub.some(x => x.indexOf('播放') >= 0),
+      msub.join(' / '));
+    [...document.querySelectorAll('.menu .item')].find(d => d.querySelector('.lb').textContent === '类型').click();
+    const tsub = [...document.querySelectorAll('.menu .item')].map(d => d.querySelector('.lb').textContent);
+    ok('MT02p ★ 五种类型都能选',
+      Object.keys(MEDIA_KIND_LABEL).every(k => tsub.some(x => x.indexOf(MEDIA_KIND_LABEL[k]) >= 0)),
+      tsub.join(' / '));
+    ok('MT02q ★ 能交回自动判定', tsub.some(x => x.indexOf('交回自动') >= 0), tsub.join(' / '));
+    hideCtx();
+    draw();
+    ok('MT02r 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

@@ -31,6 +31,11 @@ const MEDIA_EXT_LINK  = ['html', 'htm'];
 const MEDIA_KIND_LABEL = {
   image:'图片', video:'视频', audio:'音频', link:'网页', file:'文件'
 };
+/* 节点当前生效的类型名（给提示语用） */
+function mediaKindLabelOf(n){
+  const k = mediaKindOf(n);
+  return MEDIA_KIND_LABEL[k] || '未定';
+}
 
 /* 扩展名（小写，不含点）。会先去掉 ?query 和 #hash。 */
 function mediaExtOf(s){
@@ -131,9 +136,26 @@ function mediaSrcOf(n){
 function mediaHrefOf(n){
   return mediaHref(mediaSrcOf(n));
 }
-/* 类型（按原文判，补不补前缀不影响扩展名） */
+/* 节点上的类型：优先用手动指定的（n.mediaType），没有才按扩展名猜。
+   为什么要手动指定：地址里没有扩展名（比如 /api/img?id=3）、
+   或者扩展名和真实内容对不上时，猜出来的类型是错的，得给条退路。 */
+const MEDIA_KINDS = ['image', 'video', 'audio', 'link', 'file'];
+
 function mediaKindOf(n){
+  const t = (n && typeof n.mediaType === 'string') ? n.mediaType : '';
+  if (MEDIA_KINDS.indexOf(t) >= 0) return t;
   return mediaKind(mediaSrcOf(n));
+}
+/* 手动指定类型（传空 / 不认识的就把手动值清掉，回到自动判定） */
+function setMediaType(n, k){
+  if (!n) return false;
+  if (MEDIA_KINDS.indexOf(k) >= 0) n.mediaType = k;
+  else delete n.mediaType;
+  if (typeof reindex === 'function') reindex();
+  if (typeof sizeNode === 'function') sizeNode(n);
+  if (typeof sizeAll === 'function') sizeAll();
+  if (typeof mark === 'function') mark();
+  return true;
 }
 /* 多媒体节点 —— 沿用 kind:'image'（第二步整体改名时再动，避免一次改太多） */
 function isMediaNode(n){

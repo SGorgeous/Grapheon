@@ -623,6 +623,10 @@ function serialize(){
       value:(Math.round(+n.value) || 0),
       program:(n.kind === 'program') ? normalizeProgram(n.program) : null,
       src:(n.kind === 'image' && mediaSrcAllowed(mediaSrcOf(n))) ? mediaSrcOf(n) : null,
+      /* 手动指定的类型。留空 = 按扩展名自动猜。
+         地址没扩展名（/api/img?id=3）或扩展名和内容对不上时靠它兜底。 */
+      mediaType:(n.kind === 'image' && typeof n.mediaType === 'string'
+        && MEDIA_KINDS.indexOf(n.mediaType) >= 0) ? n.mediaType : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
       /* 变量节点可以挂多个变量 → 写 varDefs；
@@ -683,6 +687,10 @@ function deserialize(d){
       kind:NODE_KINDS.indexOf(n.kind) >= 0 ? n.kind : 'node',
       value:(Math.round(+n.value) || 0), program:normalizeProgram(n.program),
       src:(n.kind === 'image' && mediaSrcAllowed(mediaSrcOf(n))) ? mediaSrcOf(n) : null,
+      /* 手动指定的类型。留空 = 按扩展名自动猜。
+         地址没扩展名（/api/img?id=3）或扩展名和内容对不上时靠它兜底。 */
+      mediaType:(n.kind === 'image' && typeof n.mediaType === 'string'
+        && MEDIA_KINDS.indexOf(n.mediaType) >= 0) ? n.mediaType : null,
       imgW:(+n.imgW) || 0, imgH:(+n.imgH) || 0,
       desc:(n.desc == null ? '' : String(n.desc)),
       /* 变量节点可以挂多个变量 → 写 varDefs；

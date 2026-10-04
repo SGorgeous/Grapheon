@@ -300,6 +300,44 @@ function showCtx(x, y, n, e, info){
 
     /* ---------------- 外观 ▶ ---------------- */
     const look = [];
+    /* ★ 多媒体节点（原名「图片节点」）的专属项。
+       放在「外观」里而不是新开顶层 —— 顶层名额有限（PM01 卡 <= 8）。 */
+    if (typeof isMediaNode === 'function' && isMediaNode(n)){
+      const curSrc = mediaSrcOf(n);
+      const curKind = mediaKindOf(n);
+      look.push(['媒体', '源 / 类型 / 打开 / 播放', null, [
+        ['换源…', curSrc || '还没填', () => openValueBox({
+          title:'媒体源', who:tagOf(n),
+          hint:'相对地址会自动补 user/ 前缀（pic.png → user/pic.png）。'
+             + '也可以写 https:// 网页地址，或 data: 内嵌数据。留空 = 清掉。',
+          fields:[{ key:'src', label:'源', type:'text', placeholder:'pic.png / https://… / data:…' }],
+          values:{ src:curSrc },
+          onOk: (vals) => {
+            const v = String(vals.src == null ? '' : vals.src).trim();
+            /* 换源也过一遍白名单：危险的协议头不许进节点 */
+            if (v && typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
+              say('* 这个源不安全，没改。');
+              return;
+            }
+            n.src = v;
+            reindex(); sizeNode(n); reindex(); sizeAll(); pushHist(); mark();
+            say('* ' + tagOf(n) + '的源改成了' + (v ? '「' + mediaKindLabelOf(n) + '」' : '空') + '。');
+          }
+        })],
+        'hr',
+        ['类型', (MEDIA_KIND_LABEL[curKind] || '未定') + '（自动判的可以改）', null,
+          MEDIA_KINDS.map(k => [(curKind === k ? '● ' : '   ') + MEDIA_KIND_LABEL[k],
+            k === mediaKind(curSrc) ? '自动判定也是这个' : '',
+            () => { setMediaType(n, k); say('* ' + tagOf(n) + '的类型改成了' + MEDIA_KIND_LABEL[k] + '。'); }])
+            .concat(['hr', ['交回自动判定', '按扩展名重新猜', () => {
+              setMediaType(n, ''); say('* ' + tagOf(n) + '的类型交回自动判定。');
+            }]])],
+        'hr',
+        ['打开源', 'Ctrl + 左键', () => openMediaSource(n)],
+        ['播放 / 暂停', typeof mediaElOf === 'function' && mediaElOf(n) ? '' : '这个类型不能播放',
+          (typeof mediaElOf === 'function' && mediaElOf(n)) ? () => toggleMediaPlay(n) : null]
+      ]]);
+    }
     look.push(...effectMenuItems(n, 'node', ['tint', 'outline', 'badge'], tagOf(n)));
     look.push(['形状', '', null, [
       [(n.shape === 'rect'    ? '● ' : '   ') + '矩形',       '', () => setShape('rect')],
