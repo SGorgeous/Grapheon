@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · app/main.js
    启动引导与主循环。
@@ -43,6 +43,10 @@ function boot(){
   requestAnimationFrame(loop);
 }
 function loop(){
+  /* ★ 有东西在播的时候要一直重画。
+     视频是**抽帧画上去的**（不是叠一个真的 <video>），
+     不重画画面就停在抽到的那一帧上，看着像没播。 */
+  if (typeof markPlayingMedia === 'function') markPlayingMedia();
   if (dirty){ dirty = false; draw(); }
   requestAnimationFrame(loop);
 }

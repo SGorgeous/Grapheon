@@ -12,12 +12,28 @@
    ========================================================================= */
 const BEND_THRESHOLD = 6;      // 超过这么多世界单位才算「拉出拐点」，避免误点
 
+/* 按下时的世界坐标。click 里用它判断「这是点击还是拖完松手」——
+   拖完也会来一次 click，不挡的话一拖就误触播放。 */
+let downPt = null;
+
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.button === 2) return;
   hideCtx();
   closeHelp();
   skipDlg();
   const p = s2w(ev.clientX, ev.clientY);
+  downPt = { x:p.x, y:p.y };
+  /* ★ Ctrl + 左键 = 打开这个媒体节点的源（和 Word 里的超链接一个习惯）。
+     普通左键仍旧归选中 / 拖动，不被链接抢走。 */
+  if ((ev.ctrlKey || ev.metaKey) && ev.button === 0
+      && typeof openMediaSource === 'function' && typeof mediaSrcOf === 'function'){
+    const mn = hitNode(p);
+    if (mn && mn.kind === 'image' && mediaSrcOf(mn)){
+      selectOnly(mn.id);
+      openMediaSource(mn);
+      return;
+    }
+  }
   try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
 
   if (ev.button === 1){ drag = { mode:'pan', sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y }; return; }
@@ -514,6 +530,19 @@ window.addEventListener('blur', () => {
    ========================================================================= */
 canvas.addEventListener('click', (ev) => {
   const p = s2w(ev.clientX, ev.clientY);
+  /* ★ 多媒体节点：点一下播放 / 暂停（视频和音频）。
+     ⚠ 必须放在下面分组判断**前面** —— 那句「没有分组就 return」会把它吞掉。
+     ⚠ 还要挡住「拖完松手也会来一次 click」：起点和终点离得远就不算点击。 */
+  if (typeof mediaElOf === 'function' && typeof hitNode === 'function'){
+    const moved = downPt ? Math.hypot(p.x - downPt.x, p.y - downPt.y) : 999;
+    const mn = hitNode(p);
+    if (mn && mn.kind === 'image' && moved < 4 && mediaElOf(mn) && typeof toggleMediaPlay === 'function'){
+      selectOnly(mn.id);
+      toggleMediaPlay(mn);
+      downPt = null;
+      return;
+    }
+  }
   const gt = groupGestureTarget(p, true);
   if (!gt) return;
   if (ev.detail === 2){ selectGroupNodes(gt); return; }

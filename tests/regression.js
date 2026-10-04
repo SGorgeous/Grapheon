@@ -11088,6 +11088,90 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('MP01 点一下播放 / Ctrl+左键打开', () => {
+    fresh();
+    const PNG1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const mk = (tag, src, x) => {
+      const n = addNodeAt(tag, x, 0, 'rect');
+      n.kind = 'image'; n.src = src; n.desc = '';
+      reindex(); sizeNode(byId(n.id)); reindex(); sizeAll();
+      return byId(n.id);
+    };
+    const img  = mk('图片', PNG1, 0);
+    const vid  = mk('视频', 'data:video/mp4;base64,AA', 400);
+    const aud  = mk('音频', 'data:audio/mpeg;base64,AA', 800);
+    const link = mk('网页', 'https://example.com/a.html', 1200);
+    const file = mk('文件', 'notes.zip', 1600);
+    const at = (wp) => { const s = w2s(wp); return { clientX:Math.round(s.x), clientY:Math.round(s.y) }; };
+    const down = (wp, opts) => { cv.dispatchEvent(new PointerEvent('pointerdown', Object.assign(
+      { bubbles:true, cancelable:true, pointerId:1, pointerType:'mouse', isPrimary:true, button:0, buttons:1 },
+      at(wp), opts || {}))); };
+    const up = (wp) => { cv.dispatchEvent(new PointerEvent('pointerup', Object.assign(
+      { bubbles:true, cancelable:true, pointerId:1, pointerType:'mouse', isPrimary:true, button:0, buttons:0 }, at(wp)))); };
+    const clickAt = (wp) => { cv.dispatchEvent(new MouseEvent('click', Object.assign(
+      { bubbles:true, cancelable:true }, at(wp)))); };
+
+    /* ① 只有视频 / 音频有播放器 */
+    ok('MP01 ★ 只有视频和音频有播放器',
+      !mediaElOf(img) && !!mediaElOf(vid) && !!mediaElOf(aud) && !mediaElOf(link) && !mediaElOf(file),
+      [!!mediaElOf(img), !!mediaElOf(vid), !!mediaElOf(aud), !!mediaElOf(link), !!mediaElOf(file)].join(''));
+    ok('MP01b 视频给的是 <video>', mediaElOf(vid).tagName === 'VIDEO', mediaElOf(vid).tagName);
+    ok('MP01c 音频给的是 <audio>', mediaElOf(aud).tagName === 'AUDIO', mediaElOf(aud).tagName);
+
+    /* ② Ctrl + 左键 = 打开源（和 Word 一样）。用桩接住 window.open。 */
+    const realOpen = window.open;
+    let opened = [];
+    window.open = (u) => { opened.push(u); return null; };
+    try {
+      const c = nodeBox(link);
+      down({ x:c.x + 20, y:c.y + 20 }, { ctrlKey:true });
+      up({ x:c.x + 20, y:c.y + 20 });
+      ok('MP01d ★ Ctrl+左键 打开了网页地址',
+        opened.join(',') === 'https://example.com/a.html', opened.join(','));
+      opened = [];
+      down({ x:c.x + 20, y:c.y + 20 });
+      up({ x:c.x + 20, y:c.y + 20 });
+      ok('MP01e ★ 普通左键不打开（仍旧归选中 / 拖动）', opened.length === 0, String(opened.length));
+      const bad = mk('坏', 'javascript:alert(1)', 2000);
+      opened = [];
+      ok('MP01f ★ 危险源不给开', openMediaSource(bad) === false);
+      ok('MP01g 而且没真的去开', opened.length === 0, String(opened.length));
+      ok('MP01h 空源也不给开', openMediaSource(mk('空', '', 2400)) === false);
+    } finally { window.open = realOpen; }
+
+    /* ③ 点一下播放。用桩数调用次数（真播放要能解码的媒体文件，测不了）。 */
+    const realToggle = toggleMediaPlay;
+    let calls = [];
+    toggleMediaPlay = (n) => { calls.push(n.text); return true; };
+    try {
+      const vb = nodeBox(vid);
+      down({ x:vb.x + 20, y:vb.y + 20 }); up({ x:vb.x + 20, y:vb.y + 20 }); clickAt({ x:vb.x + 20, y:vb.y + 20 });
+      ok('MP01i ★ 点在视频上会播放', calls.join(',') === '视频', calls.join(','));
+      /* ⚠ 拖完松手也会来一次 click —— 起点终点离得远就不算点击 */
+      calls = [];
+      down({ x:vb.x + 20, y:vb.y + 20 }); up({ x:vb.x + 400, y:vb.y + 260 }); clickAt({ x:vb.x + 400, y:vb.y + 260 });
+      ok('MP01j ★ 拖完之后那次 click 不触发播放', calls.length === 0, String(calls.length));
+      calls = [];
+      const ib = nodeBox(img);
+      down({ x:ib.x + 20, y:ib.y + 20 }); up({ x:ib.x + 20, y:ib.y + 20 }); clickAt({ x:ib.x + 20, y:ib.y + 20 });
+      ok('MP01k 点图片不触发播放', calls.length === 0, String(calls.length));
+      calls = [];
+      const ab = nodeBox(aud);
+      down({ x:ab.x + 20, y:ab.y + 20 }); up({ x:ab.x + 20, y:ab.y + 20 }); clickAt({ x:ab.x + 20, y:ab.y + 20 });
+      ok('MP01l ★ 点音频也触发播放', calls.join(',') === '音频', calls.join(','));
+      /* ⚠ 分组标题上点一下不该播放（分组有它自己的一套手势） */
+      calls = [];
+      doc.groups = [ { id:'mpg1', title:'一组', color:'', members:[img.id, vid.id] } ];
+      reindex(); sizeAll();
+      const tb = groupTitleBox(byGroup('mpg1'));
+      down({ x:tb.x + 20, y:tb.y + 10 }); up({ x:tb.x + 20, y:tb.y + 10 }); clickAt({ x:tb.x + 20, y:tb.y + 10 });
+      ok('MP01m ★ 点分组标题不触发播放', calls.length === 0, String(calls.length));
+    } finally { toggleMediaPlay = realToggle; }
+    draw();
+    ok('MP01n 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();

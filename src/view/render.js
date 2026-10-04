@@ -345,6 +345,66 @@ function videoRec(n){
   return rec;
 }
 const videoReady = (n) => { const r = videoRec(n); return !!(r && r.ok); };
+
+/* 音频缓存：和视频一个套路，只是没有画面可画。
+   播放要靠真的 <audio> 元素 —— 只是它不出现在页面上，
+   节点上画的是「▶音频 + 地址」那条。 */
+const audioCache = new Map();
+function audioRec(n){
+  const href = (typeof mediaHrefOf === 'function') ? mediaHrefOf(n) : (n && n.src);
+  if (!href) return null;
+  let rec = audioCache.get(href);
+  if (!rec){
+    const el = document.createElement('audio');
+    rec = { el, bad:false };
+    el.preload = 'none';            // 没点播放之前别去抓文件
+    el.addEventListener('error', () => { rec.bad = true; mark(); });
+    el.src = href;
+    audioCache.set(href, rec);
+  }
+  return rec;
+}
+
+/* 某个节点的媒体元素（视频 / 音频才有），别的类型给 null */
+function mediaElOf(n){
+  if (!n || n.kind !== 'image') return null;
+  const k = (typeof mediaKindOf === 'function') ? (n.mediaKind || mediaKindOf(n)) : '';
+  if (k === 'video'){ const r = videoRec(n); return r ? r.el : null; }
+  if (k === 'audio'){ const r = audioRec(n); return r ? r.el : null; }
+  return null;
+}
+function isMediaPlaying(n){
+  const el = mediaElOf(n);
+  return !!el && !el.paused && !el.ended;
+}
+/* 点一下播放 / 再点一下暂停（视频和音频都是这个行为） */
+function toggleMediaPlay(n){
+  const el = mediaElOf(n);
+  if (!el) return false;
+  const k = (n.mediaKind || mediaKindOf(n));
+  if (el.paused || el.ended){
+    const pr = el.play();
+    if (pr && typeof pr.catch === 'function') pr.catch(() => {});
+    say('* 开始播放' + (k === 'video' ? '视频' : '音频') + '。');
+  } else {
+    el.pause();
+    say('* 暂停了' + (k === 'video' ? '视频' : '音频') + '。');
+  }
+  mark();
+  return true;
+}
+/* 有东西在播就每帧 mark 一下 ——
+   视频是**抽帧画上去的**，不重画画面就停在那一帧。 */
+function markPlayingMedia(){
+  const list = doc && doc.nodes ? doc.nodes : [];
+  for (const n of list){
+    if (n.kind !== 'image') continue;
+    const k = n.mediaKind || (typeof mediaKindOf === 'function' ? mediaKindOf(n) : '');
+    if (k !== 'video' && k !== 'audio') continue;
+    const el = mediaElOf(n);
+    if (el && !el.paused && !el.ended){ mark(); return; }
+  }
+}
 /* 等所有视频抽到帧（导出前用，和 ensureImagesLoaded 一个道理） */
 function ensureVideosLoaded(){
   const pend = [...doc.nodes].filter(n => n.kind === 'image' && mediaKindOf(n) === 'video'

@@ -261,6 +261,28 @@ function effectSubMenu(items, entity, scope, ids, who){
   if (list.length) items.push(['效果', '不改结构，只盖一层：' + list.map(x => x[0].replace(/^[●\s]+/, '')).join(' / '), null, list]);
 }
 
+/* =========================================================================
+   多媒体节点：Ctrl + 左键打开源（和 Word 里的超链接一个习惯）
+   图片 / 视频 / 音频打开的是**原始文件**，网页 / 文件就是新开一个标签页。
+   ========================================================================= */
+function openMediaSource(n){
+  const raw = (typeof mediaSrcOf === 'function') ? mediaSrcOf(n) : '';
+  if (!raw){ say('* 这个节点还没填源。'); return false; }
+  if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(raw)){
+    say('* 这个源不安全，不让打开。');
+    return false;
+  }
+  const href = mediaHrefOf(n);
+  try {
+    window.open(href, '_blank', 'noopener');
+  } catch (e) {
+    say('* 打不开这个源。');
+    return false;
+  }
+  say('* 已在新标签页打开。');
+  return true;
+}
+
 function showCtx(x, y, n, e, info){
   info = info || {};
   const items = [];
