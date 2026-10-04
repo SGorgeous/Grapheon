@@ -793,6 +793,55 @@ function showInsertMenu(anchor){
     /* ★ 多媒体节点的正路：文件写进 user/，文档里只记一个文件名（几十个字节）。
        上面那条「图片…」是内嵌（data:），文档会变大。 */
     ['引用 user/ 里的文件…', '写进 user/，文档里只记文件名', () => pickFilesIntoUser()],
+    /* ★ 另外两种源也给直接入口。
+       上面那条是「选文件写进 user/」，这两条是**直接写地址**：
+       网页链接原样用，相对地址自动补 user/ 前缀。
+       （不补这两条的话，用户得先建个空节点、再右键换源，绕。） */
+    ['网页链接…', '填 https:// 地址，Ctrl+左键打开', () => {
+      openValueBox({
+        title:'网页链接', who:'新节点',
+        hint:'填 http:// 或 https:// 开头的地址。建好之后 Ctrl + 左键打开（和 Word 里一样）。',
+        fields:[{ key:'url', label:'地址', type:'text', placeholder:'https://example.com' }],
+        values:{ url:'' },
+        onOk: (vals) => {
+          const v = String(vals.url == null ? '' : vals.url).trim();
+          if (!v) return;
+          if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
+            say('* 这个地址不让用。');
+            return;
+          }
+          const c = viewCenter();
+          const n = addNodeAt(v, Math.round(c.x - 120), Math.round(c.y - 24), 'rect');
+          n.kind = 'image'; n.src = v;
+          reindex(); sizeNode(n); reindex(); sizeAll();
+          selectOnly(n.id); pushHist(); mark();
+          say('* 加了网页节点。');
+        }
+      });
+    }],
+    ['相对地址…', '写 user/ 里的文件名', () => {
+      openValueBox({
+        title:'相对地址', who:'新节点',
+        hint:'写 user/ 里的文件名就行（pic.png 等于 user/pic.png）。'
+           + ' ../ 开头的是从根往上走。类型按扩展名自动判。',
+        fields:[{ key:'src', label:'地址', type:'text', placeholder:'pic.png / video/clip.mp4' }],
+        values:{ src:'' },
+        onOk: (vals) => {
+          const v = String(vals.src == null ? '' : vals.src).trim();
+          if (!v) return;
+          if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
+            say('* 这个地址不让用。');
+            return;
+          }
+          const c = viewCenter();
+          const n = addNodeAt(v, Math.round(c.x - 120), Math.round(c.y - 24), 'rect');
+          n.kind = 'image'; n.src = v;
+          reindex(); sizeNode(n); reindex(); sizeAll();
+          selectOnly(n.id); pushHist(); mark();
+          say('* 加了媒体节点（' + mediaKindLabelOf(n) + '）。');
+        }
+      });
+    }],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
     'hr',
     ['变量定义节点', '单一变量 / 滑块 / 列表 / 地图，右键可切', () => {

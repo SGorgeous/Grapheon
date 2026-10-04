@@ -11457,6 +11457,83 @@
     mediaElOf = realEl; videoRec = realVideoRec;   /* 再撤桩 */
   });
 
+
+  T('MW01 插入菜单里能直接建网页 / 相对地址节点', () => {
+    fresh();
+    /* ★ 打桩：这组会建一个相对地址（video/clip.mp4）的节点，
+       渲染器会真的去抓 user/video/clip.mp4 —— 抓不到就是 ERR_FILE_NOT_FOUND，
+       被测试框架算成失败。这个坑我今天已经踩第三次了，这次先把加载器桩上。
+       桩要留到 fresh() 之后才撤（先撤桩再画，照样会去抓）。 */
+    const realVideoRec = videoRec;
+    videoRec = () => null;
+    const allItems = () => [...document.querySelectorAll('.menu .item')];
+    const labelOf = (d) => d.querySelector('.lb').textContent;
+
+    /* ① 两个入口都在 */
+    document.getElementById('b-insert').click();
+    const labels = allItems().map(labelOf);
+    ok('MW01 ★ 插入菜单里有「网页链接…」', labels.some(x => x.indexOf('网页链接') >= 0), labels.join(' / '));
+    ok('MW01b ★ 有「相对地址…」', labels.some(x => x.indexOf('相对地址') >= 0), labels.join(' / '));
+    ok('MW01c 原来那几项没丢',
+      ['节点', '图片…', '嵌入 Grapheon…', '变量定义节点'].every(k => labels.some(x => x.indexOf(k) === 0)),
+      labels.join(' / '));
+
+    /* ② 网页链接：填地址 → 建节点 → 类型是 link → 地址不补前缀 */
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    ok('MW01d 点开是那个输入浮层', numBoxOpen());
+    const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
+    ok('MW01e 一个字段', rows().length === 1, String(rows().length));
+    ok('MW01f 是文本字段（网页地址要能随便写，不给滑条）',
+      !rows()[0].querySelector('.nbrange') && !!rows()[0].querySelector('.nbtext'));
+    const before = doc.nodes.length;
+    rows()[0].querySelector('.nbtext').value = 'https://example.com/docs';
+    document.getElementById('numboxOk').click();
+    ok('MW01g ★ 建了一个节点', doc.nodes.length === before + 1, String(doc.nodes.length));
+    const n = doc.nodes[doc.nodes.length - 1];
+    ok('MW01h ★ 源就是那个地址', mediaSrcOf(n) === 'https://example.com/docs', mediaSrcOf(n));
+    ok('MW01i ★ 类型判成网页', mediaKindOf(n) === 'link', mediaKindOf(n));
+    ok('MW01j ★ 网页地址不会被补 user/ 前缀',
+      mediaHrefOf(n) === 'https://example.com/docs', mediaHrefOf(n));
+    ok('MW01k 建完就选中了，可以接着 Ctrl+左键打开', sel.has(n.id));
+
+    /* ③ 相对地址：填文件名 → 类型按扩展名判 → 会补前缀 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('相对地址') >= 0).click();
+    const b2 = doc.nodes.length;
+    rows()[0].querySelector('.nbtext').value = 'video/clip.mp4';
+    document.getElementById('numboxOk').click();
+    ok('MW01l ★ 又建了一个', doc.nodes.length === b2 + 1, String(doc.nodes.length));
+    const n2 = doc.nodes[doc.nodes.length - 1];
+    ok('MW01m ★ 类型按扩展名判成视频', mediaKindOf(n2) === 'video', mediaKindOf(n2));
+    ok('MW01n ★ 相对地址会补 user/ 前缀',
+      mediaHrefOf(n2) === 'user/video/clip.mp4', mediaHrefOf(n2));
+    ok('MW01o 存档里存的是原文（几十个字节）',
+      serialize().nodes.find(x => x.id === n2.id).src === 'video/clip.mp4',
+      String(serialize().nodes.find(x => x.id === n2.id).src));
+
+    /* ④ 危险地址不建节点 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    const b3 = doc.nodes.length;
+    rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
+    document.getElementById('numboxOk').click();
+    ok('MW01p ★ 危险地址不建节点', doc.nodes.length === b3, String(doc.nodes.length));
+    skipDlg();
+    ok('MW01q 而且说了原因', /不让用/.test(dlgText.textContent), dlgText.textContent);
+
+    /* ⑤ 空地址也不建 */
+    document.getElementById('b-insert').click();
+    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    const b4 = doc.nodes.length;
+    document.getElementById('numboxOk').click();
+    ok('MW01r 空地址不建节点', doc.nodes.length === b4, String(doc.nodes.length));
+
+    hideCtx();
+    draw();
+    ok('MW01s 画一帧不抛', true);
+    fresh();                 /* 先清干净 */
+    videoRec = realVideoRec; /* 再撤桩 */
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
