@@ -700,6 +700,65 @@ const newImageNode = (url, natW, natH, x, y) => {
 };
 /* 视口正中的世界坐标，用来决定新图片落在哪 */
 const viewCenter = () => s2w(VW / 2, VH / 2 - 60);
+/* 通用的文件 → data: URL（视频 / 音频 / 别的都用它） */
+function fileToDataURL(file, cb){
+  try {
+    const fr = new FileReader();
+    fr.onload = () => cb(String(fr.result || ''));
+    fr.onerror = () => cb('');
+    fr.readAsDataURL(file);
+  } catch (e) { cb(''); }
+}
+
+/* =========================================================================
+   从文件插一个多媒体节点。at 不给就放视口正中。
+   ─────────────────────────────────────────────────────────────
+   ★ 以前只收图片（别的类型直接报「不是图片」），现在**任何文件**都收：
+       图片            → 内嵌 data:，按原始比例摆（和以前一样）
+       视频 / 音频 / 别的 → 也内嵌 data:
+     类型判定：先按扩展名（mediaKind），认不出来再看 MIME。
+     为什么必须显式记 n.mediaType：内嵌出来的是 data: 地址，
+     **没有扩展名**，mediaKind 认不出，所以得把它记在节点上。
+     视频的尺寸不在这里等 —— videoRec 拿到元数据会回填。
+   体积提醒：内嵌是把整个文件塞进 JSON 的 base64，
+     几十兆的视频会让文档变得很大。超过阈值就在提示语里说一声。
+   ========================================================================= */
+const MEDIA_EMBED_WARN = 1.5 * 1024 * 1024;      // base64 字符数，约合 1.1MB 原文件
+
+function insertMediaFile(file, at){
+  if (!file) return;
+  const name = String(file.name || '');
+  const mime = String(file.type || '').toLowerCase();
+  /* 类型：扩展名优先，其次 MIME */
+  let kind = (typeof mediaKind === 'function') ? mediaKind(name) : 'file';
+  if (mime.indexOf('image/') === 0) kind = 'image';
+  else if (mime.indexOf('video/') === 0) kind = 'video';
+  else if (mime.indexOf('audio/') === 0) kind = 'audio';
+  else if (mime.indexOf('text/html') === 0) kind = 'link';
+  const isImg = (kind === 'image');
+
+  const done = (url, natW, natH) => {
+    if (!url){ say('* 这个文件读不出来。'); return; }
+    const p = at || viewCenter();
+    const n = newImageNode(url, natW, natH, Math.round(p.x - 140), Math.round(p.y - 110));
+    /* data: 地址没有扩展名 —— 类型得记在节点上，不然会被当成「文件」 */
+    if (kind !== 'image') n.mediaType = kind;
+    reindex(); sizeNode(n); reindex(); sizeAll();
+    selectOnly(n.id);
+    pushHist(); mark();
+    const kb = Math.round(url.length / 1024);
+    if (url.length > MEDIA_EMBED_WARN){
+      say('* 加入了' + mediaKindLabelOf(n) + '（' + kb + ' KB），文档会变大。');
+    } else {
+      say('* 加入了' + mediaKindLabelOf(n) + '（约 ' + kb + ' KB）。');
+    }
+  };
+
+  say(isImg ? '* 正在处理图片。' : '* 正在读入文件。');
+  if (isImg) imageToDataURL(file, (url, w, h) => done(url, w, h));
+  else fileToDataURL(file, (url) => done(url, 0, 0));
+}
+
 /* 从文件插一张图。at 不给就放视口正中 */
 function insertImageFile(file, at){
   if (!file){ return; }

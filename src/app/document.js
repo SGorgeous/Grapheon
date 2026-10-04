@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · app/document.js
    模式切换、JSON 存取、新建 / 打开 / 拖入文件。
@@ -81,7 +81,6 @@ imgFileEl.addEventListener('change', () => {
   imgInsertAt = null; imgReplaceFor = null;
   imgFileEl.value = '';
 });
-const isImageFile = (f) => !!f && /^image\//.test(f.type || '');
 const dropPos = (ev) => s2w(ev.clientX || 0, ev.clientY || 0);
 
 
@@ -104,15 +103,27 @@ window.addEventListener('dragover', (ev) => {
   ev.preventDefault();
   if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
 });
+/* 是不是「我们自己导出的存档」。只有它还能走「打开文档」那条路。 */
+const isDocFile = (f) => {
+  const n = String((f && f.name) || '').toLowerCase();
+  return n.endsWith('.gpk') || n.endsWith('.json');
+};
+
 window.addEventListener('drop', (ev) => {
   ev.preventDefault();
   const dt = ev.dataTransfer;
   if (!dt) return;
-  // 图片直接插到鼠标松开的位置；不是图片才当存档读
   const files = [...(dt.files || [])];
-  const img = files.find(isImageFile);
-  if (img){ insertImageFile(img, dropPos(ev)); return; }
-  if (files[0]) readFile(files[0]);
+  if (!files.length) return;
+  /* ★ 现在**任何文件**都直接插成媒体节点 —— 以前只认图片，
+     不是图片就当存档打开（拖个 mp4 进来会被当成文档，报读不出来）。
+     只有我们自己导出的 .gpk / .json 仍旧走「打开文档」。 */
+  if (files.length === 1 && isDocFile(files[0])){ readFile(files[0]); return; }
+  const base = dropPos(ev);
+  files.forEach((f, i) => {
+    /* 一次拖好几个就错开摆，免得叠在一起 */
+    insertMediaFile(f, { x: base.x + i * 40, y: base.y + i * 40 });
+  });
 });
 /* 从剪贴板粘一张图进来 */
 window.addEventListener('paste', (ev) => {
@@ -121,7 +132,7 @@ window.addEventListener('paste', (ev) => {
   for (const it of items){
     if (it.kind !== 'file' || !/^image\//.test(it.type || '')) continue;
     const f = it.getAsFile();
-    if (f){ ev.preventDefault(); insertImageFile(f, viewCenter()); return; }
+    if (f){ ev.preventDefault(); insertMediaFile(f, viewCenter()); return; }
   }
 });
 

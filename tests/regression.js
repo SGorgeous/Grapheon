@@ -6133,11 +6133,13 @@
       .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
     hideCtx();
   });
-  T('RB03 节点里是三项：文本 / 图片 / 表格', () => {
+  T('RB03 节点里是四项：文本 / 路径 / 网络 / 表格', () => {
     emptyMenu();
     subMenu('新建');
     const sub = subMenu('节点');
-    ok('RB03 三项齐', ['文本节点', '图片节点', '表格节点']
+    /* 「图片节点…」删了 —— 现在任何文件都能直接拖进窗口，
+       手写地址的两条是「路径节点…」和「网络节点…」。 */
+    ok('RB03 四项齐', ['文本节点', '路径节点', '网络节点', '表格节点']
       .every(L => sub.some(t => t.indexOf(L) === 0)), sub.join(' / '));
     hideCtx();
   });
@@ -7957,10 +7959,13 @@
       const it2 = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('节点') === 0);
       ok('BG01f 找得到「节点」子菜单', !!it2);
       it2.click();   // ★ 子菜单改单击展开了
-      const img = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('图片节点') === 0);
-      ok('BG01g 找得到「图片节点…」', !!img, [...document.querySelectorAll('.menu .item')].map(d => d.textContent).join(' / '));
+      const img = [...document.querySelectorAll('.menu .item')].find(d => d.textContent.indexOf('路径节点') === 0);
+      ok('BG01g 找得到「路径节点…」', !!img, [...document.querySelectorAll('.menu .item')].map(d => d.textContent).join(' / '));
       if (img) img.dispatchEvent(new MouseEvent('click', { bubbles:true }));
-      ok('BG01h 点了之后真的去开文件选择框', clicked === 1, clicked);
+      /* ★ 行为变了：以前这条开的是文件选择框（内嵌图片），
+         现在开的是**值浮层**（填 user/ 里的路径）。 */
+      ok('BG01h 点了之后开的是值浮层', numBoxOpen(), 'fileClick=' + clicked + ' numBox=' + numBoxOpen());
+      closeNumBox();
     } finally { imgFileEl.click = orig; hideCtx(); }
   });
 
@@ -11398,14 +11403,15 @@
     /* ① 两个入口都在 */
     document.getElementById('b-insert').click();
     const labels = allItems().map(labelOf);
-    ok('MW01 ★ 插入菜单里有「网页链接…」', labels.some(x => x.indexOf('网页链接') >= 0), labels.join(' / '));
-    ok('MW01b ★ 有「相对地址…」', labels.some(x => x.indexOf('相对地址') >= 0), labels.join(' / '));
+    ok('MW01 ★ 插入菜单里有「网络节点…」', labels.some(x => x.indexOf('网络节点') >= 0), labels.join(' / '));
+    ok('MW01b ★ 有「路径节点…」', labels.some(x => x.indexOf('路径节点') >= 0), labels.join(' / '));
     ok('MW01c 原来那几项没丢',
-      ['节点', '图片…', '嵌入 Grapheon…', '变量定义节点'].every(k => labels.some(x => x.indexOf(k) === 0)),
+      ['节点', '路径节点…', '网络节点…', '嵌入 Grapheon…', '变量定义节点']
+        .every(k => labels.some(x => x.indexOf(k) === 0)),
       labels.join(' / '));
 
     /* ② 网页链接：填地址 → 建节点 → 类型是 link → 地址不补前缀 */
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     ok('MW01d 点开是那个输入浮层', numBoxOpen());
     const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
     ok('MW01e 一个字段', rows().length === 1, String(rows().length));
@@ -11424,7 +11430,7 @@
 
     /* ③ 相对地址：填文件名 → 类型按扩展名判 → 会补前缀 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('相对地址') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('路径节点') >= 0).click();
     const b2 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'video/clip.mp4';
     document.getElementById('numboxOk').click();
@@ -11439,7 +11445,7 @@
 
     /* ④ 危险地址不建节点 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b3 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
     document.getElementById('numboxOk').click();
@@ -11449,7 +11455,7 @@
 
     /* ⑤ 空地址也不建 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b4 = doc.nodes.length;
     document.getElementById('numboxOk').click();
     ok('MW01r 空地址不建节点', doc.nodes.length === b4, String(doc.nodes.length));
@@ -11504,7 +11510,7 @@
     const labelOf = (d) => d.querySelector('.lb').textContent;
     const rows = () => [...document.querySelectorAll('#numboxFields .nbfield')];
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b1 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'example.com/docs';
     document.getElementById('numboxOk').click();
@@ -11518,7 +11524,7 @@
 
     /* ④ 已经写了协议头 → 原样，提示语不提补 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     rows()[0].querySelector('.nbtext').value = 'http://plain.com';
     document.getElementById('numboxOk').click();
     const n2 = doc.nodes[doc.nodes.length - 1];
@@ -11529,7 +11535,7 @@
     /* ⑤ ★ 「相对地址…」**不能**补 —— 那儿的 pic.png 是 user/ 里的文件，
           补上 https:// 就全坏了。这是这个功能最容易搞错的地方。 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('相对地址') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('路径节点') >= 0).click();
     rows()[0].querySelector('.nbtext').value = 'pic.png';
     document.getElementById('numboxOk').click();
     const n3 = doc.nodes[doc.nodes.length - 1];
@@ -11539,7 +11545,7 @@
 
     /* ⑥ 危险地址：补全之后仍然拦住 */
     document.getElementById('b-insert').click();
-    allItems().find(d => labelOf(d).indexOf('网页链接') >= 0).click();
+    allItems().find(d => labelOf(d).indexOf('网络节点') >= 0).click();
     const b4 = doc.nodes.length;
     rows()[0].querySelector('.nbtext').value = 'javascript:alert(1)';
     document.getElementById('numboxOk').click();
@@ -11567,6 +11573,82 @@
     return function unmute(){ imageRec = save.imageRec; videoRec = save.videoRec; };
   }
 
+
+  await TA('ME01 拖任何文件进来都认得', async () => {
+    fresh();
+    /* 拖进来的都会内嵌成 data:，渲染器随后会去解码 —— 先把加载器关掉 */
+    const unmute = muteMediaLoaders();
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#f0f"/></svg>';
+    const mkFile = (name, mime, bytes) => new File([bytes == null ? svg : bytes], name, { type: mime });
+    const dropFiles = (files, pt) => {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(f);
+      const s = w2s(pt || { x:0, y:0 });
+      window.dispatchEvent(new DragEvent('drop', { bubbles:true, cancelable:true,
+        clientX:Math.round(s.x), clientY:Math.round(s.y), dataTransfer:dt }));
+    };
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+    /* ① 五种文件各拖一个 —— 以前只有图片能过，别的会被当存档打开 */
+    const cases = [
+      ['a.svg',  'image/svg+xml',   null,       'image'],
+      ['b.mp4',  'video/mp4',       null,       'video'],
+      ['c.mp3',  'audio/mpeg',      null,       'audio'],
+      ['d.zip',  'application/zip', null,       'file'],
+      ['e.html', 'text/html',       '<b>x</b>', 'link']
+    ];
+    for (const [name, mime, bytes, want] of cases){
+      const before = doc.nodes.length;
+      dropFiles([mkFile(name, mime, bytes)], { x:0, y:0 });
+      for (let i = 0; i < 40 && doc.nodes.length === before; i++) await wait(25);
+      ok('ME01 拖 ' + name + ' 会建节点', doc.nodes.length === before + 1,
+        before + ' → ' + doc.nodes.length);
+      const n = doc.nodes[doc.nodes.length - 1];
+      ok('ME01b ★ ' + name + ' 的类型判成 ' + want, mediaKindOf(n) === want, mediaKindOf(n));
+      ok('ME01c ' + name + ' 是内嵌的（data: 开头，没有外部依赖）',
+        String(mediaSrcOf(n)).indexOf('data:') === 0, String(mediaSrcOf(n)).slice(0, 20));
+    }
+
+    /* ② ★ 内嵌地址没有扩展名 —— 类型必须显式记在节点上，
+          不然 round-trip 之后会退化成「文件」。 */
+    const vids = doc.nodes.filter(n => mediaKindOf(n) === 'video');
+    ok('ME01d ★ 有视频节点', vids.length >= 1, String(vids.length));
+    ok('ME01e ★ 视频节点上显式记了 mediaType（data: 没扩展名，判不出来）',
+      vids[0].mediaType === 'video', String(vids[0].mediaType));
+    const snap = serialize();
+    deserialize(snap);
+    const back = doc.nodes.filter(n => n.mediaType === 'video');
+    ok('ME01f ★ 存读一轮之后类型还是视频', back.length >= 1 && mediaKindOf(back[0]) === 'video',
+      back.length ? mediaKindOf(back[0]) : '没有了');
+    const auds = doc.nodes.filter(n => mediaKindOf(n) === 'audio');
+    ok('ME01g 音频也是', auds.length >= 1 && auds[0].mediaType === 'audio',
+      auds.length ? String(auds[0].mediaType) : '没有了');
+
+    /* ③ 一次拖好几个：都进来，而且错开摆（不叠在一起） */
+    const before2 = doc.nodes.length;
+    dropFiles([mkFile('x1.mp3','audio/mpeg'), mkFile('x2.mp4','video/mp4')], { x:0, y:0 });
+    for (let i = 0; i < 40 && doc.nodes.length < before2 + 2; i++) await wait(25);
+    ok('ME01h ★ 一次拖两个都进来了', doc.nodes.length === before2 + 2,
+      before2 + ' → ' + doc.nodes.length);
+    const last2 = doc.nodes.slice(-2);
+    ok('ME01i 而且错开摆了', !(last2[0].x === last2[1].x && last2[0].y === last2[1].y),
+      last2[0].x + ',' + last2[0].y + ' / ' + last2[1].x + ',' + last2[1].y);
+
+    /* ④ ★ 只有我们自己导出的存档还能走「打开文档」 */
+    ok('ME01j ★ .gpk / .json 仍当存档', isDocFile({ name:'a.gpk' }) && isDocFile({ name:'a.JSON' }),
+      '');
+    ok('ME01k 别的扩展名都不当存档（拖 mp4 不会再被当文档读）',
+      !isDocFile({ name:'a.mp4' }) && !isDocFile({ name:'a.zip' }) && !isDocFile({ name:'a.png' })
+      && !isDocFile({ name:'' }), '');
+    /* ⑤ 提示语 */
+    skipDlg();
+    ok('ME01l 提示语说加入了什么', /加入了/.test(dlgText.textContent), dlgText.textContent);
+
+    fresh();          /* 先清干净 */
+    unmute();         /* 再开回来 */
+    draw();
+    ok('ME01m 画一帧不抛', true);
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';

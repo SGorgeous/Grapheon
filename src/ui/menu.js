@@ -283,6 +283,52 @@ function openMediaSource(n){
   return true;
 }
 
+/* =========================================================================
+   新建「路径节点」/「网络节点」
+   ─────────────────────────────────────────────────────────────
+   两种源，一个函数 —— 画布右键的「新建」和顶栏的「插入」共用。
+
+     路径节点：写 user/ 里的路径（pic.png 等于 user/pic.png）。
+               类型按扩展名自动判，图片 / 视频 / 音频 / 文件都能当。
+     网络节点：写网址。没写协议头会自动补 https://。
+               Ctrl + 左键打开（和 Word 里的超链接一个习惯）。
+
+   ★ 补全只在**网络节点**这边做。
+     路径节点那边写的是 pic.png，补上 https:// 就成了个网址，全坏了。
+   ========================================================================= */
+function newMediaNode(kind, worldPt){
+  const isLink = (kind === 'link');
+  openValueBox({
+    title: isLink ? '网络节点' : '路径节点',
+    who: '新节点',
+    hint: isLink
+      ? 'http:// 或 https:// 开头的地址。没写协议头会自动补 https://'
+        + '（example.com → https://example.com）。建好后 Ctrl + 左键打开。'
+      : '写 user/ 里的路径就行（pic.png 等于 user/pic.png）。'
+        + '../ 开头的是从根往上走。类型按扩展名自动判。',
+    fields:[{ key:'v', label:'地址', type:'text',
+      placeholder: isLink ? 'example.com 或 https://example.com' : 'pic.png / video/clip.mp4' }],
+    values:{ v:'' },
+    onOk: (vals) => {
+      const typed = String(vals.v == null ? '' : vals.v).trim();
+      if (!typed) return;
+      /* 网络节点才补协议头 */
+      const v = (isLink && typeof mediaUrlOf === 'function') ? mediaUrlOf(typed) : typed;
+      if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
+        say('* 这个地址不让用。');
+        return;
+      }
+      const p = worldPt || viewCenter();
+      const n = addNodeAt(v, Math.round(p.x - 120), Math.round(p.y - 24), 'rect');
+      n.kind = 'image'; n.src = v;
+      reindex(); sizeNode(n); reindex(); sizeAll();
+      selectOnly(n.id); pushHist(); mark();
+      if (isLink) say(v !== typed ? '* 加了网络节点，已补成 https:// 开头。' : '* 加了网络节点。');
+      else say('* 加了路径节点（' + mediaKindLabelOf(n) + '）。');
+    }
+  });
+}
+
 function showCtx(x, y, n, e, info){
   info = info || {};
   const items = [];
@@ -668,7 +714,8 @@ function showCtx(x, y, n, e, info){
           reindex(); relayout(); settleGroups([nn.id]);
           selectOnly(nn.id); pushHist(); mark();
         }],
-        ['图片节点…', '也可以直接把图片拖进窗口', () => pickImageFile(s2w(x, y))],
+        ['路径节点…', '引用 user/ 里的图片 / 视频 / 音频 / 文件', () => newMediaNode('path', s2w(x, y))],
+        ['网络节点…', '填网址，Ctrl+左键打开', () => newMediaNode('link', s2w(x, y))],
         ['表格节点', '行列可编辑，格子里的字也能引用变量', () => {
           const p = s2w(x, y);
           const nn = addTableNode(Math.round(p.x - 160), Math.round(p.y - 70));
@@ -789,63 +836,13 @@ function showInsertMenu(anchor){
       selectOnly(n.id); pushHist(); mark();
       say('* 加了节点' + tagOf(n) + '。');
     }],
-    ['图片…', '也可以直接把图片拖进窗口', () => pickImageFile()],
-    /* ★ 多媒体节点的两种源都给直接入口（直接写地址，不用先建空节点再换源）：
-         网页链接——原样用；相对地址——自动补 user/ 前缀，文件放 user/ 里。
-       上面那条「图片…」是内嵌（data:），文档会变大。 */
-    ['网页链接…', '填 https:// 地址，Ctrl+左键打开', () => {
-      openValueBox({
-        title:'网页链接', who:'新节点',
-        hint:'http:// 或 https:// 开头的地址。**没写协议头的话会自动补 https://**'
-           + '（example.com → https://example.com）。'
-           + '建好之后 Ctrl + 左键打开（和 Word 里一样）。',
-        fields:[{ key:'url', label:'地址', type:'text', placeholder:'example.com 或 https://example.com' }],
-        values:{ url:'' },
-        onOk: (vals) => {
-          const typed = String(vals.url == null ? '' : vals.url).trim();
-          if (!typed) return;
-          /* ★ 没写 http(s):// 就自动补 https://（用户要的）。
-             只在**这个入口**补 —— 「相对地址…」和「换源…」不能补：
-             那两处的 pic.png 是相对地址、data: 是内嵌数据，
-             补上 https:// 就全坏了。 */
-          const v = (typeof mediaUrlOf === 'function') ? mediaUrlOf(typed) : typed;
-          if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
-            say('* 这个地址不让用。');
-            return;
-          }
-          const c = viewCenter();
-          const n = addNodeAt(v, Math.round(c.x - 120), Math.round(c.y - 24), 'rect');
-          n.kind = 'image'; n.src = v;
-          reindex(); sizeNode(n); reindex(); sizeAll();
-          selectOnly(n.id); pushHist(); mark();
-          /* 补过就明说补成了什么（长地址不进提示语，底栏放不下） */
-          say(v !== typed ? '* 加了网页节点，已补成 https:// 开头。' : '* 加了网页节点。');
-        }
-      });
-    }],
-    ['相对地址…', '写 user/ 里的文件名', () => {
-      openValueBox({
-        title:'相对地址', who:'新节点',
-        hint:'写 user/ 里的文件名就行（pic.png 等于 user/pic.png）。'
-           + ' ../ 开头的是从根往上走。类型按扩展名自动判。',
-        fields:[{ key:'src', label:'地址', type:'text', placeholder:'pic.png / video/clip.mp4' }],
-        values:{ src:'' },
-        onOk: (vals) => {
-          const v = String(vals.src == null ? '' : vals.src).trim();
-          if (!v) return;
-          if (typeof mediaSrcAllowed === 'function' && !mediaSrcAllowed(v)){
-            say('* 这个地址不让用。');
-            return;
-          }
-          const c = viewCenter();
-          const n = addNodeAt(v, Math.round(c.x - 120), Math.round(c.y - 24), 'rect');
-          n.kind = 'image'; n.src = v;
-          reindex(); sizeNode(n); reindex(); sizeAll();
-          selectOnly(n.id); pushHist(); mark();
-          say('* 加了媒体节点（' + mediaKindLabelOf(n) + '）。');
-        }
-      });
-    }],
+    /* ★ 多媒体节点的两种源。原来这里还有一条「图片…」（内嵌 data:）——
+       删了：现在**任何文件都能直接拖进窗口**，不用再从菜单挑。
+       这两条是「手写地址」的路子，和拖放互补。
+       ★ 只有网络节点会补 https:// ——
+         路径节点写的是 pic.png，补上就成了个网址，全坏了。 */
+    ['路径节点…', '引用 user/ 里的图片 / 视频 / 音频 / 文件', () => newMediaNode('path', null)],
+    ['网络节点…', '填网址，Ctrl+左键打开', () => newMediaNode('link', null)],
     ['嵌入 Grapheon…', '整份文档当一个封闭节点', () => pickEmbedFile()],
     'hr',
     ['变量定义节点', '单一变量 / 滑块 / 列表 / 地图，右键可切', () => {
