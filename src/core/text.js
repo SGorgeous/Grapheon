@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* ==========================================================================
    GRAPHEON · core/text.js
    文本度量、中英混排换行、节点尺寸计算。
@@ -43,17 +43,35 @@ function wrapText(text, maxW, size, weight, family){
   if (!lines.length) lines.push('');
   return lines;
 }
-/* 图片节点：尺寸由「名称带 + 图片（按原始比例）+ 描述」叠出来。
-   拖右下角改宽度时图片等比缩放，高度自己跟着走。 */
+/* 多媒体节点：尺寸由「名称带 + 内容区 + 描述」叠出来。
+   拖右下角改宽度时内容等比缩放，高度自己跟着走。
+
+   ★ 内容区按类型算：
+       图片 / 视频  按原始比例（视频还没拿到元数据时按 16:9 占位）
+       音频         一条固定高度的条
+       网页 / 文件  一张固定高度的卡片
+     原始尺寸记在 n.imgW / n.imgH 里（插入时量到的；视频由 videoRec 回填）。 */
 function sizeImageNode(n){
-  const natW = (+n.imgW > 0) ? +n.imgW : 4;
-  const natH = (+n.imgH > 0) ? +n.imgH : 3;
+  const kind = (typeof mediaKindOf === 'function') ? mediaKindOf(n) : 'image';
+  const isFlat = (kind === 'audio' || kind === 'link' || kind === 'file');
+  const natW = (+n.imgW > 0) ? +n.imgW : (isFlat ? 1 : 4);
+  const natH = (+n.imgH > 0) ? +n.imgH : (isFlat ? 1 : 3);
   let w = (+n.fixedW > 0) ? Math.max(IMG_MIN_W, +n.fixedW)
-                          : Math.min(IMG_MAX_W, Math.max(IMG_MIN_W, natW));
+                          : Math.min(IMG_MAX_W, Math.max(IMG_MIN_W, isFlat ? 240 : natW));
   w = Math.round(w);
-  const imgH = Math.max(24, Math.round(natH * (w / natW)));
+  /* 内容区高度：
+       音频 / 网页 / 文件  → 固定高（一条 / 一张卡片）
+       有原始尺寸的        → 按原始比例
+       视频还没拿到元数据  → 16:9 占位
+       图片还没加载出来    → 老规矩 4:3（别改，改了老文档的形态会变） */
+  let imgH;
+  if (isFlat) imgH = mediaFallbackBoxH(kind, w);
+  else if (+n.imgH > 0) imgH = Math.max(24, Math.round(natH * (w / natW)));
+  else if (kind === 'video') imgH = mediaFallbackBoxH('video', w);
+  else imgH = Math.max(24, Math.round(3 * (w / 4)));
   n.imgDrawW = w;
   n.imgDrawH = imgH;
+  n.mediaKind = kind;                 // 画的时候不用再算一遍
   const desc = displayDescOf(n);      // 描述里也能引用变量
   n.lines = desc ? wrapText(desc, w - PADX * 2, FS, 'normal', FONT) : [];
   n.lh = Math.round(FS * 1.32);

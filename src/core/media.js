@@ -139,3 +139,23 @@ function mediaKindOf(n){
 function isMediaNode(n){
   return !!n && n.kind === 'image';
 }
+
+/* =========================================================================
+   画的时候要用的默认尺寸
+   ========================================================================= */
+
+/* 内容区的高度（宽度由节点宽度定）。
+   图片和视频按**原始比例**算高度，这几种没有比例可言，给固定值。 */
+const MEDIA_BOX_H = { audio: 34, link: 34, file: 34 };
+
+/* 视频还没拿到元数据时先按 16:9 占位，拿到之后再按真实比例重排。
+   音频 / 网页 / 文件用上面的固定高度，这个比例对它们没意义。 */
+const MEDIA_DEFAULT_RATIO = 16 / 9;
+
+/* 内容区该多高（还没加载出真实尺寸时的兜底） */
+function mediaFallbackBoxH(kind, w){
+  if (kind === 'audio' || kind === 'link' || kind === 'file'){
+    return (MEDIA_BOX_H[kind] || 34);
+  }
+  return Math.max(24, Math.round(w / MEDIA_DEFAULT_RATIO));
+}

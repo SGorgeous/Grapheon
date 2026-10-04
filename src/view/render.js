@@ -308,6 +308,83 @@ function imageRec(n){
   return rec;
 }
 const imageReady = (n) => { const r = imageRec(n); return !!(r && r.ok); };
+
+/* 视频缓存：和图片同一个套路 —— 一个离屏 <video>，抽到帧就 mark() 重画。
+   为什么是「抽一帧」而不是叠一个真的 <video> 上去：
+   画布应用里叠 DOM 要处理层级 / 拖动 / 缩放 / 每帧同步坐标，太脆。
+   抽帧之后视频就和图片一样是**画上去的**，拖拽命中全都沿用现成的。 */
+const videoCache = new Map();
+function videoRec(n){
+  const href = (typeof mediaHrefOf === 'function') ? mediaHrefOf(n) : (n && n.src);
+  if (!href) return null;
+  let rec = videoCache.get(href);
+  if (!rec){
+    const el = document.createElement('video');
+    rec = { el, ok:false, bad:false, natW:0, natH:0 };
+    /* 抽帧必须静音 + 内联播放，否则有些浏览器不给解码 */
+    el.muted = true;
+    el.playsInline = true;
+    el.preload = 'auto';
+    el.addEventListener('loadedmetadata', () => {
+      rec.natW = el.videoWidth || 0;
+      rec.natH = el.videoHeight || 0;
+      /* 尺寸回填给节点，让它按真实比例重排一次 */
+      if (n && rec.natW > 0 && rec.natH > 0 && !(+n.imgW > 0)){
+        n.imgW = rec.natW; n.imgH = rec.natH;
+        if (typeof sizeNode === 'function') sizeNode(n);
+      }
+      /* 0 秒常常是黑屏，往前挪一丁点 */
+      try { el.currentTime = 0.05; } catch (e) {}
+      mark();
+    });
+    el.addEventListener('seeked', () => { rec.ok = true; mark(); });
+    el.addEventListener('error', () => { rec.bad = true; mark(); });
+    el.src = href;
+    videoCache.set(href, rec);
+  }
+  return rec;
+}
+const videoReady = (n) => { const r = videoRec(n); return !!(r && r.ok); };
+/* 等所有视频抽到帧（导出前用，和 ensureImagesLoaded 一个道理） */
+function ensureVideosLoaded(){
+  const pend = [...doc.nodes].filter(n => n.kind === 'image' && mediaKindOf(n) === 'video'
+    && mediaSrcOf(n) && !videoReady(n));
+  if (!pend.length) return Promise.resolve();
+  return Promise.all(pend.map(n => new Promise(res => {
+    const r = videoRec(n);
+    if (!r || r.ok || r.bad) return res();
+    const done = () => res();
+    r.el.addEventListener('seeked', done, { once:true });
+    r.el.addEventListener('error', done, { once:true });
+    setTimeout(done, 4000);
+  })));
+}
+
+/* ---- 内容区的小零件（都用路径画，不依赖字体）---- */
+function drawPlayMark(g, cx, cy, r, color){
+  g.save();
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(cx - r * 0.55, cy - r);
+  g.lineTo(cx + r * 0.85, cy);
+  g.lineTo(cx - r * 0.55, cy + r);
+  g.closePath();
+  g.fill();
+  g.restore();
+}
+/* 一行「标签 + 地址」：音频 / 网页 / 文件共用 */
+function drawMediaLine(g, x, y, w, h, label, text, withPlay){
+  const left = x + 8;
+  if (withPlay) drawPlayMark(g, left + 8, y + h / 2, 8, C.yellow);
+  const tx = left + (withPlay ? 22 : 0);
+  setFont(g, FS, 'normal', FONT);
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.fillStyle = C.yellow;
+  g.fillText(label, tx, y + h / 2);
+  const lw = g.measureText(label).width;
+  g.fillStyle = C.dim;
+  g.fillText(fitText(g, text || '', w - (tx - x) - lw - 12), tx + lw + 8, y + h / 2);
+}
 /* 等所有图片解码完（导出前用：不然导出的是「加载中」占位） */
 function ensureImagesLoaded(){
   const pending = [...doc.nodes].filter(n => n.kind === 'image' && mediaSrcOf(n) && !imageReady(n));
@@ -759,17 +836,41 @@ function drawImageNode(g, n, b, selected, hov){
   g.lineJoin = 'round';
   g.fillStyle = C.bg;
   g.fillRect(b.x, b.y, b.w, b.h);
-  // 图片本体
-  const rec = imageRec(n);
-  if (rec && rec.ok){
-    g.drawImage(rec.img, b.x + 1.5, imgY, b.w - 3, n.imgDrawH || 0);
+  // 内容区：按类型画
+  const kind = n.mediaKind || (typeof mediaKindOf === 'function' ? mediaKindOf(n) : 'image');
+  const cw = b.w - 3;
+  const ch = n.imgDrawH || 0;
+  if (kind === 'image'){
+    const rec = imageRec(n);
+    if (rec && rec.ok){
+      g.drawImage(rec.img, b.x + 1.5, imgY, cw, ch);
+    } else {
+      g.fillStyle = C.bg;
+      g.fillRect(b.x + 1.5, imgY, cw, ch);
+      setFont(g, FS, 'normal', FONT);
+      g.fillStyle = C.dim;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(rec && rec.bad ? '图片读不出来' : '图片加载中…', b.x + b.w / 2, imgY + ch / 2);
+    }
+  } else if (kind === 'video'){
+    const vr = videoRec(n);
+    if (vr && vr.ok){
+      try { g.drawImage(vr.el, b.x + 1.5, imgY, cw, ch); } catch (e) { /* 抽帧失败就当没画上 */ }
+      drawPlayMark(g, b.x + b.w / 2, imgY + ch / 2, Math.min(18, ch / 4), 'rgba(255,255,255,0.85)');
+    } else {
+      g.fillStyle = C.bg;
+      g.fillRect(b.x + 1.5, imgY, cw, ch);
+      setFont(g, FS, 'normal', FONT);
+      g.fillStyle = C.dim;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(vr && vr.bad ? '视频读不出来' : '视频加载中…', b.x + b.w / 2, imgY + ch / 2);
+    }
+  } else if (kind === 'audio'){
+    drawMediaLine(g, b.x + 1.5, imgY, cw, ch, '音频', mediaHrefOf(n), true);
+  } else if (kind === 'link'){
+    drawMediaLine(g, b.x + 1.5, imgY, cw, ch, '网页', mediaHrefOf(n) || mediaSrcOf(n), false);
   } else {
-    g.fillStyle = C.bg;
-    g.fillRect(b.x + 1.5, imgY, b.w - 3, n.imgDrawH || 0);
-    setFont(g, FS, 'normal', FONT);
-    g.fillStyle = C.dim;
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(rec && rec.bad ? '图片读不出来' : '图片加载中…', b.x + b.w / 2, imgY + (n.imgDrawH || 0) / 2);
+    drawMediaLine(g, b.x + 1.5, imgY, cw, ch, '文件', mediaHrefOf(n), false);
   }
   // 分隔线
   g.strokeStyle = C.dim; g.lineWidth = 2;

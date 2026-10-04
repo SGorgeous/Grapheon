@@ -11017,6 +11017,77 @@
 
     fresh();   /* 收尾清干净 */
   });
+
+  T('MT01 五种类型：尺寸怎么算 / 画得出来', () => {
+    fresh();
+    const mk = (src) => {
+      const n = addNodeAt('m', 0, 0, 'rect');
+      n.kind = 'image'; n.src = src; n.desc = '';
+      reindex(); sizeNode(byId(n.id)); reindex(); sizeAll();
+      return byId(n.id);
+    };
+
+    /* ① 类型 → 尺寸规则 */
+    /* ★ 用 data: 当素材，不用真的相对路径 ——
+       相对路径会让渲染器真去抓文件，抓不到就是 ERR_FILE_NOT_FOUND，
+       测试框架会把它算成失败（老图片测试用 data: 就是这个原因）。
+       data:video / data:audio 既能拿到正确的类型，又不会去抓文件。
+       网页和文件这两种本来就不抓（只有图片和视频会建加载器）。 */
+    const PNG1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const img  = mk(PNG1);
+    const vid  = mk('data:video/mp4;base64,AA');
+    const aud  = mk('data:audio/mpeg;base64,AA');
+    const link = mk('https://example.com/a.html');
+    const file = mk('notes.zip');
+    ok('MT01 图片默认 4:3 兜底（老规矩，改了老文档形态会变）',
+      Math.abs(img.imgDrawH - Math.round(img.w * 3 / 4)) <= 2,
+      img.imgDrawH + ' vs ' + Math.round(img.w * 3 / 4));
+    ok('MT01b ★ 视频没拿到元数据时按 16:9 占位',
+      Math.abs(vid.imgDrawH - Math.round(vid.w / (16 / 9))) <= 2,
+      vid.imgDrawH + ' vs ' + Math.round(vid.w / (16 / 9)));
+    ok('MT01c ★ 音频 / 网页 / 文件是固定高的一条',
+      aud.imgDrawH === 34 && link.imgDrawH === 34 && file.imgDrawH === 34,
+      [aud.imgDrawH, link.imgDrawH, file.imgDrawH].join(' / '));
+    ok('MT01d 音频 / 网页 / 文件的默认宽度是 240',
+      aud.w === 240 && link.w === 240 && file.w === 240,
+      [aud.w, link.w, file.w].join(' / '));
+    ok('MT01e ★ 类型记在节点上（画的时候不用再算一遍）',
+      img.mediaKind === 'image' && vid.mediaKind === 'video' && aud.mediaKind === 'audio'
+      && link.mediaKind === 'link' && file.mediaKind === 'file',
+      [img.mediaKind, vid.mediaKind, aud.mediaKind, link.mediaKind, file.mediaKind].join(' / '));
+
+    /* ② 有原始尺寸时按真实比例（图片 / 视频都一样） */
+    const p = mk(PNG1);
+    p.imgW = 400; p.imgH = 200;
+    sizeNode(p); reindex(); sizeAll();
+    ok('MT01f ★ 有原始尺寸时按真实比例（400:200，宽度被 IMG_MAX_W 夹到 300 → 高 150）',
+      Math.abs(p.imgDrawH - Math.round(p.w * 200 / 400)) <= 2,
+      p.imgDrawH + ' vs ' + Math.round(p.w * 200 / 400) + '（宽 ' + p.w + '）');
+    const v2 = mk('data:video/mp4;base64,AA');
+    v2.imgW = 1920; v2.imgH = 1080;
+    sizeNode(v2); reindex(); sizeAll();
+    ok('MT01g ★ 视频拿到元数据之后按真实比例（1920:1080 → 16:9）',
+      Math.abs(v2.imgDrawH - Math.round(v2.w * 1080 / 1920)) <= 2,
+      v2.imgDrawH + ' vs ' + Math.round(v2.w * 1080 / 1920));
+
+    /* ③ 兜底函数本身 */
+    ok('MT01h mediaFallbackBoxH：音频 / 网页 / 文件 = 34',
+      mediaFallbackBoxH('audio', 300) === 34 && mediaFallbackBoxH('link', 300) === 34
+      && mediaFallbackBoxH('file', 300) === 34, '');
+    ok('MT01i mediaFallbackBoxH：视频 = 宽度 / (16/9)',
+      mediaFallbackBoxH('video', 320) === Math.round(320 / (16 / 9)),
+      String(mediaFallbackBoxH('video', 320)));
+
+    /* ④ 五种一起画，不抛 */
+    draw();
+    ok('MT01j ★ 五种类型一起画一帧不抛', true);
+    /* ⑤ 描述照旧：多媒体节点的描述也能引用变量、也能折行 */
+    img.desc = '这是一段描述';
+    sizeNode(img); reindex(); sizeAll();
+    ok('MT01k 描述折行照旧', img.lines.length >= 1, String(img.lines.length));
+
+    fresh();   /* 收尾清干净 */
+  });
   /* ==================== 收尾 ==================== */
   T('X01 全流程后仍无重复 id / 无孤儿', () => {
     fresh();
