@@ -137,8 +137,10 @@ function sizeVarNode(n){
   nodeDescMetrics(n);
   // ★ fixedH：手动拉过高度就听它的（内部几行由 varLayout 摊开）
   /* ★ 多变量时按「每行叠起来」算高；单变量时 varLayoutsHeight 走的就是原来那条 */
-  const natH = Math.round(varLayoutsHeight(n));
-  n.h = (+n.fixedH > 0) ? Math.max(natH, Math.round(+n.fixedH)) : natH;
+  /* ★ 高度交给块模型（②d）：var / broadcast 身上就一块 vars，
+     它整块委托给 varLayoutsHeight —— 一行加法都不重写。
+     fixedH 仍旧是框级下限。 */
+  n.h = (+n.fixedH > 0) ? Math.max(partsHeight(n), Math.round(+n.fixedH)) : partsHeight(n);
 }
 /* 运算符节点：左上角描述 + 中间「算符 运算值」 */
 function sizeOpNode(n){
@@ -149,8 +151,8 @@ function sizeOpNode(n){
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
   nodeDescMetrics(n);
-  const opNat = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
-  n.h = (+n.fixedH > 0) ? Math.max(opNat, Math.round(+n.fixedH)) : opNat;   // ★ fixedH
+  /* ★ 高度交给块模型（②d）：headLine（8 + 行高）+ opBox（OP_BOX_H + 10）。 */
+  n.h = (+n.fixedH > 0) ? Math.max(partsHeight(n), Math.round(+n.fixedH)) : partsHeight(n);
 }
 /* 输出节点：左上角描述 + 一个变量名框 */
 function sizeOutNode(n){
@@ -159,8 +161,8 @@ function sizeOutNode(n){
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
   nodeDescMetrics(n);
-  const outNat = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
-  n.h = (+n.fixedH > 0) ? Math.max(outNat, Math.round(+n.fixedH)) : outNat;  // ★ fixedH
+  /* ★ 高度交给块模型（②d）：headLine + outBox。 */
+  n.h = (+n.fixedH > 0) ? Math.max(partsHeight(n), Math.round(+n.fixedH)) : partsHeight(n);
 }
 /* 表格节点：宽 = 各列宽之和，高 = 行数 × 行高。手动拉过宽度就按比例摊给各列。 */
 function sizeTableNode(n){
@@ -169,8 +171,9 @@ function sizeTableNode(n){
   const cols = tableColWidths(n);
   const natural = cols.reduce((a, x) => a + x, 0);
   n.w = (+n.fixedW > 0) ? Math.max(MIN_FIXED_W, +n.fixedW) : Math.max(MIN_FIXED_W, natural);
-  const tblNat = t.rows * tableRowH();
-  n.h = (+n.fixedH > 0) ? Math.max(tblNat, Math.round(+n.fixedH)) : tblNat;  // ★ fixedH
+  /* ★ 高度交给块模型（②d）：table 那一块就是「行数 × 行高」。
+     fixedH 是**框级下限**，不属于块 —— 留在这一层。 */
+  n.h = (+n.fixedH > 0) ? Math.max(partsHeight(n), Math.round(+n.fixedH)) : partsHeight(n);
   n.lines = [''];
   nodeFontMetrics(n);
 }
@@ -204,7 +207,9 @@ function sizeNode(n){
   n.fs  = size;          // 实际用的字号（供绘制用）
   n.fw  = weight;
   n.fam = family;
-  let h = n.lines.length * n.lh + PADY * 2;
+  /* ★ 正文高度交给块模型（②d）：就一块 text。
+     下面那几行 MINH / 菱形 / big / fixedH **都是框级下限**，不属于块，留在这一层。 */
+  let h = partsHeight(n);
   if (dia) h = Math.max(h, n.w * 0.52);
   h = Math.max(big ? 68 : MINH, h);
   if (n.fixedH) h = Math.max(MIN_FIXED_H, n.fixedH);
