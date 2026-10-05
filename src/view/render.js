@@ -960,9 +960,20 @@ function drawOpNode(g, n, b, selected, hov){
 /* 图片节点：右上角名称带 + 图片 + 下方描述 */
 function drawImageNode(g, n, b, selected, hov){
   const stroke = selected ? C.yellow : (hov ? C.yellow : (effBorder(n) || C.white));
-  const nameY = b.y + IMG_NAME_H;
-  const imgY  = nameY;
-  const descY = imgY + (n.imgDrawH || 0);
+  /* ★ 走块盒（②c）：name / image / descBand 三块从上到下。
+     这三个值原来是手写的同一套加法 —— 块盒算出来必须**一模一样**：
+       nameBox.y + nameBox.h === b.y + IMG_NAME_H
+       imgBox.y             === nameY
+       descBox.y            === imgY + n.imgDrawH
+     ⚠ 先只换这三行推导，其它一律不动 —— 一次只改一件事，
+       出事才分得清是哪一步。 */
+  const bbx = nodeBlockBoxes(n, b);
+  const nameBox = bbx.boxes[0].box;
+  const imgBox  = bbx.boxes[1].box;
+  const descBox = bbx.boxes[2].box;
+  const nameY = nameBox.y + nameBox.h;
+  const imgY  = imgBox.y;
+  const descY = descBox.y;
   g.save();
   g.lineJoin = 'round';
   g.fillStyle = C.bg;
