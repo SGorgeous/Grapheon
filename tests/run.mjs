@@ -86,7 +86,23 @@ try {
   await new Promise(r => ws.addEventListener('open', r));
   await send('Runtime.enable');
   await send('Log.enable');
-  await sleep(6000);   // 等断言跑完
+  /* ★ 原来这里是固定 `await sleep(6000)` —— 等断言跑完。
+     加了几个带等待的异步测试（UD01 / ME01 / MG01 …）之后，
+     总耗时压到了 6 秒边缘，于是时而拿得到结果时而拿不到（missing:true），
+     表现成「测试框架莫名其妙红了」。c2cfe6c 那次就是压线过的。
+     改成**轮询** testlog：它一出来就走，最多等 60 秒。
+     为什么轮询是对的：testlog 是全部断言跑完之后才建的，
+     所以它一出现就说明跑完了，不用再靠猜一个固定秒数。 */
+  {
+    const deadline = Date.now() + 60000;
+    for (;;){
+      const r = await send('Runtime.evaluate', {
+        expression: "!!document.getElementById('testlog')", returnByValue: true });
+      if (r && r.result && r.result.result && r.result.result.value) break;
+      if (Date.now() > deadline) break;
+      await sleep(250);
+    }
+  }
 
   const res = await send('Runtime.evaluate', {
     expression: `(function(){
