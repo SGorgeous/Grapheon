@@ -12174,6 +12174,7 @@
     ok('MB01g 画一帧不抛', true);
     fresh();   /* 收尾清干净 */
   });
+
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
