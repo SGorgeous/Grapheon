@@ -357,6 +357,17 @@ function videoRec(n){
     el.muted = true;
     el.playsInline = true;
     el.preload = 'auto';
+    /* ★ 和 videoFirstFrame 一个道理：不能只等事件。
+       seeked 在「不支持 seek 的封装 / duration 为 0 的片子」上不派发，
+       loadeddata 也要 readyState >= 2 才有。
+       所以加一条轮询：只要当前帧能画了（readyState >= 2）就认为好了。 */
+    rec.poll = setInterval(() => {
+      if (rec.ok || rec.bad){ clearInterval(rec.poll); rec.poll = null; return; }
+      if (el.readyState >= 2 && el.videoWidth > 0){
+        clearInterval(rec.poll); rec.poll = null;
+        if (!rec.ok){ rec.ok = true; mark(); }
+      }
+    }, 120);
     el.addEventListener('loadedmetadata', () => {
       rec.natW = el.videoWidth || 0;
       rec.natH = el.videoHeight || 0;
@@ -369,8 +380,14 @@ function videoRec(n){
       try { el.currentTime = 0.05; } catch (e) {}
       mark();
     });
-    el.addEventListener('seeked', () => { rec.ok = true; mark(); });
-    el.addEventListener('error', () => { rec.bad = true; mark(); });
+    el.addEventListener('seeked', () => {
+      if (rec.poll){ clearInterval(rec.poll); rec.poll = null; }
+      rec.ok = true; mark();
+    });
+    el.addEventListener('error', () => {
+      if (rec.poll){ clearInterval(rec.poll); rec.poll = null; }
+      rec.bad = true; mark();
+    });
     el.src = href;
     videoCache.set(href, rec);
   }

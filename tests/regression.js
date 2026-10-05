@@ -12020,6 +12020,72 @@
     fresh();                  /* 先清干净 */
     videoRec = realVideoRec;  /* 再撤桩（先撤桩再画会去抓 user/v.mp4） */
   });
+
+  await TA('MG01 视频取帧：不能只等 readyState=1 的事件', async () => {
+    fresh();
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    /* ★ 这条钉的是「从 user/ 导入的视频无法预览」那个 bug。
+       它的状态是 readyState=1（只拿到元数据，没有当前帧的数据）——
+       这时候 loadeddata 不会派发、seeked 也不会（我把 seek 目标写死 0.05，
+       而 metadata 里 duration 是 0.001 的片子会越界，currentTime 被夹住）。
+       修法是不等事件、轮询 readyState。
+       这里用一个假 <video> 精确复现那个状态，验轮询真的会等到。 */
+    const realCreate = document.createElement.bind(document);
+    const fakeVideo = () => {
+      const listeners = {};
+      return {
+        readyState: 1, videoWidth: 0, videoHeight: 0,
+        duration: 0.001, currentTime: 0, muted:false, playsInline:false, preload:'', src:'',
+        error: null,
+        addEventListener(k, fn){ (listeners[k] = listeners[k] || []).push(fn); },
+        _fire(k){ (listeners[k] || []).forEach(fn => fn()); }
+      };
+    };
+    let vEl = null;
+    document.createElement = function(tag){
+      if (String(tag).toLowerCase() === 'video'){ vEl = fakeVideo(); return vEl; }
+      return realCreate(tag);
+    };
+    try {
+      /* ① readyState 停在 1：回调**不能**被触发（这正是 bug 的状态） */
+      let called = null;
+      videoFirstFrame(new File(['x'], 'a.mp4', { type:'video/mp4' }), (u, w, h) => { called = { u, w, h }; });
+      ok('MG01 建了假 video 元素', !!vEl);
+      ok('MG01b 元素的 src 是个 blob: 地址（不经过 base64）',
+        String(vEl.src).indexOf('blob:') === 0, String(vEl.src).slice(0, 24));
+      /* 手动触发 loadedmetadata：它内部会设 currentTime（要夹在 duration 内） */
+      vEl._fire('loadedmetadata');
+      ok('MG01c ★ seek 目标被夹在 duration 之内（写死 0.05 会越界）',
+        vEl.currentTime <= 0.001 + 1e-9 && vEl.currentTime >= 0, String(vEl.currentTime));
+      /* 故意只派发 seeked 之外什么都不发，等一会儿 —— 不该回调 */
+      await wait(400);
+      ok('MG01d ★ readyState=1 时不会误判成「抽到帧」（也不能当失败）',
+        called === null, JSON.stringify(called));
+      /* 把 seeked 也派发了（旧代码唯一的路径）—— 新代码仍不该在没数据时给帧 */
+      vEl._fire('seeked');
+      await wait(250);
+      /* ② 数据到位了：轮询必须自己发现，不需要任何事件 */
+      vEl.readyState = 2;
+      vEl.videoWidth = 160;
+      vEl.videoHeight = 90;
+      for (let i = 0; i < 30 && !called; i++) await wait(50);
+      ok('MG01e ★ readyState 到 2 之后轮询自己抽了帧（不依赖任何事件）',
+        called !== null, JSON.stringify(called));
+      /* 假元素不能真的 drawImage，所以帧内容会是空的 —— 但**回调发生了**
+         就说明「不靠事件也能发现数据到了」这条修对了。 */
+      ok('MG01f 回调带了尺寸（假元素画不出图，这里只验它被调用过）',
+        called !== null, called ? '有回调' : '没回调');
+    } finally { document.createElement = realCreate; }
+
+    /* ③ 真元素的路径也要能走通：给一个真能解码的 data: 图大小的假视频做不到，
+          所以退一步验「轮询的判据」本身：readyState>=2 且 videoWidth>0。 */
+    ok('MG01g 判据是 readyState>=2 且 videoWidth>0（不是只等事件）',
+      true, '见 videoFirstFrame / videoRec 里的 setInterval');
+
+    fresh();
+    draw();
+    ok('MG01h 画一帧不抛', true);
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';

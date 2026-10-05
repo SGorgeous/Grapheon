@@ -712,9 +712,11 @@ function videoFirstFrame(file, cb){
   const url = URL.createObjectURL(file);
   const v = document.createElement('video');
   let done = false;
+  let poll = null;                 // 轮询 readyState 用的定时器
   const finish = (out, w, h) => {
     if (done) return;
     done = true;
+    if (poll){ clearInterval(poll); poll = null; }
     try { URL.revokeObjectURL(url); } catch (e) {}
     cb(out, w || 0, h || 0);
   };
@@ -735,17 +737,37 @@ function videoFirstFrame(file, cb){
   v.muted = true;
   v.playsInline = true;
   v.preload = 'auto';
-  v.addEventListener('loadeddata', () => {
-    /* 有些格式不给 seek，所以两条路都留着；finish 自己会去重 */
-    try { v.currentTime = 0; } catch (e) {}
-    setTimeout(grab, 80);
+  /* ★ 轮询 readyState，**不能只等事件**。
+     这是「从 user/ 导入的视频无法预览」的直接原因：
+       · 我原来只在 loadeddata / seeked 里抽帧；
+       · loadeddata 要 readyState >= 2，而很多片子拿到元数据后
+         就停在 readyState = 1（没有当前帧的数据），这个事件**根本不派发**；
+       · seeked 更不可靠 —— 我写死 seek 到 0.05 秒，
+         而 duration 只有 0.001 秒（或者干脆是 0 / NaN）的片子，
+         这个位置越过了结尾，currentTime 被夹回原处，seeked **永远不派发**。
+     结果就是一个**能解码**的视频也永远显示「加载中」。
+     readyState >= 2 就说明当前帧能画了 —— 直接抽，不等任何人通知。 */
+  v.addEventListener('loadedmetadata', () => {
+    /* seek 到一个**确实存在**的位置。别写死 0.05 —— 短片子会越界。 */
+    const d = v.duration;
+    let t = 0.001;
+    if (isFinite(d) && d > 0) t = Math.min(0.05, d / 2);
+    try { v.currentTime = t; } catch (e) {}
   }, { once:true });
+  /* 轮询的判据宽松一点：readyState >= 2 且拿到宽度就抽。
+     有些封装 readyState 到 2 时 videoWidth 还差一拍，所以也认 HAVE_CURRENT_DATA。 */
+  poll = setInterval(() => {
+    if (done){ clearInterval(poll); poll = null; return; }
+    if (v.videoWidth > 0 && v.readyState >= 2){ clearInterval(poll); poll = null; grab(); }
+  }, 100);
+  v.addEventListener('loadeddata', grab, { once:true });
   v.addEventListener('seeked', grab, { once:true });
   v.addEventListener('error', () => finish('', 0, 0), { once:true });
   /* 兜底：认不出来的格式别让节点迟迟不出现。
-     3 秒够真视频解出第一帧了；超时就退化成路径节点。
-     （是异步的，界面不会卡 —— 只是节点晚一点冒出来。） */
-  setTimeout(() => finish('', 0, 0), 3000);
+     ⚠ 别设太紧 —— 探针里 3 秒就把一段能解码的 webm 判成"抽不到帧"了
+       （冷启动解码 + 那段视频 metadata 里没有 duration，seek 不派发）。
+     轮询是 100ms 一次，正常片子照样很快就出帧，不会真等满。 */
+  setTimeout(() => finish('', 0, 0), 8000);
   v.src = url;
 }
 

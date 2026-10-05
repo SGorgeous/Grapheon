@@ -24,3 +24,7 @@ user/*
 perf.html
 perf.js
 .grapheon-test.html
+_upsrv.mjs
+vp3.js
+vp4.js
+vp5.js
