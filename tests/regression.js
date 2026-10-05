@@ -12086,6 +12086,94 @@
     draw();
     ok('MG01h 画一帧不抛', true);
   });
+
+  T('MB01 块模型对账：块高度之和 == 现在的 n.h', () => {
+    fresh();
+    /* ★ 这一步是 ②a 的全部意义：**先把模型摆出来对账，不接线**。
+       每种 kind 的块高度之和，必须等于现在算出来的 n.h
+       （框级下限要单独加一层 —— 普通节点有 MINH、菱形另有下限、fixedH 也是）。
+       对不上就说明模型或边距分配有问题 —— 这时候发现比画完再发现便宜得多。 */
+
+    /* ① 每种 kind 都映射到了块 */
+    ok('MB01 9 种 kind 都有映射',
+      NODE_KINDS.every(k => Array.isArray(NODE_PARTS_BY_KIND[k]) && NODE_PARTS_BY_KIND[k].length > 0),
+      NODE_KINDS.map(k => k + ':' + (NODE_PARTS_BY_KIND[k] || []).length).join(' '));
+    ok('MB01b 映射里的块名都注册过',
+      NODE_KINDS.every(k => (NODE_PARTS_BY_KIND[k] || []).every(id => !!NODE_BLOCK_DEFS[id])), '');
+    ok('MB01c ★ program 落的是默认正文（它是「对外的算符」，不占身体）',
+      NODE_PARTS_BY_KIND.program.length === 1 && NODE_PARTS_BY_KIND.program[0] === 'text',
+      NODE_PARTS_BY_KIND.program.join(','));
+    ok('MB01d ★ 嵌入是**填充块**（不报高度，吃剩下的空间）',
+      NODE_BLOCK_DEFS.embed.fill === true, String(NODE_BLOCK_DEFS.embed.fill));
+
+    /* ② 对账：框级下限单独加一层 */
+    const frameMin = (n) => {
+      /* ★ 填充块（嵌入）自带默认尺寸 —— 它不堆叠，高度规则属于这块自己。
+         对账时要把这一支单独算出来，不然「块和 0」会被当成模型错了。 */
+      const hasFill = nodePartsOf(n).some(id => NODE_BLOCK_DEFS[id] && NODE_BLOCK_DEFS[id].fill);
+      if (hasFill){
+        const d = NODE_BLOCK_DEFS.embed;
+        const base = +n.fixedH > 0 ? Math.max(d.minH(), Math.round(+n.fixedH)) : d.defH();
+        return Math.round(base);
+      }
+      if (n.kind === 'image' || n.kind === 'table' || n.kind === 'out'
+          || n.kind === 'var' || n.kind === 'broadcast' || n.kind === 'op'){
+        return +n.fixedH > 0 ? Math.round(+n.fixedH) : 0;
+      }
+      const dia = n.shape === 'diamond';
+      let h = Math.max(n.big ? 68 : MINH, 0);
+      if (dia) h = Math.max(h, n.w * 0.52);
+      const f = +n.fixedH > 0 ? Math.max(MIN_FIXED_H, Math.round(+n.fixedH)) : 0;
+      return Math.max(h, f);
+    };
+    const rows = [];
+    const chk = (tag, mk) => {
+      const n = mk();
+      reindex(); sizeAll();
+      const cur = byId(n.id);
+      const p = partsHeight(cur);
+      const want = Math.round(Math.max(p, frameMin(cur)));
+      rows.push(tag + ' 块和=' + p + ' 下限=' + frameMin(cur) + ' n.h=' + cur.h);
+      ok('MB01e ★ ' + tag + ' 对上了', cur.h === want, rows[rows.length - 1]);
+      return cur;
+    };
+    chk('普通(空)', () => addNodeAt('', 0, 0, 'rect'));
+    chk('普通(长)', () => addNodeAt('一段挺长的中文正文内容在这里', 0, 0, 'rect'));
+    chk('普通(菱形)', () => { const n = addNodeAt('判断', 0, 0, 'rect'); n.shape = 'diamond'; return n; });
+    chk('普通(big)', () => { const n = addNodeAt('大', 0, 0, 'rect'); n.big = true; return n; });
+    chk('变量(单)', () => addVarNode('x', 0, 0));
+    chk('变量(多)', () => { const n = addVarNode('x', 0, 0);
+      addVarDefTo(n, { name:'y' }); addVarDefTo(n, { name:'z' }); return n; });
+    chk('变量(滑条)', () => addVarNode('s', 0, 0, 'slider'));
+    chk('变量(列表)', () => addVarNode('l', 0, 0, 'list'));
+    chk('变量(勾选)', () => addVarNode('c', 0, 0, 'check'));
+    chk('广播', () => { const n = addVarNode('g', 0, 0); n.kind = 'broadcast'; return n; });
+    chk('运算符', () => { const n = addVarNode('o', 0, 0); n.kind = 'op'; return n; });
+    chk('输出', () => { const n = addVarNode('u', 0, 0); n.kind = 'out'; return n; });
+    chk('表格', () => addTableNode(0, 0));
+    chk('嵌入', () => { const n = addNodeAt('e', 0, 0, 'rect'); n.kind = 'embed'; return n; });
+    chk('图片', () => { const n = addNodeAt('图', 0, 0, 'rect'); n.kind = 'image';
+      n.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      n.imgW = 40; n.imgH = 20; return n; });
+    chk('图片+描述', () => { const n = addNodeAt('图', 0, 0, 'rect'); n.kind = 'image';
+      n.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      n.imgW = 40; n.imgH = 20; n.desc = '一段说明文字'; return n; });
+
+    /* ③ 改过宽度之后还要对得上（块高度依赖折行后的行数） */
+    const wide = addNodeAt('一小段', 0, 0, 'rect');
+    reindex(); sizeAll();
+    widthOverride = null;
+    wide.fixedW = 260;
+    reindex(); sizeNode(wide); sizeAll();
+    const wn = byId(wide.id);
+    ok('MB01f ★ 手动改过宽度之后也对得上',
+      wn.h === Math.round(Math.max(partsHeight(wn), frameMin(wn))),
+      '块和=' + partsHeight(wn) + ' 下限=' + frameMin(wn) + ' n.h=' + wn.h);
+
+    draw();
+    ok('MB01g 画一帧不抛', true);
+    fresh();   /* 收尾清干净 */
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
