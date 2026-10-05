@@ -112,3 +112,38 @@ function partsHeight(n){
   }
   return Math.round(t);
 }
+
+const NODE_BLOCK_ALIGN = {
+  node: 'center', program: 'center', image: 'top', var: 'top', broadcast: 'top',
+  op: 'top', out: 'top', table: 'top', embed: 'top'
+};
+function nodeBlockBoxes(n, b){
+  const box = b || { x:0, y:0, w:0, h:0 };
+  const ids = nodePartsOf(n);
+  const align = NODE_BLOCK_ALIGN[nodeKindOf(n)] || 'top';
+  const hs = [];
+  for (let i = 0; i < ids.length; i++){
+    const d = NODE_BLOCK_DEFS[ids[i]];
+    hs.push((d && !d.fill && typeof d.h === 'function') ? (d.h(n) || 0) : 0);
+  }
+  let stacked = 0;
+  for (let i = 0; i < hs.length; i++) stacked += hs[i];
+  stacked = Math.round(stacked);
+  const bh = Math.round(box.h);
+  let hasFill = false;
+  for (let i = 0; i < ids.length; i++){
+    const d = NODE_BLOCK_DEFS[ids[i]];
+    if (d && d.fill) hasFill = true;
+  }
+  const slack = hasFill ? 0 : Math.max(0, bh - stacked);
+  const fillH = hasFill ? Math.max(0, bh - stacked) : 0;
+  let y = box.y + (align === 'center' ? Math.floor(slack / 2) : 0);
+  const boxes = [];
+  for (let i = 0; i < ids.length; i++){
+    const d = NODE_BLOCK_DEFS[ids[i]];
+    const h = (d && d.fill) ? fillH : hs[i];
+    boxes.push({ id:ids[i], def:d, box:{ x:box.x, y:y, w:box.w, h:h } });
+    y += h;
+  }
+  return { boxes:boxes, slack:slack, align:align };
+}

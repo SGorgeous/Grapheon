@@ -12193,6 +12193,96 @@
 
 
 
+
+  T('MB03 块盒铺满：Σ块高 + 零头 === 框高，最低一块也不越界', () => {
+    fresh();
+    /* ★ 这条是 ②c 的安全网。
+       ⚠ 教训：检查应用里的东西一律**写进 tests/regression.js 用断言跑**。
+         我中途几次往 index.html 注入内联探针来查，受注入点位置和脚本先后影响，
+         给出的是假象，害我两次误判成"代码坏了"、白退了两回。 */
+    let all = true;
+    const chk = (tag, mk) => {
+      const raw = mk();
+      reindex(); sizeNode(raw); reindex(); sizeAll();
+      const n = byId(raw.id);
+      const b = nodeBox(n);
+      /* nodeBox 返回**活对象**（会被 sizeNode 改），必须先快照 */
+      const snap = { x:b.x, y:b.y, w:b.w, h:b.h };
+      const r = nodeBlockBoxes(n, snap);
+      let sum = 0;
+      for (let i = 0; i < r.boxes.length; i++) sum += r.boxes[i].box.h;
+      const tiled = (sum + r.slack === Math.round(snap.h));
+      const last = r.boxes.length ? r.boxes[r.boxes.length - 1].box : null;
+      const inside = last ? (last.y + last.h <= snap.y + snap.h + 0.01) : true;
+      const topOk = (r.boxes.length === 0) || (r.boxes[0].box.y >= snap.y - 0.01);
+      if (!tiled || !inside || !topOk) all = false;
+      const desc = tag + ' align=' + r.align + ' 块和=' + sum + ' 零头=' + r.slack
+        + ' 框高=' + Math.round(snap.h)
+        + ' 盒=[' + r.boxes.map(x => x.id + ':' + x.h).join(' ') + ']';
+      ok('MB03 ' + tag, tiled && inside && topOk, desc);
+    };
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    chk('普通空', () => addNodeAt('', 0, 0, 'rect'));
+    chk('普通长', () => addNodeAt('一段挺长的中文正文内容在这里放着', 0, 0, 'rect'));
+    chk('普通菱形', () => { const n = addNodeAt('判断一下', 0, 0, 'rect'); n.shape = 'diamond'; return n; });
+    chk('普通big', () => { const n = addNodeAt('大', 0, 0, 'rect'); n.big = true; return n; });
+    chk('普通fixedH', () => { const n = addNodeAt('x', 0, 0, 'rect'); n.fixedH = 200; return n; });
+    chk('变量单', () => addVarNode('x', 0, 0));
+    chk('变量多', () => { const n = addVarNode('x', 0, 0); addVarDefTo(n, { name:'yy' }); return n; });
+    chk('变量fixedH', () => { const n = addVarNode('x', 0, 0); n.fixedH = 300; return n; });
+    chk('广播', () => { const n = addVarNode('g', 0, 0); n.kind = 'broadcast'; return n; });
+    chk('运算符', () => { const n = addVarNode('o', 0, 0); n.kind = 'op'; return n; });
+    chk('输出', () => { const n = addVarNode('u', 0, 0); n.kind = 'out'; return n; });
+    chk('表格', () => addTableNode(0, 0));
+    chk('表格fixedH', () => { const t = addTableNode(0, 0); t.fixedH = 400; return t; });
+    chk('嵌入', () => { const n = addNodeAt('e', 0, 0, 'rect'); n.kind = 'embed'; return n; });
+    chk('嵌入fixed', () => { const n = addNodeAt('e', 0, 0, 'rect'); n.kind = 'embed'; n.fixedW = 500; n.fixedH = 400; return n; });
+    chk('图片', () => { const n = addNodeAt('图', 0, 0, 'rect'); n.kind = 'image'; n.src = PNG; n.imgW = 40; n.imgH = 20; return n; });
+    chk('图片带描述', () => { const n = addNodeAt('图', 0, 0, 'rect'); n.kind = 'image'; n.src = PNG;
+      n.imgW = 40; n.imgH = 20; n.desc = '说明文字'; return n; });
+    chk('图片fixedW', () => { const n = addNodeAt('图', 0, 0, 'rect'); n.kind = 'image'; n.src = PNG;
+      n.imgW = 40; n.imgH = 20; n.fixedW = 260; return n; });
+    ok('MB03z ★ 18 种全部铺满', all, all ? '全部通过' : '有对不上的（看上面）');
+
+    /* 普通节点是居中的：零头上下平分，首块 y 一定大于框顶 */
+    const pn = addNodeAt('x', 0, 0, 'rect'); reindex(); sizeNode(pn); reindex(); sizeAll();
+    const pnn = byId(pn.id);
+    const pb = nodeBox(pnn);
+    const pr = nodeBlockBoxes(pnn, { x:pb.x, y:pb.y, w:pb.w, h:pb.h });
+    /* ⚠ 这条我第一版写错了：拿一个**零头只有 1px** 的节点断言"首块 y 大于框顶" ——
+       而 floor(1/2) = 0，偏移 0 本来就是对的（上下平分，1px 分不了）。
+       要验"居中而不是贴顶"，得用一个**零头足够大**的例子。 */
+    ok('MB03y ★ 普通节点居中排：首块偏移 = 零头的一半（向下取整）',
+      pr.align === 'center' && (pr.boxes[0].box.y - pb.y) === Math.floor(pr.slack / 2),
+      'align=' + pr.align + ' 偏移=' + (pr.boxes[0].box.y - pb.y) + ' 零头=' + pr.slack);
+    {
+      const big = addNodeAt('x', 0, 0, 'rect'); big.fixedH = 200;
+      reindex(); sizeNode(big); reindex(); sizeAll();
+      const bn = byId(big.id);
+      const bb = nodeBox(bn);
+      const br = nodeBlockBoxes(bn, { x:bb.x, y:bb.y, w:bb.w, h:bb.h });
+      const off = br.boxes[0].box.y - bb.y;
+      ok('MB03y2 ★ 零头大时确实居中（不贴顶）',
+        br.align === 'center' && br.slack > 20 && off === Math.floor(br.slack / 2),
+        '零头=' + br.slack + ' 偏移=' + off + ' 期望=' + Math.floor(br.slack / 2));
+      /* 贴顶的反面：偏移既不等于 0，也不等于整个零头 */
+      ok('MB03y3 ★ 偏移严格在上下之间',
+        off > 0 && off < br.slack, '偏移=' + off + ' 零头=' + br.slack);
+    }
+    /* 填充块：零头必须 0，块高就是框高 */
+    const en = addNodeAt('e', 0, 0, 'rect'); en.kind = 'embed';
+    reindex(); sizeNode(en); reindex(); sizeAll();
+    const enn = byId(en.id);
+    const eb = nodeBox(enn);
+    const er = nodeBlockBoxes(enn, { x:eb.x, y:eb.y, w:eb.w, h:eb.h });
+    ok('MB03x ★ 填充块零头为 0、块高就是框高',
+      er.slack === 0 && er.boxes[0].box.h === Math.round(eb.h),
+      'slack=' + er.slack + ' 块高=' + er.boxes[0].box.h + ' 框高=' + Math.round(eb.h));
+
+    draw();
+    ok('MB03w 画一帧不抛', true);
+    fresh();
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';
