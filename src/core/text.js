@@ -80,18 +80,45 @@ function sizeImageNode(n){
   n.w = w;
   n.h = IMG_NAME_H + imgH + descH;
 }
+/* =========================================================================
+   节点尺寸计算的两块公共部分
+   ─────────────────────────────────────────────────────────────
+   ① nodeFontMetrics：字体度量的那三行。
+      六个 size×Node 里一字不差地抄了六遍，收敛成一处。
+   ② nodeDescMetrics：把描述折行 + 上面那三行。
+      var / op / out 三个节点完全一样（都用 displayTextOf、都用同样的宽度）。
+      ⚠ 另外三个**不能**套：
+        image  用 displayDescOf，而且 wrapText 发生在 n.w = w **之前**；
+        table  把 n.lines 写死成 ['']（长度 1，和空描述不一样）；
+        embed  写死成 []。
+        硬套会悄悄改变行为，所以宁可各留各的。
+   ★ 这一步只收敛重复，**行为一个字都不改**。 */
+function nodeFontMetrics(n){
+  n.lh = Math.round(FS * 1.32);
+  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+}
+function nodeDescMetrics(n){
+  const desc = displayTextOf(n);
+  /* 这里**不能**加「空描述就给 []」的守卫 ——
+     var / op / out 原来都是无条件 wrapText 的，
+     加守卫会让空描述的节点矮一行（wrapText('') 给的是 ['']，长度 1）。
+     我第一版就是顺手加了守卫，等于偷偷改了行为。
+     要守卫的是 sizeImageNode，它自己留着。 */
+  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
+  nodeFontMetrics(n);
+  return n.lines.length;
+}
+
 /* 嵌入节点：尺寸完全手动（里面那张缩略图会等比铺满） */
 function sizeEmbedNode(n){
   n.w = Math.round(Math.max(EMBED_MIN_W, +n.fixedW || EMBED_DEF_W));
   n.h = Math.round(Math.max(EMBED_MIN_H, +n.fixedH || EMBED_DEF_H));
   n.lines = [];
-  n.lh = Math.round(FS * 1.32);
-  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  nodeFontMetrics(n);
 }
 /* 变量定义节点：左上角描述 + 中间两个输入框 + 作用域一行 */
 function sizeVarNode(n){
   setFont(mctx, FS, 'normal', FONT);
-  const desc = displayTextOf(n);
   const v = varDefOf(n);
   // 控件节点也是「名字格 + 本体」两段，宽度按同一套算
   let inner = (v.control === 'plain')
@@ -102,9 +129,7 @@ function sizeVarNode(n){
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
-  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
-  n.lh = Math.round(FS * 1.32);
-  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  nodeDescMetrics(n);
   // ★ fixedH：手动拉过高度就听它的（内部几行由 varLayout 摊开）
   /* ★ 多变量时按「每行叠起来」算高；单变量时 varLayoutsHeight 走的就是原来那条 */
   const natH = Math.round(varLayoutsHeight(n));
@@ -113,28 +138,22 @@ function sizeVarNode(n){
 /* 运算符节点：左上角描述 + 中间「算符 运算值」 */
 function sizeOpNode(n){
   setFont(mctx, FS, 'normal', FONT);
-  const desc = displayTextOf(n);
   const arity = opArity(normalizeOpDef(n.opDef).op);
   const inner = VAR_PAD * 2 + OP_OP_W + 10 + arity * OP_VAL_W + (arity - 1) * 8;
   let w = Math.max(MINW, inner);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
-  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
-  n.lh = Math.round(FS * 1.32);
-  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  nodeDescMetrics(n);
   const opNat = Math.round(8 + n.lines.length * n.lh + OP_BOX_H + 10);
   n.h = (+n.fixedH > 0) ? Math.max(opNat, Math.round(+n.fixedH)) : opNat;   // ★ fixedH
 }
 /* 输出节点：左上角描述 + 一个变量名框 */
 function sizeOutNode(n){
   setFont(mctx, FS, 'normal', FONT);
-  const desc = displayTextOf(n);
   let w = Math.max(MINW, VAR_PAD * 2 + OUT_NAME_W);
   if (+n.fixedW > 0) w = Math.max(MIN_FIXED_W, +n.fixedW);
   n.w = Math.round(w);
-  n.lines = wrapText(desc, n.w - VAR_PAD * 2, FS, 'normal', FONT);
-  n.lh = Math.round(FS * 1.32);
-  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  nodeDescMetrics(n);
   const outNat = Math.round(8 + n.lines.length * n.lh + OUT_BOX_H + 10);
   n.h = (+n.fixedH > 0) ? Math.max(outNat, Math.round(+n.fixedH)) : outNat;  // ★ fixedH
 }
@@ -148,8 +167,7 @@ function sizeTableNode(n){
   const tblNat = t.rows * tableRowH();
   n.h = (+n.fixedH > 0) ? Math.max(tblNat, Math.round(+n.fixedH)) : tblNat;  // ★ fixedH
   n.lines = [''];
-  n.lh = Math.round(FS * 1.32);
-  n.fs = FS; n.fw = 'normal'; n.fam = FONT;
+  nodeFontMetrics(n);
 }
 function sizeNode(n){
   if (n.kind === 'image'){ sizeImageNode(n); return; }
