@@ -12100,6 +12100,22 @@
       NODE_KINDS.map(k => k + ':' + (NODE_PARTS_BY_KIND[k] || []).length).join(' '));
     ok('MB01b 映射里的块名都注册过',
       NODE_KINDS.every(k => (NODE_PARTS_BY_KIND[k] || []).every(id => !!NODE_BLOCK_DEFS[id])), '');
+    /* ★ 这次查实的：**普通节点根本没有 kind 字段**（只有特殊节点才有）。
+       因为 NODE_BLOCK_ALIGN[n.kind] 取不到，align 落到兜底 'top'，
+       普通节点的正文被顶到上面去了（本来该居中）。
+       所以按 kind 查表的地方一律先过 nodeKindOf()。 */
+    {
+      const p = addNodeAt('x', 0, 0, 'rect'); reindex(); sizeAll();
+      const pn = byId(p.id);
+      ok('MB01c2 ★ 普通节点没有 kind 字段（查表前必须正规化）',
+        pn.kind === undefined || pn.kind === '', JSON.stringify(pn.kind));
+      ok('MB01c3 ★ nodeKindOf 把它当成 node',
+        nodeKindOf(pn) === 'node', nodeKindOf(pn));
+      ok('MB01c4 有 kind 的照原样',
+        nodeKindOf({ kind:'var' }) === 'var' && nodeKindOf({ kind:'外星人' }) === 'node',
+        nodeKindOf({ kind:'var' }) + '/' + nodeKindOf({ kind:'外星人' }));
+      fresh();
+    }
     ok('MB01c ★ program 落的是默认正文（它是「对外的算符」，不占身体）',
       NODE_PARTS_BY_KIND.program.length === 1 && NODE_PARTS_BY_KIND.program[0] === 'text',
       NODE_PARTS_BY_KIND.program.join(','));
@@ -12174,6 +12190,8 @@
     ok('MB01g 画一帧不抛', true);
     fresh();   /* 收尾清干净 */
   });
+
+
 
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');

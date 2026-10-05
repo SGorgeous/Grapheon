@@ -76,10 +76,18 @@ const NODE_PARTS_BY_KIND = {
 };
 
 /* 这个节点身上有哪几块 */
+/* ★ 节点种类的正规化：**普通节点没有 kind 字段**（只有特殊节点才有）——
+   这是铺满断言查出来的：n.kind 是 undefined，于是
+   NODE_BLOCK_ALIGN[undefined] 取不到、align 落到兜底 'top'，
+   普通节点的正文就被顶到上面去了（本来该居中）。
+   所有按 kind 查表的地方都要先过这一层。 */
+function nodeKindOf(n){
+  const k = n && n.kind;
+  return (k && NODE_PARTS_BY_KIND[k]) ? k : 'node';
+}
 function nodePartsOf(n){
   if (!n) return [];
-  const list = NODE_PARTS_BY_KIND[n.kind];
-  return list ? list.slice() : NODE_PARTS_BY_KIND.node.slice();
+  return NODE_PARTS_BY_KIND[nodeKindOf(n)].slice();
 }
 /* 这个节点身上的**填充块**（没有就 null）。
    填充块自带尺寸规则（嵌入就是 240×340），不参与堆叠求和。 */
@@ -100,7 +108,7 @@ function partsHeight(n){
   let t = 0;
   for (const id of nodePartsOf(n)){
     const def = NODE_BLOCK_DEFS[id];
-    if (def && typeof def.h === 'function') t += def.h(n) || 0;
+    if (def && !def.fill && typeof def.h === 'function') t += def.h(n) || 0;
   }
   return Math.round(t);
 }
