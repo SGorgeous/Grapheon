@@ -76,9 +76,11 @@ function sizeImageNode(n){
   n.lines = desc ? wrapText(desc, w - PADX * 2, FS, 'normal', FONT) : [];
   n.lh = Math.round(FS * 1.32);
   n.fs = FS; n.fw = 'normal'; n.fam = FONT;
-  const descH = n.lines.length ? n.lines.length * n.lh + PADY * 2 : 0;
   n.w = w;
-  n.h = IMG_NAME_H + imgH + descH;
+  /* ★ 高度改由块模型说了算（②b）。
+     这一行原来是 IMG_NAME_H + imgH + descH ——
+     那三块正是 name / image / descBand，块和必须和它**一模一样**。 */
+  n.h = partsHeight(n);
 }
 /* =========================================================================
    节点尺寸计算的两块公共部分
@@ -111,8 +113,11 @@ function nodeDescMetrics(n){
 
 /* 嵌入节点：尺寸完全手动（里面那张缩略图会等比铺满） */
 function sizeEmbedNode(n){
-  n.w = Math.round(Math.max(EMBED_MIN_W, +n.fixedW || EMBED_DEF_W));
-  n.h = Math.round(Math.max(EMBED_MIN_H, +n.fixedH || EMBED_DEF_H));
+  /* ★ 嵌入是**填充块** —— 尺寸规则属于这块自己（240×340，能被 fixedW/H 覆盖），
+     不走堆叠求和。规则写在 blocks.js 的 defW/defH/minW/minH 上。 */
+  const fb = fillBlockOf(n);
+  n.w = Math.round(Math.max(fb.minW(), +n.fixedW || fb.defW()));
+  n.h = Math.round(Math.max(fb.minH(), +n.fixedH || fb.defH()));
   n.lines = [];
   nodeFontMetrics(n);
 }

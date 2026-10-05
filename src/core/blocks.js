@@ -81,6 +81,16 @@ function nodePartsOf(n){
   const list = NODE_PARTS_BY_KIND[n.kind];
   return list ? list.slice() : NODE_PARTS_BY_KIND.node.slice();
 }
+/* 这个节点身上的**填充块**（没有就 null）。
+   填充块自带尺寸规则（嵌入就是 240×340），不参与堆叠求和。 */
+function fillBlockOf(n){
+  for (const id of nodePartsOf(n)){
+    const d = NODE_BLOCK_DEFS[id];
+    if (d && d.fill) return d;
+  }
+  return null;
+}
+
 /* 块加起来的自然高度。
    ⚠ 它**不含框级下限**：普通节点有 MINH(=48)、菱形另有下限、fixedH 也是下限。
      所以对账要写成 max(框级下限, partsHeight)，不能直接比 ——
