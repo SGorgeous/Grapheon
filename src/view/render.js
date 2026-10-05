@@ -299,15 +299,47 @@ function imageRec(n){
   if (!href) return null;
   let rec = imgCache.get(href);
   if (!rec){
-    rec = { img:new Image(), ok:false, bad:false };
-    rec.img.onload  = () => { rec.ok = true; mark(); };
+    rec = { img:new Image(), ok:false, bad:false, node:(n || null) };
+    rec.img.onload = () => {
+      rec.ok = true;
+      /* ★ 回填真实尺寸。
+         按**路径**引用的图（user/pic.png）建节点的时候根本不知道它多大 ——
+         sizeImageNode 只能按 4:3 兜底，结果画出来被**拉伸**。
+         图一加载出来就把真实尺寸写回节点并重排一次。 */
+      const t = rec.node;
+      if (t && t.kind === 'image' && !(+t.imgW > 0)
+          && rec.img.naturalWidth > 0 && (t.mediaKind || 'image') !== 'video'){
+        t.imgW = rec.img.naturalWidth;
+        t.imgH = rec.img.naturalHeight || 1;
+        if (typeof sizeNode === 'function') sizeNode(t);
+        if (typeof sizeAll === 'function') sizeAll();
+      }
+      mark();
+    };
     rec.img.onerror = () => { rec.bad = true; mark(); };
     rec.img.src = href;
     imgCache.set(href, rec);
+  } else if (n && !rec.node){
+    rec.node = n;             // 谁先用谁当回填目标
   }
   return rec;
 }
 const imageReady = (n) => { const r = imageRec(n); return !!(r && r.ok); };
+
+/* 按原始比例**装进去**（contain），不拉伸。
+   ─────────────────────────────────────────────────────────────
+   ★ 这是兜底：正常情况下节点尺寸就是按原始比例算好的，缩放系数正好是 1。
+     但万一比例还是不对（图刚加载出来、元数据还没回填），
+     宁可留一点空隙，也不要变形。
+   图片用 naturalWidth，视频用 videoWidth，两边都试一下。 */
+function drawFit(g, media, x, y, w, h){
+  const iw = media.naturalWidth || media.videoWidth || 0;
+  const ih = media.naturalHeight || media.videoHeight || 0;
+  if (!iw || !ih){ g.drawImage(media, x, y, w, h); return; }
+  const s = Math.min(w / iw, h / ih);
+  const dw = iw * s, dh = ih * s;
+  g.drawImage(media, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
 
 /* 视频缓存：和图片同一个套路 —— 一个离屏 <video>，抽到帧就 mark() 重画。
    为什么是「抽一帧」而不是叠一个真的 <video> 上去：
@@ -925,7 +957,7 @@ function drawImageNode(g, n, b, selected, hov){
   if (kind === 'image'){
     const rec = imageRec(n);
     if (rec && rec.ok){
-      g.drawImage(rec.img, b.x + 1.5, imgY, cw, ch);
+      drawFit(g, rec.img, b.x + 1.5, imgY, cw, ch);
     } else {
       g.fillStyle = C.bg;
       g.fillRect(b.x + 1.5, imgY, cw, ch);
@@ -937,7 +969,7 @@ function drawImageNode(g, n, b, selected, hov){
   } else if (kind === 'video'){
     const vr = videoRec(n);
     if (vr && vr.ok){
-      try { g.drawImage(vr.el, b.x + 1.5, imgY, cw, ch); } catch (e) { /* 抽帧失败就当没画上 */ }
+      try { drawFit(g, vr.el, b.x + 1.5, imgY, cw, ch); } catch (e) { /* 抽帧失败就当没画上 */ }
       drawPlayMark(g, b.x + b.w / 2, imgY + ch / 2, Math.min(18, ch / 4), 'rgba(255,255,255,0.85)');
     } else {
       g.fillStyle = C.bg;

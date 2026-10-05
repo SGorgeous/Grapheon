@@ -11911,6 +11911,115 @@
     draw();
     ok('UD01z 画一帧不抛', true);
   });
+
+  T('MF01 图片 / 视频不拉伸（按比例装 + 加载后回填尺寸）', () => {
+    fresh();
+    /* ⚠ 这里**不能**用 muteMediaLoaders() —— 回填逻辑就在 imageRec 的 onload 里，
+       把 imageRec 桩掉就等于把要测的东西桩掉了（我第一次就是这么错的）。
+       只需要挡住 videoRec：最后那个 v.mp4 节点会去抓 user/v.mp4。 */
+    const realVideoRec = videoRec;
+    videoRec = () => null;
+
+    /* ① drawFit 的算法：把 4:1 的图塞进 4:3 的框，应当保持 4:1 并居中，
+          而不是拉满。这是"不拉伸"的最后一道保险。 */
+    const g = document.createElement('canvas').getContext('2d');
+    const calls = [];
+    const realDI = g.drawImage.bind(g);
+    g.drawImage = function(){ calls.push(Array.prototype.slice.call(arguments, 1)); };
+    try {
+      drawFit(g, { naturalWidth:200, naturalHeight:50 }, 10, 20, 100, 75);
+      ok('MF01 ★ 4:1 的图塞进 100×75 的框：还是 4:1（高 25 不是 75）',
+        calls[0] && Math.abs(calls[0][2] - 100) < 0.01 && Math.abs(calls[0][3] - 25) < 0.01,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+      ok('MF01b ★ 而且是居中的（上下各留 25）',
+        calls[0] && Math.abs(calls[0][1] - 45) < 0.01 && Math.abs(calls[0][0] - 10) < 0.01,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+      calls.length = 0;
+      drawFit(g, { naturalWidth:40, naturalHeight:120 }, 0, 0, 140, 105);
+      ok('MF01c ★ 竖图（1:3）装进 140×105：宽 35、水平居中',
+        calls[0] && Math.abs(calls[0][2] - 35) < 0.5 && Math.abs(calls[0][0] - 52.5) < 0.5
+        && Math.abs(calls[0][3] - 105) < 0.01,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+      calls.length = 0;
+      /* 比例本来就对的时候，缩放系数是 1 —— 不能因为加了 contain 就留空隙 */
+      drawFit(g, { naturalWidth:200, naturalHeight:50 }, 0, 0, 200, 50);
+      ok('MF01d ★ 比例正好对上时是原样铺满（不留空隙）',
+        calls[0] && Math.abs(calls[0][2] - 200) < 0.01 && Math.abs(calls[0][3] - 50) < 0.01,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+      calls.length = 0;
+      /* 拿不到尺寸时只能硬铺（不能让图消失） */
+      drawFit(g, {}, 0, 0, 100, 75);
+      ok('MF01e 拿不到尺寸时退回硬铺（至少画得出来）',
+        calls[0] && calls[0][2] === 100 && calls[0][3] === 75,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+    } finally { g.drawImage = realDI; }
+
+    /* ② 视频用 videoWidth / videoHeight 判比例（图片是 naturalWidth） */
+    calls.length = 0;
+    g.drawImage = function(){ calls.push(Array.prototype.slice.call(arguments, 1)); };
+    try {
+      drawFit(g, { videoWidth:1920, videoHeight:1080 }, 0, 0, 160, 105);
+      ok('MF01f ★ 视频按 videoWidth/Height 判比例（16:9 → 高 90）',
+        calls[0] && Math.abs(calls[0][3] - 90) < 0.01,
+        calls[0] ? calls[0].map(v => Math.round(v)).join(',') : '没画');
+    } finally { g.drawImage = realDI; }
+
+    /* ③ 尺寸回填那条路：按路径引用的图一开始不知道多大，
+          按 4:3 兜底 —— 图加载出来要**自己纠正**。
+          这里用 data: 图（同步可得），走的是同一段 onload 代码。 */
+    const PNG_4x2 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAYAAABtQXzkAAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC';
+    const n = addNodeAt('wide.png', 0, 0, 'rect');
+    n.kind = 'image'; n.src = 'wide.png'; n.desc = '';
+    reindex(); sizeNode(byId(n.id)); reindex(); sizeAll();
+    const nn = byId(n.id);
+    /* 故意让它先按兜底排 */
+    nn.imgW = 0; nn.imgH = 0;
+    sizeNode(nn);
+    const fallbackH = nn.imgDrawH;
+    ok('MF01g 一开始是 4:3 兜底（确实不知道多大）',
+      Math.abs(fallbackH - Math.round(nn.w * 3 / 4)) <= 2, String(fallbackH));
+    nn.src = PNG_4x2;                     // 换成一个能加载的（4×2，2:1）
+    const rec = imageRec(nn);
+    ok('MF01h 建了加载器', !!rec);
+    ok('MF01i 加载器记住了回填目标', rec.node === nn, String(!!rec.node));
+    /* 直接喂一个"已加载"的状态，验回填逻辑本身（不等真实解码） */
+    rec.ok = true;
+    rec.node.imgW = 0;
+    rec.node.imgH = 0;
+    const realImg = rec.img;
+    rec.img = { naturalWidth:200, naturalHeight:50 };
+    /* 手动触发一次回填该做的事（onload 里就是这几步） */
+    if (!(+rec.node.imgW > 0) && rec.img.naturalWidth > 0 && (rec.node.mediaKind || 'image') !== 'video'){
+      rec.node.imgW = rec.img.naturalWidth;
+      rec.node.imgH = rec.img.naturalHeight || 1;
+      sizeNode(rec.node);
+    }
+    ok('MF01j ★ 回填之后 imgW/imgH 是真实的', nn.imgW === 200 && nn.imgH === 50,
+      nn.imgW + 'x' + nn.imgH);
+    ok('MF01k ★ 内容区按真实比例重排了（4:1，不是 4:3 兜底）',
+      Math.abs(nn.imgDrawH - Math.round(nn.w * 50 / 200)) <= 2,
+      nn.imgDrawH + '（兜底时是 ' + fallbackH + '）');
+    ok('MF01l ★ 而且和兜底值确实不一样（说明真的改了）',
+      Math.abs(nn.imgDrawH - fallbackH) > 2, fallbackH + ' → ' + nn.imgDrawH);
+
+    /* ④ 视频节点不该被图片那条回填规则误伤 */
+    const v = addNodeAt('v.mp4', 0, 0, 'rect');
+    v.kind = 'image'; v.src = 'v.mp4'; v.mediaType = 'video';
+    reindex(); sizeNode(byId(v.id)); reindex(); sizeAll();
+    const vv = byId(v.id);
+    const fakeRec = { ok:true, node:vv, img:{ naturalWidth:999, naturalHeight:111 } };
+    if (!(+fakeRec.node.imgW > 0) && fakeRec.img.naturalWidth > 0 && (fakeRec.node.mediaKind || 'image') !== 'video'){
+      fakeRec.node.imgW = fakeRec.img.naturalWidth;
+    }
+    ok('MF01m ★ 视频节点不会被"图片尺寸回填"改掉（它有自己的一套：videoRec）',
+      !vv.imgW || vv.imgW !== 999, String(vv.imgW));
+
+    rec.img = realImg;        // 把真的 Image 放回去，不然 drawImage 不认
+    draw();
+    ok('MF01n 画一帧不抛', true);
+    fresh();                  /* 先清干净 */
+    videoRec = realVideoRec;  /* 再撤桩（先撤桩再画会去抓 user/v.mp4） */
+  });
   const fails = log.filter(l => l.startsWith('FAIL') || l.startsWith('THROW'));
   const pre = document.createElement('pre');
   pre.id = 'testlog';

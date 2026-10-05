@@ -712,24 +712,25 @@ function videoFirstFrame(file, cb){
   const url = URL.createObjectURL(file);
   const v = document.createElement('video');
   let done = false;
-  const finish = (out) => {
+  const finish = (out, w, h) => {
     if (done) return;
     done = true;
     try { URL.revokeObjectURL(url); } catch (e) {}
-    cb(out);
+    cb(out, w || 0, h || 0);
   };
   const grab = () => {
     try {
       const vw = v.videoWidth || 0, vh = v.videoHeight || 0;
-      if (!vw || !vh){ finish(''); return; }
+      if (!vw || !vh){ finish('', 0, 0); return; }
       const scale = Math.min(1, MEDIA_FRAME_MAX_W / vw);
       const w = Math.max(1, Math.round(vw * scale));
       const h = Math.max(1, Math.round(vh * scale));
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(v, 0, 0, w, h);
-      finish(c.toDataURL('image/jpeg', 0.82));   // jpeg 比 png 小得多
-    } catch (e) { finish(''); }
+      /* ★ 尺寸一起给出去 —— 建节点时要按它排，不然会按 4:3 兜底、画出来是拉伸的 */
+      finish(c.toDataURL('image/jpeg', 0.82), w, h);   // jpeg 比 png 小得多
+    } catch (e) { finish('', 0, 0); }
   };
   v.muted = true;
   v.playsInline = true;
@@ -740,11 +741,11 @@ function videoFirstFrame(file, cb){
     setTimeout(grab, 80);
   }, { once:true });
   v.addEventListener('seeked', grab, { once:true });
-  v.addEventListener('error', () => finish(''), { once:true });
+  v.addEventListener('error', () => finish('', 0, 0), { once:true });
   /* 兜底：认不出来的格式别让节点迟迟不出现。
      3 秒够真视频解出第一帧了；超时就退化成路径节点。
      （是异步的，界面不会卡 —— 只是节点晚一点冒出来。） */
-  setTimeout(() => finish(''), 3000);
+  setTimeout(() => finish('', 0, 0), 3000);
   v.src = url;
 }
 
@@ -907,14 +908,14 @@ function insertMediaFile(file, at){
   /* ② 视频：只取第一帧当预览，**不把视频本身读进来** */
   if (isVid){
     say('* 正在取视频第一帧。');
-    videoFirstFrame(file, (url) => {
+    videoFirstFrame(file, (url, fw, fh) => {
       if (!url){
         placeMediaNode(name, 0, 0, 'video', name, at,
           '这个视频取不到预览。把原文件放进 user/ 就能用。');
         say('* 取不到预览，记了个路径节点。');
         return;
       }
-      placeMediaNode(url, 0, 0, 'image', name, at,
+      placeMediaNode(url, fw, fh, 'image', name, at,
         '只存了视频的第一帧当预览。想播放就把原文件放进 user/，用路径节点引用。');
       say('* 视频只留了第一帧当预览。');
     });
